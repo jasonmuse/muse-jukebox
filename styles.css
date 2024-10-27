@@ -1,0 +1,130 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background: #1e1e2f;
+    color: #fff;
+    align-items:flex-start;
+    margin-top: 150px;
+}
+
+#jukebox {
+text-align: center;
+max-width: 500px;
+padding: 20px;
+padding-bottom: 0px;
+border-radius: 10px;
+background: #2e2e3d;
+box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+
+
+border: 3px solid #738fff; /* Outer light gray border */
+box-shadow: 0 0 0 3px #ffffff; /* Inner white border effect */
+}
+
+h1 {
+    font-size: 3em;
+    background: linear-gradient(90deg, #476bfc, #580af5);
+    background-size: 200% 200%;
+    color: transparent;
+    background-clip: text;
+    -webkit-background-clip: text; /* for Safari */
+    animation: gradientAnimation 3s ease-in-out infinite;
+    margin-bottom: 15px;
+    margin-top: 5px;
+}
+
+@keyframes gradientAnimation {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+
+#filters {
+margin-bottom: 15px;
+}
+
+#track-list {
+max-height: 400px;
+overflow-y: auto;
+margin: 10px 0;
+padding: 10px; /* Add padding to create space between borders */
+border: 3px solid #373593; /* Outer light gray border */
+border-radius: 10px; /* Optional: Adds rounded corners */
+box-shadow: 0 0 0 3px #ffffff; /* Inner white border effect */
+}
+
+
+.track {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #444;
+    padding: 10px;
+}
+
+.track img {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    margin-right: 10px;
+}
+
+.track-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 250px
+}
+
+.title {
+    font-weight: bold;
+    margin: 0;
+}
+
+.tags {
+    font-size: 0.9em;
+    color: #ccc;
+    margin: 3px 0;
+    border-radius: 5px;
+    background: #373593;
+    padding: 3px;
+
+}
+
+audio {
+    width: 100%; /* Full width */
+    height: 40px; /* Custom height */
+    background-color: #333; /* Background color for some browsers */
+    border-radius: 8px; /* Rounded corners */
+    overflow: hidden;
+}
+
+/* Position and animate the record */
+.record {
+    position: absolute;
+    top: 30%; /* Start off-screen */
+    left: 50%;
+    width: 350px;
+    height: 350px;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: top 0.5s, opacity 0.5s;
+    z-index:-1;
+}
+
+
+.record.up {
+    top: 10px; /* Raise the record up behind the title */
+    opacity: 1; /* Make the record visible */
+}

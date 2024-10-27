@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Muse Jukebox</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="jukebox">
+        <h1 class="jukebox-title">Muse Jukebox</h1>
+        <img src="images/itchyscratchy.gif" alt="Itchy and Scratchy"
+         style="position: absolute; top: 150px; left:40%; z-index: 0; opacity: 0.5;">
+
+
+        <!-- Record Image -->
+        <img src="images/record.png" class="record" alt="Record">
+
+        <!-- Filter Section -->
+        <div id="filters">
+            <label for="tag-filter">Filter by tag:</label>
+            <select id="tag-filter">
+                <option value="all">All</option>
+            </select>
+        </div>
+
+        <!-- Track List -->
+        <div id="track-list"></div>
+
+        <!-- Optional additional GIF -->
+        <img src="images/frogblinkie.gif" alt="Animated Frog">
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
