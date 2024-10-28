@@ -5,13 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Muse Jukebox</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="images/musecast.png" />
 </head>
 <body>
     <div id="jukebox">
-        <h1 class="jukebox-title">Muse Jukebox</h1>
-        <img src="images/itchyscratchy.gif" alt="Itchy and Scratchy"
-         style="position: absolute; top: 150px; left:40%; z-index: 0; opacity: 0.5;">
 
+        <h1 class="jukebox-title">
+            <div class="title-container">
+                <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
+                 Muse Jukebox
+                <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
+            </div>
+        </h1>
+
+
+        <p><span>Welcome to the full library of all the <i>Muse Tunes,</i>  all gathered right in one place! Feel free to explore and filter by genre, vibe, or whatever tag catches your eye. 😎</span></p>
+        <!--
+        itchyscratchy image
+        <img src="images/itchyscratchy.gif" alt="Itchy and Scratchy" style="position: absolute; top: 150px; left:40%; z-index: 0; opacity: 0.5;">
+        -->
 
         <!-- Record Image -->
         <img src="images/record.png" class="record" alt="Record">
@@ -27,8 +39,11 @@
         <!-- Track List -->
         <div id="track-list"></div>
 
-        <!-- Optional additional GIF -->
+        <!-- additional GIF -->
+        <a href="https://amused.itch.io/frog-quest" target="_blank">
+
         <img src="images/frogblinkie.gif" alt="Animated Frog">
+        </a>
     </div>
 
     <script src="script.js"></script>

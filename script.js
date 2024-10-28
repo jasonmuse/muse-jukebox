@@ -3,126 +3,206 @@ const tracks = [
     {
         "title": "Loot Mode",
         "file": "audio/lootmode.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Hype", "Trap", "2024"]
+        "cover": "images/itchyscratchy.gif",
+        "tags": ["Hype", "Trap"],
+        "date": "2024"
     },
     {
         "title": "Mino",
         "file": "audio/mino.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Hype", "Piano", "Trap", "2024"]
+        "cover": "images/wiz.png",
+        "tags": ["Chill", "Piano", "Trap"],
+        "date": "2024"
     },
     {
         "title": "Portal",
         "file": "audio/portal.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Chill", "Lo-fi", "2024"]
+        "cover": "images/howhollows-min.png",
+        "tags": ["Chill", "Lo-fi"],
+        "date": "2024"
     },
     {
         "title": "Sundrown",
         "file": "audio/sundrown.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Happy", "Ambient", "2024"]
+        "cover": "images/water.gif",
+        "tags": ["Happy", "Ambient"],
+        "date": "2024"
     }
 ];
 
-// Elements
-const trackList = document.getElementById("track-list");
-const tagFilter = document.getElementById("tag-filter");
-let audioElements = [];
-const record = document.querySelector(".record"); // Select record image
-let isSpinning = false; // Track if record is currently spinning
-let rotationAngle = 0; // Track current rotation angle
-let spinRequest; // Store the animation frame ID for rotation
+// Wait for the DOM to load before accessing elements
+document.addEventListener("DOMContentLoaded", () => {
+    const trackList = document.getElementById("track-list");
+    const tagFilter = document.getElementById("tag-filter");
+    const record = document.querySelector(".record");
+    const switchSound = new Audio("audio/jukeboxswitch.mp3");
+    let audioElements = [];
+    let isSpinning = false;
+    let currentAudio = null;
+    let rotationAngle = 0; // Declare rotationAngle here
+    let spinRequest; // Declare spinRequest here
 
-// Function to start spinning the record
-function startSpinning() {
-    isSpinning = true;
-    function spin() {
-        if (isSpinning) {
-            rotationAngle = (rotationAngle + 0.5) % 360; // Increment angle
-            record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`; // Apply rotation
-            spinRequest = requestAnimationFrame(spin); // Request next frame
+    // Function to start spinning the record
+    function startSpinning() {
+        if (isSpinning) return;
+        isSpinning = true;
+
+        function spin() {
+            if (isSpinning) {
+                rotationAngle = (rotationAngle + 0.5) % 360;
+                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+                spinRequest = requestAnimationFrame(spin);
+            }
         }
+        spin();
     }
-    spin();
-}
 
-// Function to stop spinning the record
-function stopSpinning() {
-    isSpinning = false;
-    cancelAnimationFrame(spinRequest); // Stop the animation loop
-}
+    // Function to stop spinning the record
+    function stopSpinning() {
+        isSpinning = false;
+        cancelAnimationFrame(spinRequest);
+    }
 
-// Populate track list dynamically
-function populateTrackList(tracks) {
-    trackList.innerHTML = ''; // Clear the list
-    audioElements = []; // Clear audio element references
+    // Function to move the record down briefly before starting the next spin
+    function moveRecordDownAndUp(callback) {
+        switchSound.volume = 0.5;
+        switchSound.play();
+        record.classList.remove("up");
+        setTimeout(() => {
+            record.classList.add("up");
+            if (callback) callback();
+        }, 300);
+    }
 
-    tracks.forEach(track => {
-        const trackElement = document.createElement("div");
-        trackElement.classList.add("track");
-        trackElement.innerHTML = `
-        <img src="${track.cover}" alt="${track.title} Cover">
-        <div class="track-info">
-        <p class="title">${track.title}</p>
-        <p class="tags">${track.tags.map(tag => `<span class="tag-bubble">${tag}</span>`).join(', ')}</p>
-        <audio controls>
-        <source src="${track.file}" type="audio/mp3">
-        Your browser does not support the audio element.
-        </audio>
-        </div>
-        `;
-        trackList.appendChild(trackElement);
+    // Helper function to format time in M:SS format
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "--:--";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
+    }
 
-        // Get the audio element and add it to the array
-        const audio = trackElement.querySelector("audio");
-        audioElements.push(audio);
+    // Populate track list dynamically
+    function populateTrackList(tracks) {
+        trackList.innerHTML = '';
+        audioElements = [];
 
-        // Play event to animate record up and start spinning
-        audio.addEventListener("play", () => {
-            record.classList.add("up"); // Move up without spin
-            startSpinning(); // Start the spin
-            audioElements.forEach(otherAudio => {
-                if (otherAudio !== audio) {
-                    otherAudio.pause(); // Pause other tracks
+        tracks.forEach(track => {
+            const trackElement = document.createElement("div");
+            trackElement.classList.add("track");
+            trackElement.innerHTML = `
+            <img src="${track.cover}" alt="${track.title} Cover">
+            <div class="track-info">
+            <p class="title">${track.title} <span class="release-date clickable-tag">${track.date}</span></p>
+            <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
+            <div class="playback-controls">
+            <button class="play-button">Play</button>
+            <span class="time-display" style="display:none">0:00 / --:--</span>
+            </div>
+            <audio data-src="${track.file}" preload="none" style="display: none;"></audio>
+            </div>
+            `;
+            trackList.appendChild(trackElement);
+
+            const audio = trackElement.querySelector("audio");
+            const playButton = trackElement.querySelector(".play-button");
+            const timeDisplay = trackElement.querySelector(".time-display");
+            audioElements.push(audio);
+
+            // Play/pause logic for the custom button
+            playButton.addEventListener("click", () => {
+                if (currentAudio && currentAudio !== audio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio.parentElement.querySelector(".play-button").textContent = "Play";
+                    currentAudio.parentElement.querySelector(".time-display").style.display = "none";
+                }
+
+                if (audio.paused) {
+                    if (currentAudio !== audio) {
+                        if (!audio.src) {
+                            audio.src = audio.getAttribute("data-src");
+                        }
+                        currentAudio = audio;
+
+                        moveRecordDownAndUp(() => startSpinning());
+                        setTimeout(() => audio.play(), 300);
+                    } else {
+                        startSpinning();
+                        audio.play();
+                    }
+                    playButton.textContent = "Pause";
+                    timeDisplay.style.display = "inline";
+                } else {
+                    audio.pause();
+                    playButton.textContent = "Play";
+                }
+            });
+
+            // Update time display when the audio is playing
+            audio.addEventListener("timeupdate", () => {
+                const currentTime = formatTime(audio.currentTime);
+                const duration = formatTime(audio.duration);
+                timeDisplay.textContent = `${currentTime} / ${duration}`;
+            });
+
+            // Reset the display when a track ends
+            audio.addEventListener("ended", () => {
+                stopSpinning();
+                record.classList.remove("up");
+                playButton.textContent = "Play";
+                timeDisplay.style.display = "none";
+                currentAudio = null;
+            });
+
+            // Pause event to stop spinning if no other track is playing
+            audio.addEventListener("pause", () => {
+                const anyPlaying = audioElements.some(a => !a.paused && a !== audio);
+                if (!anyPlaying) {
+                    stopSpinning();
                 }
             });
         });
 
-        // Pause and ended events to stop spinning and keep the current rotation
-        audio.addEventListener("pause", stopSpinning); // Stop spinning without resetting angle
-        audio.addEventListener("ended", () => {
-            stopSpinning(); // Stop spinning
-            record.classList.remove("up"); // Move back down
+        // Add event listeners to each tag bubble for filtering
+        document.querySelectorAll(".clickable-tag").forEach(tagElement => {
+            tagElement.addEventListener("click", () => {
+                tagFilter.value = tagElement.textContent;
+                applyTagFilter(tagElement.textContent);
+            });
         });
-    });
-}
+    }
 
-// Populate tag filter options
-function populateTagFilter(tracks) {
-    const tags = new Set();
-    tracks.forEach(track => track.tags.forEach(tag => tags.add(tag)));
+    // Populate tag filter options
+    function populateTagFilter(tracks) {
+        const tags = new Set();
+        tracks.forEach(track => {
+            track.tags.forEach(tag => tags.add(tag));
+            tags.add(track.date);
+        });
 
-    tags.forEach(tag => {
-        const option = document.createElement("option");
-        option.value = tag;
-        option.textContent = tag;
-        tagFilter.appendChild(option);
-    });
-}
+        tagFilter.innerHTML = '<option value="all">All</option>';
 
-// Filter by selected tag
-tagFilter.addEventListener('change', () => {
-    const selectedTag = tagFilter.value;
-    if (selectedTag === 'all') {
-        populateTrackList(tracks); // Show all tracks
-    } else {
-        const filteredTracks = tracks.filter(track => track.tags.includes(selectedTag));
+        tags.forEach(tag => {
+            const option = document.createElement("option");
+            option.value = tag;
+            option.textContent = tag;
+            tagFilter.appendChild(option);
+        });
+    }
+
+    // Apply filter by selected tag
+    function applyTagFilter(selectedTag) {
+        const filteredTracks = selectedTag === 'all' ? tracks : tracks.filter(track => track.tags.includes(selectedTag) || track.date === selectedTag);
         populateTrackList(filteredTracks);
     }
-});
 
-// Initial population of track list and filter
-populateTrackList(tracks);
-populateTagFilter(tracks);
+    // Filter by selected tag from dropdown
+    tagFilter.addEventListener('change', () => {
+        applyTagFilter(tagFilter.value);
+    });
+
+    // Initial population of track list and filter
+    populateTrackList(tracks);
+    populateTagFilter(tracks);
+});
