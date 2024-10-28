@@ -245,4 +245,15 @@ audio {
     p {
         line-height: 1.2; /* Reduced line height for smaller screens */
     }
+
+    .record{
+
+        width: 250px;
+        height: 250px;
+    }
+    .record.up {
+        top: 0px;
+        opacity: 1;
+    }
+
 }
