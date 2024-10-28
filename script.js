@@ -42,26 +42,54 @@ document.addEventListener("DOMContentLoaded", () => {
     let rotationAngle = 0; // Declare rotationAngle here
     let spinRequest; // Declare spinRequest here
 
-    // Function to start spinning the record
+    let accelerationRequest; // New variable to track acceleration frame
+
+    // Modify startSpinning to implement smooth acceleration
     function startSpinning() {
         if (isSpinning) return;
         isSpinning = true;
+        let acceleration = 0.1; // Start with a small increment for gradual acceleration
 
-        function spin() {
+        function accelerate() {
             if (isSpinning) {
-                rotationAngle = (rotationAngle + 0.5) % 360;
+                rotationAngle = (rotationAngle + acceleration) % 360;
                 record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
-                spinRequest = requestAnimationFrame(spin);
+
+                // Gradually increase the acceleration until it reaches the target speed (e.g., 0.5)
+                if (acceleration < 0.5) {
+                    acceleration += 0.01; // Increase speed gradually
+                }
+
+                accelerationRequest = requestAnimationFrame(accelerate);
             }
         }
-        spin();
+
+        accelerate();
     }
 
-    // Function to stop spinning the record
+    let decelerateRequest; // New variable to track deceleration frame
+
+    // Modify stopSpinning to implement smooth deceleration
     function stopSpinning() {
         isSpinning = false;
-        cancelAnimationFrame(spinRequest);
+        let deceleration = 0.5; // Initial deceleration speed
+
+        function decelerate() {
+            if (deceleration > 0) {
+                rotationAngle = (rotationAngle + deceleration) % 360;
+                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+                deceleration -= 0.02; // Gradually slow down
+
+                // Continue decelerating until the speed reaches zero
+                decelerateRequest = requestAnimationFrame(decelerate);
+            } else {
+                cancelAnimationFrame(decelerateRequest); // Stop animation when deceleration completes
+            }
+        }
+
+        decelerate();
     }
+
 
     // Function to move the record down briefly before starting the next spin
     function moveRecordDownAndUp(callback) {
