@@ -1,10 +1,11 @@
 // Song data embedded directly into the script
 const tracks = [
+
     {
-        "title": "Loot Mode",
-        "file": "audio/lootmode.mp3",
-        "cover": "images/itchyscratchy.gif",
-        "tags": ["Hype", "Trap"],
+        "title": "Sundrown",
+        "file": "audio/sundrown.mp3",
+        "cover": "images/water.gif",
+        "tags": ["Happy", "Ambient"],
         "date": "2024"
     },
     {
@@ -22,12 +23,13 @@ const tracks = [
         "date": "2024"
     },
     {
-        "title": "Sundrown",
-        "file": "audio/sundrown.mp3",
-        "cover": "images/water.gif",
-        "tags": ["Happy", "Ambient"],
+        "title": "Loot Mode",
+        "file": "audio/lootmode.mp3",
+        "cover": "images/itchyscratchy.gif",
+        "tags": ["Hype", "Trap"],
         "date": "2024"
     }
+
 ];
 
 // Wait for the DOM to load before accessing elements
