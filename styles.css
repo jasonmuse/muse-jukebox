@@ -221,7 +221,7 @@ audio {
     }
 
     h1 {
-        font-size: 2.5em;
+        font-size: 3em;
         line-height: 1.1;
     }
 
@@ -259,8 +259,8 @@ audio {
         opacity: 1;
     }
     .penguin-icon {
-        transform: scale(2.0);
-        padding: 10px;
+        transform: scale(3.0);
+        padding: 30px;
     }
 
 }
