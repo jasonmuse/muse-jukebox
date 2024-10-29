@@ -53,7 +53,7 @@ const tracks = [
     {
         "title": "Frog God",
         "file": "audio/FROGGOD.mp3",
-        "cover": "images/baby_bowser.png",
+        "cover": "images/Baby_Bowser.png",
         "tags": ["Hype", "Dark", "Mysterious", "Game OST"],
         "date": "2024"
     },
@@ -145,7 +145,7 @@ const tracks = [
     {
         "title": "??????",
         "file": "audio/gotcha.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/question.jpg",
         "tags": ["?????", "?????", "?????", "?????"],
         "date": "?????"
     }
