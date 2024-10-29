@@ -5,13 +5,13 @@ const tracks = [
         "title": "Sundrown",
         "file": "audio/sundrown.mp3",
         "cover": "images/water.gif",
-        "tags": ["Happy", "Ambient"],
+        "tags": ["Happy", "Ambient", "Lo-fi"],
         "date": "2024"
     },
     {
         "title": "Mino",
         "file": "audio/mino.mp3",
-        "cover": "images/wiz.png",
+        "cover": "images/bonedeer.png",
         "tags": ["Chill", "Piano", "Trap"],
         "date": "2024"
     },
@@ -19,15 +19,135 @@ const tracks = [
         "title": "Portal",
         "file": "audio/portal.mp3",
         "cover": "images/howhollows-min.png",
-        "tags": ["Chill", "Lo-fi"],
+        "tags": ["Chill", "Lo-fi", "Mysterious"],
+        "date": "2024"
+    },
+    {
+        "title": "Hollows",
+        "file": "audio/hollows.mp3",
+        "cover": "images/hollows.jpg",
+        "tags": ["Hype", "Trap", "Bass"],
+        "date": "2023"
+    },
+    {
+        "title": "Rubber Bandit",
+        "file": "audio/rubberbandit.mp3",
+        "cover": "images/rubberbandit.png",
+        "tags": ["Hype", "Trap", "Bass"],
+        "date": "2023"
+    },
+    {
+        "title": "BOX 11",
+        "file": "audio/box11.mp3",
+        "cover": "images/box11.png",
+        "tags": ["Chill", "Ambient", "Lo-fi", "Mysterious"],
+        "date": "2024"
+    },
+    {
+        "title": "Goodbye Froggy",
+        "file": "audio/goodbyefroggy.mp3",
+        "cover": "images/goodbyefroggy.png",
+        "tags": ["Emotional", "Ambient", "Melancholic", "Game OST"],
+        "date": "2024"
+    },
+    {
+        "title": "Frog God",
+        "file": "audio/FROGGOD.mp3",
+        "cover": "images/baby_bowser.png",
+        "tags": ["Hype", "Dark", "Mysterious", "Game OST"],
+        "date": "2024"
+    },
+    {
+        "title": "Bell Drop",
+        "file": "audio/belldrop.mp3",
+        "cover": "images/belldrop.png",
+        "tags": ["Chill", "Hype", "Lo-fi", "Mysterious"],
+        "date": "2024"
+    },
+    {
+        "title": "Zoom",
+        "file": "audio/zoom.mp3",
+        "cover": "images/zoom.png",
+        "tags": ["Hype", "Trap", "Mysterious"],
+        "date": "2023"
+    },
+    {
+        "title": "Polar Coaster",
+        "file": "audio/polarcoaster.mp3",
+        "cover": "images/polarcoaster.png",
+        "tags": ["Chill", "Ambient", "Lo-fi"],
+        "date": "2024"
+    },
+    {
+        "title": "Orbit",
+        "file": "audio/orbit.mp3",
+        "cover": "images/orbit.png",
+        "tags": ["Chill", "Lo-fi", "Meow"],
+        "date": "2024"
+    },
+    {
+        "title": "Clocked Out",
+        "file": "audio/clockedout.mp3",
+        "cover": "images/clockedout.png",
+        "tags": ["Chill", "Ambient", "Lo-fi"],
+        "date": "2024"
+    },
+    {
+        "title": "Closed Eyes",
+        "file": "audio/closedeyes.mp3",
+        "cover": "images/closedeyes.png",
+        "tags": ["Chill", "Lo-fi", "Ambient"],
+        "date": "2024"
+    },
+    {
+        "title": "Spit Up",
+        "file": "audio/spitup.mp3",
+        "cover": "images/spitup.png",
+        "tags": ["Chill", "Dark", "Trap"],
+        "date": "2024"
+    },
+    {
+        "title": "Flyby",
+        "file": "audio/flyby.mp3",
+        "cover": "images/flyby.png",
+        "tags": ["Chill", "Ambient", "Lo-fi"],
+        "date": "2024"
+    },
+    {
+        "title": "Skywatch",
+        "file": "audio/Skywatch.mp3",
+        "cover": "images/skywatch.png",
+        "tags": ["Chill", "Trap", "Hype"],
+        "date": "2024"
+    },
+    {
+        "title": "Boom Slide",
+        "file": "audio/bottletop.mp3",
+        "cover": "images/boomslide.png",
+        "tags": ["Chill", "Ambient", "Lo-fi", "Game OST"],
+        "date": "2024"
+    },
+    {
+        "title": "Brain Check",
+        "file": "audio/braincheck.mp3",
+        "cover": "images/pineapplecakelogo.png",
+        "tags": ["Chill", "Ambient", "Game OST"],
         "date": "2024"
     },
     {
         "title": "Loot Mode",
         "file": "audio/lootmode.mp3",
         "cover": "images/itchyscratchy.gif",
-        "tags": ["Hype", "Trap"],
+        "tags": ["Hype", "Dark", "Mysterious", "Trap"],
         "date": "2024"
+    },
+
+    {
+        "title": "??????",
+        "file": "audio/gotcha.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["?????", "?????", "?????", "?????"],
+        "date": "?????"
     }
 
 ];
