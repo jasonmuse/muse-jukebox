@@ -2,6 +2,13 @@
 const tracks = [
 
     {
+        "title": "Callout",
+        "file": "audio/callout.mp3",
+        "cover": "images/penguin.png",
+        "tags": ["Happy", "Ambient", "Lo-fi"],
+        "date": "2024"
+    },
+    {
         "title": "Sundrown",
         "file": "audio/sundrown.mp3",
         "cover": "images/water.gif",
