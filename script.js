@@ -2,6 +2,13 @@
 const tracks = [
 
     {
+        "title": "Drift",
+        "file": "audio/drift.mp3",
+        "cover": "images/drift.gif",
+        "tags": ["Ambient", "Bass", "Chill"],
+        "date": "2025"
+    },    
+	{
         "title": "Callout",
         "file": "audio/callout.mp3",
         "cover": "images/penguin.png",
@@ -51,7 +58,7 @@ const tracks = [
         "date": "2024"
     },
     {
-        "title": "Goodbye Froggy",
+        "title": "Farewell Froggy",
         "file": "audio/goodbyefroggy.mp3",
         "cover": "images/goodbyefroggy.png",
         "tags": ["Emotional", "Ambient", "Melancholic", "Game OST"],
