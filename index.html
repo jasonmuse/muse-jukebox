@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <title>Muse Jukebox</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="images/musecast.png" />
 </head>
 <body>
+  <div id="jukebox-wrapper">
+  <div id="jukebox-container">
+        <!-- Record Image -->
+        <img src="images/record.png" class="record" alt="Record">
     <div id="jukebox">
 
         <h1 class="jukebox-title">
@@ -19,14 +24,12 @@
         </h1>
 
 
-        <p><span>Welcome to the full library of my <i>Muse Tunes,</i>  all gathered right in one place! Feel free to explore and filter by genre, vibe, or whatever tag catches your eye. 😎</span></p>
+        <p><span>Welcome to the semi-complete library of my <i>Muse Tunes</i>— gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag catches your eye! 😎</span></p>
         <!--
         itchyscratchy image
         <img src="images/itchyscratchy.gif" alt="Itchy and Scratchy" style="position: absolute; top: 150px; left:40%; z-index: 0; opacity: 0.5;">
         -->
 
-        <!-- Record Image -->
-        <img src="images/record.png" class="record" alt="Record">
 
         <!-- Filter Section -->
         <div id="filters">
@@ -44,6 +47,8 @@
 
         <img src="images/frogblinkie.gif" alt="Animated Frog">
         </a>
+    </div>
+    </div>
     </div>
 
     <script src="script.js"></script>

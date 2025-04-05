@@ -129,7 +129,7 @@ const tracks = [
     },
     {
         "title": "Skywatch",
-        "file": "audio/Skywatch.mp3",
+        "file": "audio/skywatch.mp3",
         "cover": "images/skywatch.png",
         "tags": ["Chill", "Trap", "Hype"],
         "date": "2024"
