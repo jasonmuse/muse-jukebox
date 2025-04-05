@@ -226,20 +226,27 @@ audio {
     border-radius: 5px;
 }
 
-/* Mobile */
-@media (max-width: 600px) {
+/* Mobile */@media (max-width: 600px) {
+    html, body {
+        height: 100%;
+        overflow: hidden; /* 🔒 prevent extra scrollbars */
+    }
+
+    body {
+        transform: scale(0.9, 0.85);
+        transform-origin: top center;
+    }
+
+    #jukebox-wrapper {
+    width: 100vw;
+    overflow: hidden;
+    margin-top: -30px;
+    }
+
     #jukebox {
     max-width: 100%;
     padding: 10px 10px 0px 10px;
     box-sizing: border-box;
-    }
-
-    #jukebox-wrapper {
-
-    transform: scale(0.9, 0.85);
-    width: 125%
-    transform-origin: top center;
-    margin-top: -80px;
     }
 
     #track-list {
