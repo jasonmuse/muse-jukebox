@@ -101,7 +101,7 @@ const tracks = [
     },
     {
         "title": "Orbit",
-        "file": "audio/orbit.mp3",
+        "file": "audio/ORBIT.mp3",
         "cover": "images/orbit.png",
         "tags": ["Chill", "Lo-fi", "Meow"],
         "date": "2024"
@@ -136,7 +136,7 @@ const tracks = [
     },
     {
         "title": "Skywatch",
-        "file": "audio/skywatch.mp3",
+        "file": "audio/SKYWATCH.mp3",
         "cover": "images/skywatch.png",
         "tags": ["Chill", "Trap", "Hype"],
         "date": "2024"
