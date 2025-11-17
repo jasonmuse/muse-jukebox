@@ -4,7 +4,7 @@ html, body {
     padding: 0;
     overflow-x: hidden;
     font-family: Arial, sans-serif;
-    background: radial-gradient(circle, #8BC6EC, #9599E2);
+    background: radial-gradient(circle, #91cdfa, #2e2372);
     min-height: 100vh;
 }
 
@@ -78,7 +78,7 @@ h1 {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: linear-gradient(90deg, #476bfc, #580af5);
+    background: linear-gradient(90deg, #476bfc, #d4c9ff);
     background-size: 200% 200%;
     color: transparent;
     background-clip: text;
@@ -232,7 +232,7 @@ audio {
         overflow: hidden; /* 🔒 prevent extra scrollbars */
     }
 
-    body {
+    #jukebox {
         transform: scale(0.9, 0.85);
         transform-origin: top center;
     }
@@ -298,4 +298,60 @@ audio {
         transform: scale(2.0);
         padding: 15px;
     }
+}
+
+
+
+/* ───── CUSTOM SCROLLBAR FOR THE TRACK LIST ───── */
+#track-list {
+    /* existing styles... */
+    scrollbar-width: thin;          /* Firefox */
+    scrollbar-color: #738fff #2e2e3d;  /* thumb + track color (Firefox) */
+}
+
+/* Webkit browsers (Chrome, Edge, Safari, Android, iOS) */
+#track-list::-webkit-scrollbar {
+    width: 10px;                     /* vertical scrollbar */
+    height: 10px;                    /* horizontal (won’t appear anyway) */
+}
+
+#track-list::-webkit-scrollbar-track {
+    background: #2e2e3d;             /* dark background like your jukebox */
+    border-radius: 10px;
+    border: 2px solid #373593;
+}
+
+#track-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #738fff, #580af5); /* matches your title gradient */
+    border-radius: 10px;
+    border: 2px solid #2e2e3d;
+}
+
+#track-list::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #8ba8ff, #7a2eff);
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+/* ───── OPTIONAL: make the whole page scrollbar match too ───── */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: #738fff #2e2e3d;
+}
+
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2e2e3d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #738fff, #580af5);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #8ba8ff, #7a2eff);
 }

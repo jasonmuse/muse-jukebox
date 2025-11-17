@@ -8,6 +8,16 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="images/musecast.png" />
 </head>
+<script>
+if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('portrait').catch(()=>{});
+}
+window.addEventListener("orientationchange", () => {
+    if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait');
+    }
+});
+</script>
 <body>
   <div id="jukebox-wrapper">
   <div id="jukebox-container">
