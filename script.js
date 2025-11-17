@@ -2,13 +2,20 @@
 const tracks = [
 
     {
+        "title": "Dropoff",
+        "file": "audio/dropoff.mp3",
+        "cover": "images/dropoff.png",
+        "tags": ["Ambient", "Bass", "Chill"],
+        "date": "2025"
+    }, 
+    {
         "title": "Drift",
         "file": "audio/drift.mp3",
         "cover": "images/drift.gif",
         "tags": ["Ambient", "Bass", "Chill"],
         "date": "2025"
     },    
-	{
+    {
         "title": "Callout",
         "file": "audio/callout.mp3",
         "cover": "images/penguin.png",
