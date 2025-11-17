@@ -356,13 +356,14 @@ html {
     background: linear-gradient(135deg, #8ba8ff, #7a2eff);
 }
 
-/* Add this anywhere in your CSS */
+/* FORCE PORTRAIT + AUTO-RESET WHEN ROTATING BACK */
 @media screen and (orientation: landscape) and (max-width: 920px) {
+    /* Full-screen "rotate back" message */
     body::before {
-        content: "Rotate to portrait for the best experience ↑";
+        content: "Please rotate to portrait ↑";
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: #000;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.95);
         color: #fff;
         font-size: 1.8rem;
         font-weight: bold;
@@ -372,10 +373,34 @@ html {
         text-align: center;
         padding: 40px;
         z-index: 99999;
-        backdrop-filter: blur(5px);
+        backdrop-filter: blur(8px);
     }
-    body > *:not(script):not(style) {
-        opacity: 0;
-        pointer-events: none;
+
+    /* Hide all real content while in landscape */
+    body > * {
+        visibility: hidden !important;
+    }
+}
+
+/* This is the key part — reset everything when back in portrait */
+@media screen and (orientation: portrait) {
+    body::before {
+        display: none !important;
+    }
+    body > * {
+        visibility: visible !important;
+    }
+    
+    /* Force a full refresh of layout when returning to portrait */
+    html, body, #jukebox-wrapper, #jukebox-container, #jukebox {
+        transform: none !important;
+        zoom: 1 !important;
+        overflow: visible !important;
+    }
+    
+    /* Fix iOS Safari weird zoom/scale bug on rotate back */
+    body {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
     }
 }
