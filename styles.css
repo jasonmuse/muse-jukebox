@@ -356,27 +356,26 @@ html {
     background: linear-gradient(135deg, #8ba8ff, #7a2eff);
 }
 
-/* Force portrait layout on mobile - works on iOS + Android */
-@supports (orientation: portrait) {
-    @media screen and (orientation: landscape) and (max-width: 920px) {
-        body::before {
-            content: "Please rotate your device to portrait ↑";
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.95);
-            color: white;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            z-index: 99999;
-            padding: 20px;
-        }
-        
-        /* Hide everything else while in landscape */
-        body > * {
-            visibility: hidden;
-        }
+/* Add this anywhere in your CSS */
+@media screen and (orientation: landscape) and (max-width: 920px) {
+    body::before {
+        content: "Rotate to portrait for the best experience ↑";
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: #000;
+        color: #fff;
+        font-size: 1.8rem;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 40px;
+        z-index: 99999;
+        backdrop-filter: blur(5px);
+    }
+    body > *:not(script):not(style) {
+        opacity: 0;
+        pointer-events: none;
     }
 }
