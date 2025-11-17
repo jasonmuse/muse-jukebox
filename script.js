@@ -23,6 +23,13 @@ const tracks = [
         "date": "2024"
     },
     {
+        "title": "BOX 11",
+        "file": "audio/box11.mp3",
+        "cover": "images/box11.png",
+        "tags": ["Chill", "Ambient", "Lo-fi", "Mysterious"],
+        "date": "2024"
+    },
+    {
         "title": "Sundrown",
         "file": "audio/sundrown.mp3",
         "cover": "images/water.gif",
@@ -56,13 +63,6 @@ const tracks = [
         "cover": "images/rubberbandit.png",
         "tags": ["Hype", "Trap", "Bass"],
         "date": "2023"
-    },
-    {
-        "title": "BOX 11",
-        "file": "audio/box11.mp3",
-        "cover": "images/box11.png",
-        "tags": ["Chill", "Ambient", "Lo-fi", "Mysterious"],
-        "date": "2024"
     },
     {
         "title": "Farewell Froggy",
