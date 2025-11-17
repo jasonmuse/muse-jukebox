@@ -14,7 +14,7 @@ body {
     justify-content: center;
     align-items: flex-start;
     color: #fff;
-    overflow-y: auto;
+    overflow-y: hidden;
 }
 
 /* Outer wrapper */
@@ -392,7 +392,7 @@ html {
     }
     
     /* Force a full refresh of layout when returning to portrait */
-    html, body, #jukebox-wrapper, #jukebox-container, #jukebox {
+    #jukebox-wrapper, #jukebox-container, #jukebox {
 
         zoom: 1 !important;
         overflow: visible !important;
