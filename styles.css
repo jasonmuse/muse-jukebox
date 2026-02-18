@@ -126,15 +126,16 @@ box-shadow: 0 0 0 3px #ffffff;
 
 .track {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 15px;
     border-bottom: 1px solid #444;
     padding: 10px;
+    --cover-size: 80px;
 }
 
 .track img {
-    width: 80px;
-    height: 80px;
+    width: var(--cover-size);
+    height: var(--cover-size);
     border-radius: 12px;
     margin-right: 15px;
     cursor: pointer;
@@ -163,9 +164,8 @@ box-shadow: 0 0 0 3px #ffffff;
     justify-content: space-between;
     min-width: 250px;
 
-    height: var(--cover-size);
-    box-sizing: border-box;     /* NEW */
-    padding: 2px 0 6px 0;       /* NEW: restores the “old” vertical padding feel */
+    box-sizing: border-box;
+    padding: 2px 0 6px 0;
 }
 
 
@@ -224,7 +224,7 @@ audio {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-top: 2px;
+    margin-top: 0;
     margin-right: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     position: relative;
@@ -313,6 +313,7 @@ audio {
     position: relative;
     z-index: 0;
     letter-spacing: 0.2px;
+    line-height: 1;
 }
 
 .time-display.visible {
@@ -383,14 +384,15 @@ audio {
 
     .track {
         flex-direction: row;
-        align-items: center;
+        align-items: flex-start;
         margin-bottom: 12px;
         padding: 8px;
+        --cover-size: 70px;
     }
     
     .track img {
-        width: 70px;
-        height: 70px;
+        width: var(--cover-size);
+        height: var(--cover-size);
         margin-right: 12px;
     }
     
