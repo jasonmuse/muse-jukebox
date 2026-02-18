@@ -173,8 +173,11 @@ box-shadow: 0 0 0 3px #ffffff;
 .title {
     font-weight: bold;
     margin: 0;
-    margin-bottom: -5px;
     font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.1;
 }
 
 .tags {
@@ -343,9 +346,13 @@ audio {
     font-size: 0.75em;
     color: #ccc;
     opacity: 0.7;
-    margin-left: 5px;
-    padding: 3px;
-    border-radius: 5px;
+    margin-left: 2px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    background: #0000002e;
 }
 
 /* Mobile */@media (max-width: 600px) {
