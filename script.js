@@ -2,6 +2,27 @@
 const tracks = [
 
     {
+        "title": "Runaway",
+        "file": "audio/runawaynovocals.mp3",
+        "cover": "images/runaway.gif",
+        "tags": ["Chill", "Ambient", "Lo-fi"],
+        "date": "2026"
+    },
+    {
+        "title": "Leafed",
+        "file": "audio/leafed.mp3",
+        "cover": "images/leafed.gif",
+        "tags": ["Chill", "Ambient", "Mysterious"],
+        "date": "2026"
+    },
+    {
+        "title": "Gallery - Muse Remix",
+        "file": "audio/gallerymuseremix.mp3",
+        "cover": "images/gallerymuseremix.png",
+        "tags": ["Trap", "Bass", "Remix", "Game OST"],
+        "date": "2026"
+    },
+    {
         "title": "Dropoff",
         "file": "audio/dropoff.mp3",
         "cover": "images/dropoff.png",
@@ -179,6 +200,53 @@ document.addEventListener("DOMContentLoaded", () => {
     const tagFilter = document.getElementById("tag-filter");
     const record = document.querySelector(".record");
     const switchSound = new Audio("audio/jukeboxswitch.mp3");
+    
+    // Cover modal elements
+    const coverModal = document.getElementById("cover-modal");
+    const coverModalImage = document.getElementById("cover-modal-image");
+    const coverModalClose = document.querySelector(".cover-modal-close");
+    const coverModalOverlay = document.querySelector(".cover-modal-overlay");
+    
+    // Function to open cover modal
+    window.openCoverModal = function(imageSrc, title) {
+        if (coverModalImage && coverModal) {
+            coverModalImage.src = imageSrc;
+            coverModalImage.alt = `${title} Cover`;
+            coverModal.classList.add("active");
+            document.body.style.overflow = "hidden"; // Prevent background scrolling
+        }
+    };
+    
+    // Function to close cover modal
+    function closeCoverModal() {
+        if (coverModal) {
+            // Start fade out
+            coverModal.classList.remove("active");
+            
+            // Wait for fade out to complete before hiding
+            setTimeout(() => {
+                if (!coverModal.classList.contains("active")) {
+                    // Modal is still closed, safe to restore scrolling
+                    document.body.style.overflow = ""; // Restore scrolling
+                }
+            }, 300); // Match CSS transition duration
+        }
+    }
+    
+    // Close modal handlers
+    if (coverModalClose) {
+        coverModalClose.addEventListener("click", closeCoverModal);
+    }
+    if (coverModalOverlay) {
+        coverModalOverlay.addEventListener("click", closeCoverModal);
+    }
+    
+    // Close modal on Escape key
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && coverModal && coverModal.classList.contains("active")) {
+            closeCoverModal();
+        }
+    });
     let audioElements = [];
     let isSpinning = false;
     let currentAudio = null;
@@ -187,21 +255,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let accelerationRequest; // New variable to track acceleration frame
 
-    // Modify startSpinning to implement smooth acceleration
+    // Modify startSpinning to implement smooth acceleration (like a record starting)
     function startSpinning() {
         if (isSpinning) return;
         isSpinning = true;
-        let acceleration = 0.1; // Start with a small increment for gradual acceleration
+        let currentSpeed = currentRotationSpeed || 0; // Start from current speed (might be decelerating)
+        const targetSpeed = 0.5;
+        const accelerationRate = 0.008; // More subtle acceleration
 
         function accelerate() {
             if (isSpinning) {
-                rotationAngle = (rotationAngle + acceleration) % 360;
-                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
-
-                // Gradually increase the acceleration until it reaches the target speed (e.g., 0.5)
-                if (acceleration < 0.5) {
-                    acceleration += 0.01; // Increase speed gradually
+                // Gradually accelerate to target speed
+                if (currentSpeed < targetSpeed) {
+                    currentSpeed = Math.min(currentSpeed + accelerationRate, targetSpeed);
                 }
+                
+                rotationAngle = (rotationAngle + currentSpeed) % 360;
+                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+                currentRotationSpeed = currentSpeed; // Update tracked speed
 
                 accelerationRequest = requestAnimationFrame(accelerate);
             }
@@ -211,21 +282,105 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let decelerateRequest; // New variable to track deceleration frame
+    let currentRotationSpeed = 0; // Track current rotation speed
+    let volumeFadeInterval = null; // Track volume fade interval
 
-    // Modify stopSpinning to implement smooth deceleration
+    // Function to fade out audio volume
+    function fadeOutAudio(audioElement, callback) {
+        if (!audioElement || audioElement.paused) {
+            if (callback) callback();
+            return;
+        }
+        
+        // Clear any existing fade
+        if (volumeFadeInterval) {
+            clearInterval(volumeFadeInterval);
+        }
+        
+        let volume = audioElement.volume || 1.0;
+        const duration = 80; // Very quick fade out
+        const steps = 5;
+        const stepSize = volume / steps;
+        const intervalTime = duration / steps;
+        
+        volumeFadeInterval = setInterval(() => {
+            if (audioElement.paused) {
+                clearInterval(volumeFadeInterval);
+                volumeFadeInterval = null;
+                audioElement.volume = 1.0; // Reset volume
+                if (callback) callback();
+                return;
+            }
+            
+            if (volume > 0) {
+                volume = Math.max(volume - stepSize, 0);
+                audioElement.volume = volume;
+            } else {
+                // Faded out, pause and reset
+                clearInterval(volumeFadeInterval);
+                volumeFadeInterval = null;
+                audioElement.pause();
+                audioElement.volume = 1.0; // Reset volume for next play
+                if (callback) callback();
+            }
+        }, intervalTime);
+    }
+
+    // Function to fade in audio volume
+    function fadeInAudio(audioElement) {
+        if (!audioElement) return;
+        
+        // Clear any existing fade
+        if (volumeFadeInterval) {
+            clearInterval(volumeFadeInterval);
+        }
+        
+        // Start at 0 volume
+        audioElement.volume = 0;
+        
+        let volume = 0;
+        const targetVolume = 1.0;
+        const duration = 100; // Very quick fade in
+        const steps = 5;
+        const stepSize = targetVolume / steps;
+        const intervalTime = duration / steps;
+        
+        volumeFadeInterval = setInterval(() => {
+            if (audioElement.paused) {
+                clearInterval(volumeFadeInterval);
+                volumeFadeInterval = null;
+                audioElement.volume = 1.0;
+                return;
+            }
+            
+            if (volume < targetVolume) {
+                volume = Math.min(volume + stepSize, targetVolume);
+                audioElement.volume = volume;
+            } else {
+                // Faded in completely
+                clearInterval(volumeFadeInterval);
+                volumeFadeInterval = null;
+                audioElement.volume = 1.0; // Ensure full volume
+            }
+        }, intervalTime);
+    }
+
+    // Modify stopSpinning to implement smooth deceleration (like a record slowing down)
     function stopSpinning() {
         isSpinning = false;
-        let deceleration = 0.5; // Initial deceleration speed
+        let deceleration = currentRotationSpeed || 0.5; // Start from current speed
 
         function decelerate() {
             if (deceleration > 0) {
                 rotationAngle = (rotationAngle + deceleration) % 360;
                 record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
-                deceleration -= 0.02; // Gradually slow down
+                deceleration -= 0.015; // More subtle deceleration
+                currentRotationSpeed = deceleration;
 
                 // Continue decelerating until the speed reaches zero
                 decelerateRequest = requestAnimationFrame(decelerate);
             } else {
+                currentRotationSpeed = 0;
                 cancelAnimationFrame(decelerateRequest); // Stop animation when deceleration completes
             }
         }
@@ -253,6 +408,56 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${mins}:${secs}`;
     }
 
+    // Helper function to split text into letter spans for animation
+    function splitIntoLetters(text) {
+        return text.split('').map((letter, index) => 
+            `<span style="transition-delay: ${index * 30}ms">${letter === ' ' ? '&nbsp;' : letter}</span>`
+        ).join('');
+    }
+
+    // Helper function to animate text change with letter-by-letter effect
+    function animateTextChange(button, newText) {
+        // Add transitioning class to animate letters out (scale down)
+        button.classList.add("transitioning");
+        
+        // Wait for letters to animate out, then change text
+        setTimeout(() => {
+            // Store current width
+            const currentWidth = button.offsetWidth;
+            
+            // Set explicit width to maintain current size
+            button.style.width = currentWidth + 'px';
+            
+            // Change text content
+            button.innerHTML = splitIntoLetters(newText);
+            
+            // Force reflow
+            void button.offsetWidth;
+            
+            // Remove transitioning class to trigger bounce-in animation
+            button.classList.remove("transitioning");
+            
+            // Measure new width with auto, then animate to it
+            const tempWidth = button.style.width;
+            button.style.width = 'auto';
+            const newWidth = button.offsetWidth;
+            button.style.width = currentWidth + 'px';
+            
+            // Force reflow again
+            void button.offsetWidth;
+            
+            // Animate to new width
+            setTimeout(() => {
+                button.style.width = newWidth + 'px';
+                
+                // After transition, reset to auto
+                setTimeout(() => {
+                    button.style.width = '';
+                }, 300);
+            }, 50);
+        }, 250);
+    }
+
     // Populate track list dynamically
     function populateTrackList(tracks) {
         trackList.innerHTML = '';
@@ -268,7 +473,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
-            <span class="time-display" style="display:none">0:00 / --:--</span>
+            <span class="time-display">0:00 / --:--</span>
             </div>
             <audio data-src="${track.file}" preload="none" style="display: none;"></audio>
             </div>
@@ -278,15 +483,42 @@ document.addEventListener("DOMContentLoaded", () => {
             const audio = trackElement.querySelector("audio");
             const playButton = trackElement.querySelector(".play-button");
             const timeDisplay = trackElement.querySelector(".time-display");
+            const coverImage = trackElement.querySelector("img");
+            
+            // Initialize button with letter spans
+            playButton.innerHTML = splitIntoLetters("Play");
+            
+            // Add click handler for cover image modal
+            coverImage.addEventListener("click", (e) => {
+                e.stopPropagation(); // Prevent any other click handlers
+                if (window.openCoverModal) {
+                    window.openCoverModal(track.cover, track.title);
+                }
+            });
+            
             audioElements.push(audio);
 
             // Play/pause logic for the custom button
             playButton.addEventListener("click", () => {
                 if (currentAudio && currentAudio !== audio) {
+                    const prevButton = currentAudio.parentElement.querySelector(".play-button");
+                    const prevTimeDisplay = currentAudio.parentElement.querySelector(".time-display");
+                    
+                    // Stop any ongoing audio effects
+                    if (volumeFadeInterval) {
+                        clearInterval(volumeFadeInterval);
+                        volumeFadeInterval = null;
+                    }
+                    
+                    // Immediately pause previous track (switching tracks)
                     currentAudio.pause();
+                    currentAudio.volume = 1.0;
                     currentAudio.currentTime = 0;
-                    currentAudio.parentElement.querySelector(".play-button").textContent = "Play";
-                    currentAudio.parentElement.querySelector(".time-display").style.display = "none";
+                    
+                    // Smooth letter-by-letter text transition for previous button
+                    animateTextChange(prevButton, "Play");
+                    
+                    prevTimeDisplay.classList.remove("visible");
                 }
 
                 if (audio.paused) {
@@ -297,16 +529,30 @@ document.addEventListener("DOMContentLoaded", () => {
                         currentAudio = audio;
 
                         moveRecordDownAndUp(() => startSpinning());
-                        setTimeout(() => audio.play(), 300);
+                        setTimeout(() => {
+                            audio.play();
+                            fadeInAudio(audio); // Fade in audio volume
+                            // Trigger animation after a tiny delay to ensure smooth transition
+                            setTimeout(() => timeDisplay.classList.add("visible"), 50);
+                        }, 300);
                     } else {
                         startSpinning();
                         audio.play();
+                        fadeInAudio(audio); // Fade in audio volume
+                        setTimeout(() => timeDisplay.classList.add("visible"), 50);
                     }
-                    playButton.textContent = "Pause";
-                    timeDisplay.style.display = "inline";
+                    
+                    // Smooth letter-by-letter text transition to "Pause"
+                    animateTextChange(playButton, "Pause");
                 } else {
-                    audio.pause();
-                    playButton.textContent = "Play";
+                    // Fade out audio volume, then pause
+                    fadeOutAudio(audio, () => {
+                        // Audio is now paused after fade out
+                    });
+                    stopSpinning(); // Add subtle slow-down effect
+                    
+                    // Smooth letter-by-letter text transition to "Play"
+                    animateTextChange(playButton, "Play");
                 }
             });
 
@@ -321,8 +567,11 @@ document.addEventListener("DOMContentLoaded", () => {
             audio.addEventListener("ended", () => {
                 stopSpinning();
                 record.classList.remove("up");
-                playButton.textContent = "Play";
-                timeDisplay.style.display = "none";
+                
+                // Smooth letter-by-letter text transition to "Play"
+                animateTextChange(playButton, "Play");
+                
+                timeDisplay.classList.remove("visible");
                 currentAudio = null;
             });
 

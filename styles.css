@@ -133,18 +133,42 @@ box-shadow: 0 0 0 3px #ffffff;
 }
 
 .track img {
-    width: 60px;
-    height: 60px;
-    border-radius: 8px;
-    margin-right: 10px;
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    margin-right: 15px;
+    cursor: pointer;
+    object-fit: cover;
+    border: 2px solid rgba(100, 100, 120, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+    flex-shrink: 0;
+}
+
+.track img:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border-color: rgba(130, 130, 150, 0.6);
+}
+
+.track img:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .track-info {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    justify-content: space-between;
     min-width: 250px;
+
+    height: var(--cover-size);
+    box-sizing: border-box;     /* NEW */
+    padding: 2px 0 6px 0;       /* NEW: restores the “old” vertical padding feel */
 }
+
+
 
 .title {
     font-weight: bold;
@@ -187,34 +211,131 @@ audio {
 }
 
 .play-button {
-    background-color: #8BC6EC;
+    background-color: #7BA8D0;
     color: #fff;
     border: none;
-    padding: 6px 16px;
-    font-size: 1em;
-    border-radius: 5px;
+    padding: 7px 18px;
+    font-size: 0.95em;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    border-radius: 10px;
     cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-    display: inline-block;
+    transition: transform 120ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out, width 300ms cubic-bezier(0.4, 0, 0.2, 1), min-width 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-top: 2px;
-    margin-right: 8px;
+    margin-right: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+    min-width: 70px;
+    width: auto;
+}
+
+.play-button span {
+    display: inline-block;
+    transition: transform 400ms cubic-bezier(0.68, -0.6, 0.32, 1.6), opacity 200ms ease-out !important;
+    transform: scale(1);
+    opacity: 1;
+}
+
+.play-button.transitioning span {
+    transform: scale(0.3) !important;
+    opacity: 0 !important;
+}
+
+.play-button:not(.transitioning) span {
+    transform: scale(1) !important;
+    opacity: 1 !important;
+    animation: bounceIn 400ms cubic-bezier(0.68, -0.6, 0.32, 1.6) !important;
+}
+
+@keyframes bounceIn {
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.15);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.play-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.play-button:hover::before {
+    left: 100%;
 }
 
 .play-button:hover {
-    transform: scale(1.1);
-    background-color: #7ABBEA;
+    transform: scale(1.05);
+    background-color: #6B98C0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.play-button:active {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
 }
 
 .time-display {
     display: inline-block;
     vertical-align: middle;
-    font-size: 0.9em;
+    font-size: 0.85em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.86);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 5px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    transform: translateX(-14px);
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity 160ms ease-out, transform 220ms ease-out, max-width 220ms ease-out;
+    position: relative;
+    z-index: 0;
+    letter-spacing: 0.2px;
+}
+
+.time-display.visible {
+    opacity: 1;
+    transform: translateX(0);
+    max-width: 150px;
 }
 
 .playback-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    position: relative;
+    overflow: visible;
+
+    margin-top: auto;
+    padding-bottom: 1px;        /* NEW: tiny buffer so it never kisses the bottom */
+}
+
+
+.play-button {
+    position: relative;
+    z-index: 1;
 }
 
 .release-date {
@@ -260,19 +381,78 @@ audio {
         line-height: 1.1;
     }
 
+    .track {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12px;
+        padding: 8px;
+    }
+    
+    .track img {
+        width: 70px;
+        height: 70px;
+        margin-right: 12px;
+    }
+    
     .track-info {
         min-width: auto;
+        flex: 1;
         width: 100%;
     }
-
-    .track {
-        flex-direction: column;
-        align-items: flex-start;
-        margin-bottom: 0;
+    
+    .title {
+        font-size: 1.3rem;
     }
-
-    .time-display {
+    
+    .tag-bubble {
         font-size: 0.8em;
+        padding: 2px 6px;
+    }
+    
+    .play-button {
+        padding: 6px 14px;
+        font-size: 0.9em;
+    }
+    
+    .time-display {
+        font-size: 0.7em;
+        padding: 3px 8px;
+    }
+    
+    .time-display.visible {
+        max-width: 120px;
+    }
+    
+    .cover-modal-content {
+        width: 100vw;
+        height: 100vh;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    
+    .cover-modal-content img {
+        border-radius: 0;
+        border: none;
+    }
+    
+    .cover-modal-close {
+        top: 20px;
+        right: 20px;
+        font-size: 2em;
+        width: 45px;
+        height: 45px;
+        background: rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.4);
+    }
+    
+    .cover-modal-overlay {
+        background: rgba(0, 0, 0, 0.95);
+    }
+    
+    /* Ensure modal is on top of everything on mobile */
+    .cover-modal {
+        z-index: 99999;
     }
 
     .play-button {
@@ -380,6 +560,102 @@ html {
     body > * {
         visibility: hidden !important;
     }
+}
+
+/* Cover Art Modal */
+.cover-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+    pointer-events: none;
+}
+
+.cover-modal.active {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.cover-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+}
+
+.cover-modal.active .cover-modal-overlay {
+    opacity: 1;
+}
+
+.cover-modal-content {
+    position: relative;
+    z-index: 10001;
+    width: 500px;
+    height: 500px;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: modalFadeIn 250ms ease-out;
+}
+
+@keyframes modalFadeIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.cover-modal-content img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.cover-modal-close {
+    position: absolute;
+    top: -70px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 2.5em;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 200ms ease-out, transform 200ms ease-out;
+    line-height: 1;
+    padding: 0;
+}
+
+.cover-modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
 }
 
 /* This is the key part — reset everything when back in portrait */
