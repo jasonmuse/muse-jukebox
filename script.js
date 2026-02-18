@@ -206,14 +206,79 @@ document.addEventListener("DOMContentLoaded", () => {
     const coverModalImage = document.getElementById("cover-modal-image");
     const coverModalClose = document.querySelector(".cover-modal-close");
     const coverModalOverlay = document.querySelector(".cover-modal-overlay");
+    let activeModalCover = "";
+
+    function getTrackCoverPreview(track) {
+        return track.thumbnail || track.cover;
+    }
+
+
+    const lazyCoverObserver = "IntersectionObserver" in window
+        ? new IntersectionObserver((entries, observer) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+
+                const image = entry.target;
+                const targetSrc = image.dataset.src;
+                if (targetSrc && image.getAttribute("src") !== targetSrc) {
+                    image.src = targetSrc;
+                }
+                observer.unobserve(image);
+            });
+        }, {
+            root: trackList,
+            rootMargin: "140px",
+            threshold: 0.01
+        })
+        : null;
+
+    function preloadTopTrackCovers(trackItems, count = 4) {
+        trackItems.slice(0, count).forEach((track) => {
+            const preload = document.createElement("link");
+            preload.rel = "preload";
+            preload.as = "image";
+            preload.href = getTrackCoverPreview(track);
+            preload.onerror = () => {
+                preload.href = track.cover;
+            };
+            document.head.appendChild(preload);
+        });
+    }
     
+    function setUpCoverLoad(coverImage, previewCover, isTopPriority, updateCoverSize) {
+        coverImage.dataset.src = previewCover;
+
+        if (isTopPriority || !lazyCoverObserver) {
+            coverImage.src = previewCover;
+        } else {
+            lazyCoverObserver.observe(coverImage);
+        }
+
+        if (coverImage.complete) {
+            updateCoverSize();
+        } else {
+            coverImage.addEventListener("load", updateCoverSize, { once: true });
+        }
+    }
+
     // Function to open cover modal
-    window.openCoverModal = function(imageSrc, title) {
+    window.openCoverModal = function(imageSrc, title, previewSrc = imageSrc) {
         if (coverModalImage && coverModal) {
-            coverModalImage.src = imageSrc;
+            activeModalCover = imageSrc;
+            coverModalImage.src = previewSrc;
             coverModalImage.alt = `${title} Cover`;
             coverModal.classList.add("active");
             document.body.style.overflow = "hidden"; // Prevent background scrolling
+
+            if (imageSrc !== previewSrc) {
+                const fullResImage = new Image();
+                fullResImage.src = imageSrc;
+                fullResImage.onload = () => {
+                    if (coverModal.classList.contains("active") && activeModalCover === imageSrc) {
+                        coverModalImage.src = imageSrc;
+                    }
+                };
+            }
         }
     };
     
@@ -228,6 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!coverModal.classList.contains("active")) {
                     // Modal is still closed, safe to restore scrolling
                     document.body.style.overflow = ""; // Restore scrolling
+                    activeModalCover = "";
                 }
             }, 300); // Match CSS transition duration
         }
@@ -458,16 +524,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 250);
     }
 
+    function syncTrackCoverHeight(trackElement) {
+        const title = trackElement.querySelector(".title");
+        const controls = trackElement.querySelector(".playback-controls");
+
+        if (!title || !controls) return;
+
+        const titleRect = title.getBoundingClientRect();
+        const controlsRect = controls.getBoundingClientRect();
+        const coverSize = Math.max(60, Math.round(controlsRect.bottom - titleRect.top));
+
+        trackElement.style.setProperty("--cover-size", `${coverSize}px`);
+    }
+
+    function syncAllTrackCoverHeights() {
+        document.querySelectorAll(".track").forEach(syncTrackCoverHeight);
+    }
+
     // Populate track list dynamically
     function populateTrackList(tracks) {
         trackList.innerHTML = '';
         audioElements = [];
 
-        tracks.forEach(track => {
+        tracks.forEach((track, index) => {
+            const previewCover = getTrackCoverPreview(track);
+            const isTopPriority = index < 4;
             const trackElement = document.createElement("div");
             trackElement.classList.add("track");
             trackElement.innerHTML = `
-            <img src="${track.cover}" alt="${track.title} Cover">
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-preview-src="${previewCover}" data-full-src="${track.cover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async">
             <div class="track-info">
             <p class="title">${track.title} <span class="release-date clickable-tag">${track.date}</span></p>
             <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
@@ -484,6 +569,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const playButton = trackElement.querySelector(".play-button");
             const timeDisplay = trackElement.querySelector(".time-display");
             const coverImage = trackElement.querySelector("img");
+
             
             // Initialize button with letter spans
             playButton.innerHTML = splitIntoLetters("Play");
@@ -492,11 +578,15 @@ document.addEventListener("DOMContentLoaded", () => {
             coverImage.addEventListener("click", (e) => {
                 e.stopPropagation(); // Prevent any other click handlers
                 if (window.openCoverModal) {
-                    window.openCoverModal(track.cover, track.title);
+                    window.openCoverModal(track.cover, track.title, coverImage.currentSrc || coverImage.src);
                 }
             });
             
             audioElements.push(audio);
+
+            const updateCoverSize = () => syncTrackCoverHeight(trackElement);
+            requestAnimationFrame(updateCoverSize);
+            setUpCoverLoad(coverImage, previewCover, isTopPriority, updateCoverSize);
 
             // Play/pause logic for the custom button
             playButton.addEventListener("click", () => {
@@ -623,6 +713,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Initial population of track list and filter
+    preloadTopTrackCovers(tracks);
     populateTrackList(tracks);
     populateTagFilter(tracks);
+
+    window.addEventListener("resize", () => {
+        requestAnimationFrame(syncAllTrackCoverHeights);
+    });
 });
