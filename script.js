@@ -458,6 +458,23 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 250);
     }
 
+    function syncTrackCoverHeight(trackElement) {
+        const title = trackElement.querySelector(".title");
+        const controls = trackElement.querySelector(".playback-controls");
+
+        if (!title || !controls) return;
+
+        const titleRect = title.getBoundingClientRect();
+        const controlsRect = controls.getBoundingClientRect();
+        const coverSize = Math.max(60, Math.round(controlsRect.bottom - titleRect.top));
+
+        trackElement.style.setProperty("--cover-size", `${coverSize}px`);
+    }
+
+    function syncAllTrackCoverHeights() {
+        document.querySelectorAll(".track").forEach(syncTrackCoverHeight);
+    }
+
     // Populate track list dynamically
     function populateTrackList(tracks) {
         trackList.innerHTML = '';
@@ -497,6 +514,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             
             audioElements.push(audio);
+
+            const updateCoverSize = () => syncTrackCoverHeight(trackElement);
+            requestAnimationFrame(updateCoverSize);
+            if (coverImage.complete) {
+                updateCoverSize();
+            } else {
+                coverImage.addEventListener("load", updateCoverSize, { once: true });
+            }
 
             // Play/pause logic for the custom button
             playButton.addEventListener("click", () => {
@@ -625,4 +650,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initial population of track list and filter
     populateTrackList(tracks);
     populateTagFilter(tracks);
+
+    window.addEventListener("resize", () => {
+        requestAnimationFrame(syncAllTrackCoverHeights);
+    });
 });
