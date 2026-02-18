@@ -587,6 +587,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const updateCoverSize = () => syncTrackCoverHeight(trackElement);
             requestAnimationFrame(updateCoverSize);
             setUpCoverLoad(coverImage, previewCover, isTopPriority, updateCoverSize);
+            if (coverImage.complete) {
+                updateCoverSize();
+            } else {
+                coverImage.addEventListener("load", updateCoverSize, { once: true });
+            }
 
             // Play/pause logic for the custom button
             playButton.addEventListener("click", () => {
