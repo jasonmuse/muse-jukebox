@@ -392,6 +392,9 @@ p {
 max-height: 400px;
 overflow-y: auto;
 overflow-x: hidden;
+overscroll-behavior: contain;
+-webkit-overflow-scrolling: touch;
+touch-action: pan-y;
 margin: 10px 0px 0;
 padding: 10px;
 border: 3px solid #373593;
@@ -514,9 +517,8 @@ box-shadow: 0 0 0 3px #ffffff;
 .track {
     display: flex;
     align-items: stretch;
-    margin-bottom: 15px;
     border-bottom: 1px solid #444;
-    padding: 10px;
+    padding: 15px 10px 15px 10px;
     --cover-size: 88px;
 }
 
@@ -598,7 +600,7 @@ box-shadow: 0 0 0 3px #ffffff;
     min-width: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
-    touch-action: pan-x;
+    touch-action: auto;
     overscroll-behavior-x: contain;
     cursor: grab;
     user-select: none;
@@ -621,10 +623,16 @@ box-shadow: 0 0 0 3px #ffffff;
     min-width: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
-    touch-action: pan-x;
+    touch-action: auto;
     overscroll-behavior-x: contain;
     cursor: grab;
     user-select: none;
+}
+
+#track-list .play-button,
+#track-list img,
+#track-list .clickable-tag {
+    touch-action: pan-y;
 }
 
 .horizontal-scroll.dragging {

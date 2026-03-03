@@ -179,7 +179,7 @@ const tracks = [
     {
         "title": "Blackened",
         "file": "audio/blackened.mp3",
-        "cover": "images/blackened.gif",
+        "cover": "images/blackened.png",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
@@ -193,14 +193,14 @@ const tracks = [
     {
         "title": "Oddball",
         "file": "audio/oddball.mp3",
-        "cover": "images/oddball.gif",
+        "cover": "images/oddball.png",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
     {
         "title": "Benched",
         "file": "audio/benched.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/benched.png",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2023"
     },
@@ -508,13 +508,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         coverImage.dataset.src = previewCover;
         const isGifPreview = isGifSource(previewCover);
 
-        if (isGifPreview) {
-            coverImage.decoding = "auto";
+        if (isGifPreview && isTopPriority) {
+            coverImage.decoding = "async";
             coverImage.loading = "eager";
             coverImage.fetchPriority = isTopPriority ? "high" : "auto";
         }
 
-        if (isTopPriority || isGifPreview || !lazyCoverObserver) {
+        if (isTopPriority || !lazyCoverObserver) {
             setSafeImageSource(coverImage, previewCover);
         } else {
             attachImageFallback(coverImage);
@@ -667,6 +667,50 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeStartTime = null;
     let whereFadeDurationMs = 0;
     let recordSeekNudgeFrame = null;
+    let mobileScrollHealFrame = null;
+
+    function isMobileViewport() {
+        return window.matchMedia("(max-width: 600px)").matches;
+    }
+
+    function keepPageAnchoredOnMobile() {
+        if (!isMobileViewport()) return;
+        if (window.scrollY === 0) return;
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+
+    function scheduleMobileScrollHeal() {
+        if (!isMobileViewport()) return;
+        if (mobileScrollHealFrame !== null) return;
+        mobileScrollHealFrame = requestAnimationFrame(() => {
+            mobileScrollHealFrame = null;
+            keepPageAnchoredOnMobile();
+        });
+    }
+
+    function scrollTrackIntoViewWithinList(trackElement, behavior = "smooth") {
+        if (!trackElement || !trackList) return;
+
+        const listRect = trackList.getBoundingClientRect();
+        const trackRect = trackElement.getBoundingClientRect();
+        const margin = 12;
+        let targetScrollTop = trackList.scrollTop;
+
+        if (trackRect.top < listRect.top + margin) {
+            targetScrollTop += trackRect.top - listRect.top - margin;
+        } else if (trackRect.bottom > listRect.bottom - margin) {
+            targetScrollTop += trackRect.bottom - listRect.bottom + margin;
+        } else {
+            return;
+        }
+
+        const maxScrollTop = Math.max(0, trackList.scrollHeight - trackList.clientHeight);
+        targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+        trackList.scrollTo({ top: targetScrollTop, behavior });
+        scheduleMobileScrollHeal();
+    }
 
     function syncPlayingTrackStickPosition() {
         trackList.querySelectorAll(".track-playing-stick-top, .track-playing-stick-bottom").forEach((trackElement) => {
@@ -740,9 +784,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playButton = targetTrack.querySelector(".play-button");
         if (!playButton) return;
 
-        targetTrack.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        scrollTrackIntoViewWithinList(targetTrack, "smooth");
         setTimeout(() => {
             playButton.click();
+            scheduleMobileScrollHeal();
         }, 220);
     }
 
@@ -1194,8 +1239,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         let pointerActive = false;
         let startX = 0;
+        let startY = 0;
         let startScrollLeft = 0;
         let dragged = false;
+        let pointerId = null;
 
         scrollElement.addEventListener("pointerdown", (event) => {
             if (event.pointerType === "mouse" && event.button !== 0) {
@@ -1203,17 +1250,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             pointerActive = true;
             dragged = false;
+            pointerId = event.pointerId;
             startX = event.clientX;
+            startY = event.clientY;
             startScrollLeft = scrollElement.scrollLeft;
             scrollElement.classList.add("dragging");
         });
 
         scrollElement.addEventListener("pointermove", (event) => {
-            if (!pointerActive) return;
+            if (!pointerActive || (pointerId !== null && event.pointerId !== pointerId)) return;
             const deltaX = event.clientX - startX;
-            if (Math.abs(deltaX) > 3) {
+            const deltaY = event.clientY - startY;
+
+            if (!dragged && Math.abs(deltaY) > 6 && Math.abs(deltaY) > Math.abs(deltaX)) {
+                pointerActive = false;
+                pointerId = null;
+                scrollElement.classList.remove("dragging");
+                return;
+            }
+
+            if (Math.abs(deltaX) > 6 && Math.abs(deltaX) > Math.abs(deltaY) + 2) {
                 dragged = true;
             }
+
             if (dragged) {
                 event.preventDefault();
                 scrollElement.scrollLeft = startScrollLeft - deltaX;
@@ -1222,6 +1281,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const endDrag = () => {
             pointerActive = false;
+            pointerId = null;
             scrollElement.classList.remove("dragging");
         };
 
@@ -1520,7 +1580,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         sortFilter.value = "newest";
     }
     showTrackListSkeleton();
-    await resolveTrackCoverSources(tracks);
     const sortedTracks = sortTracks(tracks, sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
@@ -1528,11 +1587,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateWhereBackgroundFromPlayback();
 
     trackList.addEventListener("scroll", syncPlayingTrackStickPosition, { passive: true });
+    window.addEventListener("scroll", scheduleMobileScrollHeal, { passive: true });
+    window.addEventListener("orientationchange", () => {
+        setTimeout(keepPageAnchoredOnMobile, 80);
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+            scheduleMobileScrollHeal();
+        }
+    });
 
     window.addEventListener("resize", () => {
         requestAnimationFrame(() => {
             syncAllTrackCoverHeights();
             syncPlayingTrackStickPosition();
+            scheduleMobileScrollHeal();
             if (coverModal && coverModal.classList.contains("active")) {
                 updateModalImageFrameFromNaturalSize();
             }
