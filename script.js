@@ -158,35 +158,28 @@ const tracks = [
     {
         "title": "Kicked Up",
         "file": "audio/kickedup.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/kickedup.gif",
         "tags": ["Old", "Archive", "Unsorted"],
-        "date": "2023"
+        "date": "2024"
     },
     {
         "title": "Upstep",
         "file": "audio/upstep.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/upstep.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
     {
         "title": "Kickout",
         "file": "audio/kickout.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Old", "Archive", "Unsorted"],
-        "date": "2023"
-    },
-    {
-        "title": "Starstruck",
-        "file": "audio/starstruck.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/kickout.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
     {
         "title": "Blackened",
         "file": "audio/blackened.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/blackened.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
@@ -200,7 +193,7 @@ const tracks = [
     {
         "title": "Oddball",
         "file": "audio/oddball.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/oddball.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
@@ -221,7 +214,7 @@ const tracks = [
     {
         "title": "Floatoff",
         "file": "audio/floatoff.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/floatoff.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
@@ -235,21 +228,14 @@ const tracks = [
     {
         "title": "Fliptrix",
         "file": "audio/fliptrix.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Old", "Archive", "Unsorted"],
-        "date": "2024"
-    },
-    {
-        "title": "Terror Tower",
-        "file": "audio/terrortower.mp3",
-        "cover": "images/cover.jpg",
+        "cover": "images/fliptrix.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
     {
         "title": "Slaw",
         "file": "audio/slaw.mp3",
-        "cover": "images/peng.png",
+        "cover": "images/slaw.gif",
         "tags": ["Old", "Archive", "Unsorted"],
         "date": "2025"
     },
@@ -304,6 +290,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const trackList = document.getElementById("track-list");
     const tagFilter = document.getElementById("tag-filter");
     const record = document.querySelector(".record");
+    const recordSeekControls = document.getElementById("record-seek-controls");
+    const recordRewindButton = document.getElementById("record-rewind");
+    const recordForwardButton = document.getElementById("record-forward");
     const whereBackground = document.getElementById("where-background");
     const switchSound = new Audio("audio/jukeboxswitch.mp3");
     
@@ -566,6 +555,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             closeCoverModal();
         }
     });
+
+    if (record) {
+        record.addEventListener("click", () => {
+            toggleCurrentTrackFromRecord();
+        });
+    }
+
+    if (recordRewindButton) {
+        recordRewindButton.addEventListener("click", () => {
+            seekCurrentAudioBy(-10);
+        });
+    }
+
+    if (recordForwardButton) {
+        recordForwardButton.addEventListener("click", () => {
+            seekCurrentAudioBy(10);
+        });
+    }
+
     let audioElements = [];
     let isSpinning = false;
     let currentAudio = null;
@@ -577,10 +585,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeStartOpacity = 0;
     let whereFadeStartTime = null;
     let whereFadeDurationMs = 0;
+    let recordSeekNudgeFrame = null;
 
     function setWhereBackgroundOpacity(opacityValue) {
         if (!whereBackground) return;
         whereBackground.style.opacity = opacityValue.toFixed(4);
+    }
+
+    function updateRecordTransform() {
+        if (!record) return;
+        record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+    }
+
+    function setRecordSeekControlsVisible(isVisible) {
+        if (!recordSeekControls) return;
+        recordSeekControls.classList.toggle("visible", isVisible);
+        recordSeekControls.setAttribute("aria-hidden", isVisible ? "false" : "true");
     }
 
     function stepWhereBackgroundFade(timestamp) {
@@ -634,6 +654,104 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateWhereBackgroundFromPlayback() {
         const hasActivePlayback = audioElements.some((audioElement) => !audioElement.paused && !audioElement.ended);
         setWhereBackgroundTargetOpacity(hasActivePlayback ? 1 : 0);
+        setRecordSeekControlsVisible(hasActivePlayback);
+    }
+
+    function seekCurrentAudioBy(offsetSeconds) {
+        if (!currentAudio || !Number.isFinite(currentAudio.currentTime)) return;
+
+        const duration = currentAudio.duration;
+        const previousTime = currentAudio.currentTime;
+        const maxSeekTime = Number.isFinite(duration) ? duration : Math.max(currentAudio.currentTime, 0);
+        const nextTime = Math.min(Math.max(currentAudio.currentTime + offsetSeconds, 0), maxSeekTime);
+        currentAudio.currentTime = nextTime;
+        const appliedSeekOffset = nextTime - previousTime;
+
+        const activeTimeDisplay = currentAudio.parentElement?.querySelector(".time-display");
+        if (activeTimeDisplay && Number.isFinite(currentAudio.duration)) {
+            setTimeDisplayReady(currentAudio, activeTimeDisplay, nextTime);
+            activeTimeDisplay.classList.add("visible");
+        }
+
+        nudgeRecordForSeek(appliedSeekOffset);
+    }
+
+    function nudgeRecordForSeek(appliedSeekOffsetSeconds) {
+        if (!record || !Number.isFinite(appliedSeekOffsetSeconds) || appliedSeekOffsetSeconds === 0) return;
+
+        const direction = Math.sign(appliedSeekOffsetSeconds);
+        const tenSecondUnits = Math.abs(appliedSeekOffsetSeconds) / 10;
+        const turnsPerTenSeconds = 2.25;
+        const totalDegrees = direction * turnsPerTenSeconds * tenSecondUnits * 360;
+        const durationMs = 170;
+
+        if (recordSeekNudgeFrame !== null) {
+            cancelAnimationFrame(recordSeekNudgeFrame);
+            recordSeekNudgeFrame = null;
+        }
+
+        let startTime = null;
+        let previousProgress = 0;
+
+        function animateNudge(timestamp) {
+            if (startTime === null) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            const progress = Math.min(elapsed / durationMs, 1);
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+            const deltaProgress = easedProgress - previousProgress;
+            previousProgress = easedProgress;
+
+            rotationAngle = (rotationAngle + (totalDegrees * deltaProgress)) % 360;
+            updateRecordTransform();
+
+            if (progress < 1) {
+                recordSeekNudgeFrame = requestAnimationFrame(animateNudge);
+            } else {
+                recordSeekNudgeFrame = null;
+            }
+        }
+
+        recordSeekNudgeFrame = requestAnimationFrame(animateNudge);
+    }
+
+    function toggleCurrentTrackFromRecord() {
+        if (!currentAudio) return;
+
+        const currentButton = currentAudio.parentElement?.querySelector(".play-button");
+        const currentTimeDisplay = currentAudio.parentElement?.querySelector(".time-display");
+
+        if (currentAudio.paused) {
+            if (currentTimeDisplay) {
+                currentTimeDisplay.classList.add("visible");
+                if (currentAudio.readyState < 1 || !Number.isFinite(currentAudio.duration)) {
+                    setTimeDisplayLoading(currentTimeDisplay);
+                } else {
+                    setTimeDisplayReady(currentAudio, currentTimeDisplay);
+                }
+            }
+
+            record.classList.add("up");
+            startSpinning();
+            const playPromise = currentAudio.play();
+            if (playPromise && typeof playPromise.catch === "function") {
+                playPromise.catch(() => {
+                    if (currentButton) {
+                        animateTextChange(currentButton, "Play");
+                    }
+                });
+            }
+            fadeInAudio(currentAudio);
+            if (currentButton) {
+                animateTextChange(currentButton, "Pause");
+            }
+            return;
+        }
+
+        fadeOutAudio(currentAudio, () => {});
+        stopSpinning();
+        if (currentButton) {
+            animateTextChange(currentButton, "Play");
+        }
     }
 
     let accelerationRequest; // New variable to track acceleration frame
@@ -654,7 +772,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 
                 rotationAngle = (rotationAngle + currentSpeed) % 360;
-                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+                updateRecordTransform();
                 currentRotationSpeed = currentSpeed; // Update tracked speed
 
                 accelerationRequest = requestAnimationFrame(accelerate);
@@ -756,7 +874,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         function decelerate() {
             if (deceleration > 0) {
                 rotationAngle = (rotationAngle + deceleration) % 360;
-                record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
+                updateRecordTransform();
                 deceleration -= 0.015; // More subtle deceleration
                 currentRotationSpeed = deceleration;
 
@@ -871,6 +989,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         timeDisplay.textContent = "0:00 / --:--";
     }
 
+    function showTrackListSkeleton(count = 8) {
+        const skeletonItems = Array.from({ length: count }, () => `
+            <div class="track track-skeleton" aria-hidden="true">
+                <div class="skeleton-cover skeleton-shimmer"></div>
+                <div class="track-info">
+                    <div class="skeleton-line skeleton-title skeleton-shimmer"></div>
+                    <div class="skeleton-tags">
+                        <span class="skeleton-pill skeleton-shimmer"></span>
+                        <span class="skeleton-pill skeleton-shimmer"></span>
+                        <span class="skeleton-pill skeleton-shimmer"></span>
+                    </div>
+                    <div class="skeleton-controls">
+                        <span class="skeleton-button skeleton-shimmer"></span>
+                        <span class="skeleton-time skeleton-shimmer"></span>
+                    </div>
+                </div>
+            </div>
+        `).join("");
+
+        trackList.classList.remove("tracks-ready");
+        trackList.classList.add("skeleton-loading");
+        trackList.innerHTML = skeletonItems;
+    }
+
     function syncAllTrackCoverHeights() {
         const trackRows = trackList.querySelectorAll(".track");
         trackRows.forEach((trackRow) => {
@@ -887,6 +1029,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Populate track list dynamically
     function populateTrackList(tracks) {
+        trackList.classList.remove("skeleton-loading", "tracks-ready");
         trackList.innerHTML = '';
         audioElements = [];
 
@@ -895,11 +1038,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             const fullCover = getTrackCoverFull(track);
             const isTopPriority = index < 4;
             const trackElement = document.createElement("div");
-            trackElement.classList.add("track");
+            trackElement.classList.add("track", "track-enter");
+            trackElement.style.setProperty("--track-delay", `${Math.min(index, 14) * 24}ms`);
             trackElement.innerHTML = `
             <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
-            <p class="title">${track.title} <span class="release-date clickable-tag">${track.date}</span></p>
+            <p class="title"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></p>
             <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
@@ -1030,7 +1174,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             audio.addEventListener("play", () => {
-                setWhereBackgroundTargetOpacity(1);
+                updateWhereBackgroundFromPlayback();
             });
 
             // Update time display when the audio is playing
@@ -1085,6 +1229,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         syncAllTrackCoverHeights();
+        requestAnimationFrame(() => {
+            trackList.classList.add("tracks-ready");
+        });
     }
 
     // Populate tag filter options
@@ -1119,6 +1266,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Initial population of track list and filter
+    showTrackListSkeleton();
     await resolveTrackCoverSources(tracks);
     const sortedTracks = sortTracksByNewest(tracks);
     preloadTopTrackCovers(sortedTracks);

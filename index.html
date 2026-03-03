@@ -14,6 +14,16 @@
   <div id="jukebox-container">
         <!-- Record Image -->
         <img src="images/record.png" class="record" alt="Record">
+        <div id="record-seek-controls" class="record-seek-controls" aria-hidden="true">
+            <button id="record-rewind" class="record-seek-button record-seek-button--rewind" type="button" aria-label="Rewind 10 seconds">
+                <span class="seek-arrow" aria-hidden="true">&#8634;</span>
+                <span class="seek-seconds" aria-hidden="true">10s</span>
+            </button>
+            <button id="record-forward" class="record-seek-button record-seek-button--forward" type="button" aria-label="Forward 10 seconds">
+                <span class="seek-seconds" aria-hidden="true">10s</span>
+                <span class="seek-arrow" aria-hidden="true">&#8635;</span>
+            </button>
+        </div>
     <div id="jukebox">
 
         <h1 class="jukebox-title">

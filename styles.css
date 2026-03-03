@@ -62,11 +62,73 @@ justify-content: center;
     opacity: 0;
     transition: top 0.5s, opacity 0.5s;
     z-index: 1; /* âœ… behind jukebox, above background */
+    cursor: pointer;
+    touch-action: manipulation;
 }
 
 .record.up {
     top: -120px; /* âœ… slides up into margin space */
     opacity: 1;
+}
+
+.record-seek-controls {
+    position: absolute;
+    left: 50%;
+    top: -50px;
+    transform: translateX(-50%);
+    width: min(450px, 78vw);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 2520ms cubic-bezier(0.8, 0, 0.2, 1);
+    z-index: 3;
+}
+
+.record-seek-controls.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.record-seek-button {
+    border: 1px solid #737373;
+    background: transparent;
+    color: #ffffff;
+    padding: 4px 6px;
+    min-width: 50px;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.45);
+    transition: color 160ms ease-out, transform 120ms ease-out, text-shadow 160ms ease-out;
+}
+
+.record-seek-button:hover {
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.68);
+    transform: translateY(-1px);
+}
+
+.record-seek-button:active {
+    transform: translateY(0);
+}
+
+.seek-arrow {
+    font-size: 1.18em;
+    line-height: 1;
+}
+
+.seek-seconds {
+    font-size: 0.95em;
+    font-weight: 700;
+    line-height: 1;
 }
 
 /* Jukebox container */
@@ -169,11 +231,110 @@ margin-bottom: 15px;
 #track-list {
 max-height: 400px;
 overflow-y: auto;
+overflow-x: hidden;
 margin: 10px 0px 0;
 padding: 10px;
 border: 3px solid #373593;
 border-radius: 10px;
 box-shadow: 0 0 0 3px #ffffff;
+}
+
+#track-list.skeleton-loading {
+    overflow: hidden;
+}
+
+.track.track-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+#track-list.tracks-ready .track.track-enter {
+    animation: trackFadeInUp 260ms ease-out forwards;
+    animation-delay: var(--track-delay, 0ms);
+}
+
+@keyframes trackFadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.track-skeleton {
+    pointer-events: none;
+}
+
+.skeleton-cover {
+    width: var(--cover-size);
+    height: var(--cover-size);
+    min-width: var(--cover-size);
+    border-radius: 12px;
+    margin-right: 15px;
+}
+
+.skeleton-line {
+    height: 18px;
+    border-radius: 8px;
+}
+
+.skeleton-title {
+    width: min(240px, 72%);
+    margin-bottom: 10px;
+}
+
+.skeleton-tags {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.skeleton-pill {
+    width: 56px;
+    height: 20px;
+    border-radius: 999px;
+}
+
+.skeleton-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.skeleton-button {
+    width: 70px;
+    height: 32px;
+    border-radius: 10px;
+}
+
+.skeleton-time {
+    width: 110px;
+    height: 26px;
+    border-radius: 10px;
+}
+
+.skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+    animation: skeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+    100% {
+        transform: translateX(100%);
+    }
 }
 
 .frogquest-link {
@@ -234,7 +395,8 @@ box-shadow: 0 0 0 3px #ffffff;
     flex-direction: column;
     align-items: flex-start;
     justify-content: space-between;
-    min-width: 250px;
+    min-width: 0;
+    width: 100%;
 
     box-sizing: border-box;
     padding: 2px 0 6px 0;
@@ -250,13 +412,36 @@ box-shadow: 0 0 0 3px #ffffff;
     align-items: center;
     gap: 6px;
     line-height: 1.1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+}
+
+.title-text {
+    flex: 0 0 auto;
 }
 
 .tags {
     margin: 4px 0;
     display: flex;
     gap: 5px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
 }
 
 .tag-bubble {
@@ -265,6 +450,7 @@ box-shadow: 0 0 0 3px #ffffff;
     border-radius: 12px;
     padding: 3px 8px;
     font-size: 0.9em;
+    flex: 0 0 auto;
 }
 
 .clickable-tag {
@@ -445,6 +631,7 @@ audio {
     align-items: center;
     line-height: 1;
     background: #0000002e;
+    flex: 0 0 auto;
 }
 
 /* Mobile */
@@ -470,7 +657,7 @@ audio {
     }
 
     #jukebox {
-        width: calc(100vw - 50px);
+        width: calc(100vw - 25px);
         max-width: none;
         height: calc(100dvh - 84px);
         padding: 10px 10px 8px 10px;
@@ -586,6 +773,17 @@ audio {
     .record {
         width: 210px;
         height: 210px;
+    }
+
+    .record-seek-controls {
+        top: -40px;
+        width: min(280px, 86vw);
+    }
+
+    .record-seek-button {
+        min-width: 42px;
+        font-size: 0.86rem;
+        padding: 3px 6px;
     }
 
     .record.up {
@@ -797,4 +995,3 @@ html {
         -webkit-transform: translateZ(0);
     }
 }
-
