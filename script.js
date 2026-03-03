@@ -6,7 +6,7 @@ const tracks = [
         "file": "audio/runawaynovocals.mp3",
         "cover": "images/runaway.gif",
         "tags": ["Chill", "Ambient", "Lo-fi"],
-        "date": "2026"
+        "date": "2027"
     },
     {
         "title": "Leafed",
@@ -153,6 +153,118 @@ const tracks = [
         "file": "audio/flyby.mp3",
         "cover": "images/flyby.png",
         "tags": ["Chill", "Ambient", "Lo-fi"],
+        "date": "2023"
+    },
+    {
+        "title": "Kicked Up",
+        "file": "audio/kickedup.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2023"
+    },
+    {
+        "title": "Upstep",
+        "file": "audio/upstep.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Kickout",
+        "file": "audio/kickout.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2023"
+    },
+    {
+        "title": "Starstruck",
+        "file": "audio/starstruck.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Blackened",
+        "file": "audio/blackened.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2023"
+    },
+    {
+        "title": "Beesting",
+        "file": "audio/beesting.mp3",
+        "cover": "images/beesting.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Oddball",
+        "file": "audio/oddball.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Benched",
+        "file": "audio/benched.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2023"
+    },
+    {
+        "title": "Elevate",
+        "file": "audio/elevate.mp3",
+        "cover": "images/elevate.gif",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Floatoff",
+        "file": "audio/floatoff.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Moonie",
+        "file": "audio/moonie.mp3",
+        "cover": "images/good-night.gif",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Fliptrix",
+        "file": "audio/fliptrix.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Lockdown",
+        "file": "audio/lockdown.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Terror Tower",
+        "file": "audio/terrortower.mp3",
+        "cover": "images/cover.jpg",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2024"
+    },
+    {
+        "title": "Slaw",
+        "file": "audio/slaw.mp3",
+        "cover": "images/peng.png",
+        "tags": ["Old", "Archive", "Unsorted"],
+        "date": "2025"
+    },
+    {
+        "title": "Bones",
+        "file": "audio/bones.mp3",
+        "cover": "images/askbot.png",
+        "tags": ["Old", "Archive", "Unsorted"],
         "date": "2024"
     },
     {
@@ -195,10 +307,11 @@ const tracks = [
 ];
 
 // Wait for the DOM to load before accessing elements
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     const trackList = document.getElementById("track-list");
     const tagFilter = document.getElementById("tag-filter");
     const record = document.querySelector(".record");
+    const whereBackground = document.getElementById("where-background");
     const switchSound = new Audio("audio/jukeboxswitch.mp3");
     
     // Cover modal elements
@@ -207,11 +320,149 @@ document.addEventListener("DOMContentLoaded", () => {
     const coverModalClose = document.querySelector(".cover-modal-close");
     const coverModalOverlay = document.querySelector(".cover-modal-overlay");
     let activeModalCover = "";
+    const FALLBACK_COVER = "images/cover.jpg";
+    const COVER_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
+    const coverSourceCheckCache = new Map();
+    const WHERE_FADE_IN_SECONDS = 30;
+    const WHERE_FADE_OUT_SECONDS = 7;
 
-    function getTrackCoverPreview(track) {
-        return track.thumbnail || track.cover;
+    function toValidCoverSource(source) {
+        if (typeof source !== "string") return FALLBACK_COVER;
+        const trimmedSource = source.trim();
+        return trimmedSource ? trimmedSource : FALLBACK_COVER;
     }
 
+    function getTrackCoverPreview(track) {
+        return toValidCoverSource(track.resolvedThumbnail || track.thumbnail || track.cover);
+    }
+
+    function getTrackCoverFull(track) {
+        return toValidCoverSource(track.resolvedCover || track.cover);
+    }
+
+    function extractFileStem(pathValue) {
+        if (typeof pathValue !== "string") return "";
+        const filename = pathValue.split("/").pop() || "";
+        const dotIndex = filename.lastIndexOf(".");
+        return dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+    }
+
+    function slugifyTitle(value) {
+        if (typeof value !== "string") return "";
+        return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function isGifSource(source) {
+        if (typeof source !== "string") return false;
+        return /\.gif(?:[?#].*)?$/i.test(source.trim());
+    }
+
+    function getTrackYearSortValue(track) {
+        const year = Number.parseInt(track.date, 10);
+        return Number.isFinite(year) ? year : Number.NEGATIVE_INFINITY;
+    }
+
+    function sortTracksByNewest(trackItems) {
+        return [...trackItems].sort((a, b) => {
+            const yearDifference = getTrackYearSortValue(b) - getTrackYearSortValue(a);
+            if (yearDifference !== 0) return yearDifference;
+            return a.title.localeCompare(b.title);
+        });
+    }
+
+    function resolveCoverSourceForPath(path) {
+        const safePath = toValidCoverSource(path);
+        if (safePath === FALLBACK_COVER) return Promise.resolve(FALLBACK_COVER);
+
+        if (coverSourceCheckCache.has(safePath)) {
+            return coverSourceCheckCache.get(safePath);
+        }
+
+        const checkPromise = new Promise((resolve) => {
+            const probeImage = new Image();
+            probeImage.onload = () => resolve(safePath);
+            probeImage.onerror = () => resolve(FALLBACK_COVER);
+            probeImage.src = safePath;
+        });
+
+        coverSourceCheckCache.set(safePath, checkPromise);
+        return checkPromise;
+    }
+
+    function getCoverCandidatesForTrack(track) {
+        const candidates = [];
+        const explicitCover = toValidCoverSource(track.cover);
+
+        if (explicitCover !== FALLBACK_COVER) {
+            candidates.push(explicitCover);
+        }
+
+        const stems = new Set([
+            extractFileStem(track.file),
+            slugifyTitle(track.title)
+        ]);
+
+        stems.forEach((stem) => {
+            if (!stem) return;
+            COVER_EXTENSIONS.forEach((extension) => {
+                candidates.push(`images/${stem}${extension}`);
+            });
+        });
+
+        return [...new Set(candidates)];
+    }
+
+    async function resolveBestCoverForTrack(track) {
+        const candidates = getCoverCandidatesForTrack(track);
+        for (const candidate of candidates) {
+            const resolvedCandidate = await resolveCoverSourceForPath(candidate);
+            if (resolvedCandidate !== FALLBACK_COVER) {
+                return resolvedCandidate;
+            }
+        }
+        return FALLBACK_COVER;
+    }
+
+    async function resolveTrackCoverSources(trackItems) {
+        await Promise.all(
+            trackItems.map(async (track) => {
+                const resolvedCover = await resolveBestCoverForTrack(track);
+                const hasExplicitThumbnail = typeof track.thumbnail === "string" && track.thumbnail.trim() !== "";
+                const intendedThumbnail = toValidCoverSource(hasExplicitThumbnail ? track.thumbnail : track.cover);
+                let resolvedThumbnail = await resolveCoverSourceForPath(intendedThumbnail);
+
+                if (!hasExplicitThumbnail && resolvedThumbnail === FALLBACK_COVER && resolvedCover !== FALLBACK_COVER) {
+                    resolvedThumbnail = resolvedCover;
+                }
+
+                track.resolvedCover = resolvedCover;
+                track.resolvedThumbnail = resolvedThumbnail;
+            })
+        );
+    }
+
+    function attachImageFallback(imageElement) {
+        if (!imageElement || imageElement.dataset.hasFallbackHandler === "true") {
+            return;
+        }
+
+        imageElement.addEventListener("error", () => {
+            if (imageElement.dataset.fallbackApplied === "true") {
+                return;
+            }
+            imageElement.dataset.fallbackApplied = "true";
+            imageElement.src = FALLBACK_COVER;
+        });
+        imageElement.dataset.hasFallbackHandler = "true";
+    }
+
+    function setSafeImageSource(imageElement, source) {
+        if (!imageElement) return;
+        attachImageFallback(imageElement);
+        imageElement.dataset.fallbackApplied = "false";
+        imageElement.src = toValidCoverSource(source);
+    }
 
     const lazyCoverObserver = "IntersectionObserver" in window
         ? new IntersectionObserver((entries, observer) => {
@@ -221,7 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const image = entry.target;
                 const targetSrc = image.dataset.src;
                 if (targetSrc && image.getAttribute("src") !== targetSrc) {
-                    image.src = targetSrc;
+                    setSafeImageSource(image, targetSrc);
                 }
                 observer.unobserve(image);
             });
@@ -239,43 +490,52 @@ document.addEventListener("DOMContentLoaded", () => {
             preload.as = "image";
             preload.href = getTrackCoverPreview(track);
             preload.onerror = () => {
-                preload.href = track.cover;
+                preload.href = getTrackCoverFull(track);
             };
             document.head.appendChild(preload);
         });
     }
     
-    function setUpCoverLoad(coverImage, previewCover, isTopPriority, updateCoverSize) {
+    function setUpCoverLoad(coverImage, previewCover, isTopPriority) {
         coverImage.dataset.src = previewCover;
+        const isGifPreview = isGifSource(previewCover);
 
-        if (isTopPriority || !lazyCoverObserver) {
-            coverImage.src = previewCover;
-        } else {
-            lazyCoverObserver.observe(coverImage);
+        if (isGifPreview) {
+            coverImage.decoding = "auto";
+            coverImage.loading = "eager";
+            coverImage.fetchPriority = isTopPriority ? "high" : "auto";
         }
 
-        if (coverImage.complete) {
-            updateCoverSize();
+        if (isTopPriority || isGifPreview || !lazyCoverObserver) {
+            setSafeImageSource(coverImage, previewCover);
         } else {
-            coverImage.addEventListener("load", updateCoverSize, { once: true });
+            attachImageFallback(coverImage);
+            lazyCoverObserver.observe(coverImage);
         }
     }
 
     // Function to open cover modal
     window.openCoverModal = function(imageSrc, title, previewSrc = imageSrc) {
         if (coverModalImage && coverModal) {
-            activeModalCover = imageSrc;
-            coverModalImage.src = previewSrc;
+            const safeImageSrc = toValidCoverSource(imageSrc);
+            const safePreviewSrc = toValidCoverSource(previewSrc);
+            activeModalCover = safeImageSrc;
+            setSafeImageSource(coverModalImage, safePreviewSrc);
             coverModalImage.alt = `${title} Cover`;
             coverModal.classList.add("active");
             document.body.style.overflow = "hidden"; // Prevent background scrolling
 
-            if (imageSrc !== previewSrc) {
+            if (safeImageSrc !== safePreviewSrc) {
                 const fullResImage = new Image();
-                fullResImage.src = imageSrc;
+                fullResImage.src = safeImageSrc;
                 fullResImage.onload = () => {
-                    if (coverModal.classList.contains("active") && activeModalCover === imageSrc) {
-                        coverModalImage.src = imageSrc;
+                    if (coverModal.classList.contains("active") && activeModalCover === safeImageSrc) {
+                        setSafeImageSource(coverModalImage, safeImageSrc);
+                    }
+                };
+                fullResImage.onerror = () => {
+                    if (coverModal.classList.contains("active") && activeModalCover === safeImageSrc) {
+                        setSafeImageSource(coverModalImage, FALLBACK_COVER);
                     }
                 };
             }
@@ -318,6 +578,70 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentAudio = null;
     let rotationAngle = 0; // Declare rotationAngle here
     let spinRequest; // Declare spinRequest here
+    let whereCurrentOpacity = 0;
+    let whereTargetOpacity = 0;
+    let whereFadeFrame = null;
+    let whereFadeStartOpacity = 0;
+    let whereFadeStartTime = null;
+    let whereFadeDurationMs = 0;
+
+    function setWhereBackgroundOpacity(opacityValue) {
+        if (!whereBackground) return;
+        whereBackground.style.opacity = opacityValue.toFixed(4);
+    }
+
+    function stepWhereBackgroundFade(timestamp) {
+        if (whereFadeStartTime === null) {
+            whereFadeStartTime = timestamp;
+        }
+
+        const increasing = whereTargetOpacity > whereFadeStartOpacity;
+        const totalDelta = whereTargetOpacity - whereFadeStartOpacity;
+        const elapsedMs = Math.max(0, timestamp - whereFadeStartTime);
+        const progress = whereFadeDurationMs <= 0 ? 1 : Math.min(elapsedMs / whereFadeDurationMs, 1);
+        const easedProgress = increasing ? (progress * progress) : progress;
+        whereCurrentOpacity = whereFadeStartOpacity + (totalDelta * easedProgress);
+
+        setWhereBackgroundOpacity(whereCurrentOpacity);
+
+        if (progress >= 1 || Math.abs(whereCurrentOpacity - whereTargetOpacity) <= 0.0001) {
+            whereCurrentOpacity = whereTargetOpacity;
+            setWhereBackgroundOpacity(whereCurrentOpacity);
+            whereFadeFrame = null;
+            whereFadeStartTime = null;
+            return;
+        }
+
+        whereFadeFrame = requestAnimationFrame(stepWhereBackgroundFade);
+    }
+
+    function setWhereBackgroundTargetOpacity(nextTarget) {
+        whereTargetOpacity = Math.max(0, Math.min(1, nextTarget));
+        const distance = Math.abs(whereTargetOpacity - whereCurrentOpacity);
+        if (distance <= 0.0001) {
+            whereCurrentOpacity = whereTargetOpacity;
+            setWhereBackgroundOpacity(whereCurrentOpacity);
+            return;
+        }
+
+        whereFadeStartOpacity = whereCurrentOpacity;
+        whereFadeStartTime = null;
+
+        if (whereTargetOpacity > whereFadeStartOpacity) {
+            whereFadeDurationMs = distance * WHERE_FADE_IN_SECONDS * 1000;
+        } else {
+            whereFadeDurationMs = distance * WHERE_FADE_OUT_SECONDS * 1000;
+        }
+
+        if (whereFadeFrame === null) {
+            whereFadeFrame = requestAnimationFrame(stepWhereBackgroundFade);
+        }
+    }
+
+    function updateWhereBackgroundFromPlayback() {
+        const hasActivePlayback = audioElements.some((audioElement) => !audioElement.paused && !audioElement.ended);
+        setWhereBackgroundTargetOpacity(hasActivePlayback ? 1 : 0);
+    }
 
     let accelerationRequest; // New variable to track acceleration frame
 
@@ -524,21 +848,48 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 250);
     }
 
-    function syncTrackCoverHeight(trackElement) {
-        const title = trackElement.querySelector(".title");
-        const controls = trackElement.querySelector(".playback-controls");
+    function setTimeDisplayLoading(timeDisplay) {
+        timeDisplay.classList.remove("ready", "ready-fade");
+        timeDisplay.classList.add("loading");
+        timeDisplay.textContent = "loading";
+    }
 
-        if (!title || !controls) return;
+    function triggerTimeDisplayFade(timeDisplay) {
+        timeDisplay.classList.remove("ready-fade");
+        void timeDisplay.offsetWidth;
+        timeDisplay.classList.add("ready-fade");
+    }
 
-        const titleRect = title.getBoundingClientRect();
-        const controlsRect = controls.getBoundingClientRect();
-        const coverSize = Math.max(60, Math.round(controlsRect.bottom - titleRect.top));
+    function setTimeDisplayReady(audio, timeDisplay, currentTime = audio.currentTime) {
+        if (!Number.isFinite(audio.duration)) return;
+        const wasLoading = timeDisplay.classList.contains("loading");
+        const formattedCurrentTime = formatTime(currentTime);
+        const formattedDuration = formatTime(audio.duration);
+        timeDisplay.textContent = `${formattedCurrentTime} / ${formattedDuration}`;
+        timeDisplay.classList.remove("loading");
+        timeDisplay.classList.add("ready");
+        if (wasLoading) {
+            triggerTimeDisplayFade(timeDisplay);
+        }
+    }
 
-        trackElement.style.setProperty("--cover-size", `${coverSize}px`);
+    function resetTimeDisplay(timeDisplay) {
+        timeDisplay.classList.remove("loading", "ready", "ready-fade");
+        timeDisplay.textContent = "0:00 / --:--";
     }
 
     function syncAllTrackCoverHeights() {
-        document.querySelectorAll(".track").forEach(syncTrackCoverHeight);
+        const trackRows = trackList.querySelectorAll(".track");
+        trackRows.forEach((trackRow) => {
+            const coverImage = trackRow.querySelector("img");
+            if (!coverImage) return;
+
+            const configuredSize = getComputedStyle(trackRow).getPropertyValue("--cover-size").trim();
+            if (!configuredSize) return;
+
+            coverImage.style.width = configuredSize;
+            coverImage.style.height = configuredSize;
+        });
     }
 
     // Populate track list dynamically
@@ -548,11 +899,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         tracks.forEach((track, index) => {
             const previewCover = getTrackCoverPreview(track);
+            const fullCover = getTrackCoverFull(track);
             const isTopPriority = index < 4;
             const trackElement = document.createElement("div");
             trackElement.classList.add("track");
             trackElement.innerHTML = `
-            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-preview-src="${previewCover}" data-full-src="${track.cover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async">
+            <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
             <p class="title">${track.title} <span class="release-date clickable-tag">${track.date}</span></p>
             <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
@@ -578,20 +930,12 @@ document.addEventListener("DOMContentLoaded", () => {
             coverImage.addEventListener("click", (e) => {
                 e.stopPropagation(); // Prevent any other click handlers
                 if (window.openCoverModal) {
-                    window.openCoverModal(track.cover, track.title, coverImage.currentSrc || coverImage.src);
+                    window.openCoverModal(fullCover, track.title, coverImage.currentSrc || coverImage.src);
                 }
             });
             
             audioElements.push(audio);
-
-            const updateCoverSize = () => syncTrackCoverHeight(trackElement);
-            requestAnimationFrame(updateCoverSize);
-            setUpCoverLoad(coverImage, previewCover, isTopPriority, updateCoverSize);
-            if (coverImage.complete) {
-                updateCoverSize();
-            } else {
-                coverImage.addEventListener("load", updateCoverSize, { once: true });
-            }
+            setUpCoverLoad(coverImage, previewCover, isTopPriority);
 
             // Play/pause logic for the custom button
             playButton.addEventListener("click", () => {
@@ -614,6 +958,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     animateTextChange(prevButton, "Play");
                     
                     prevTimeDisplay.classList.remove("visible");
+                    resetTimeDisplay(prevTimeDisplay);
                 }
 
                 if (audio.paused) {
@@ -622,19 +967,46 @@ document.addEventListener("DOMContentLoaded", () => {
                             audio.src = audio.getAttribute("data-src");
                         }
                         currentAudio = audio;
+                        timeDisplay.classList.add("visible");
+                        if (audio.readyState < 1 || !Number.isFinite(audio.duration)) {
+                            setTimeDisplayLoading(timeDisplay);
+                        } else {
+                            setTimeDisplayReady(audio, timeDisplay, 0);
+                        }
 
                         moveRecordDownAndUp(() => startSpinning());
                         setTimeout(() => {
-                            audio.play();
+                            const playPromise = audio.play();
+                            if (playPromise && typeof playPromise.catch === "function") {
+                                playPromise.catch(() => {
+                                    animateTextChange(playButton, "Play");
+                                    resetTimeDisplay(timeDisplay);
+                                    timeDisplay.classList.remove("visible");
+                                    currentAudio = null;
+                                    updateWhereBackgroundFromPlayback();
+                                });
+                            }
                             fadeInAudio(audio); // Fade in audio volume
-                            // Trigger animation after a tiny delay to ensure smooth transition
-                            setTimeout(() => timeDisplay.classList.add("visible"), 50);
                         }, 300);
                     } else {
+                        timeDisplay.classList.add("visible");
+                        if (audio.readyState < 1 || !Number.isFinite(audio.duration)) {
+                            setTimeDisplayLoading(timeDisplay);
+                        } else {
+                            setTimeDisplayReady(audio, timeDisplay);
+                        }
                         startSpinning();
-                        audio.play();
+                        const playPromise = audio.play();
+                        if (playPromise && typeof playPromise.catch === "function") {
+                            playPromise.catch(() => {
+                                animateTextChange(playButton, "Play");
+                                resetTimeDisplay(timeDisplay);
+                                timeDisplay.classList.remove("visible");
+                                currentAudio = null;
+                                updateWhereBackgroundFromPlayback();
+                            });
+                        }
                         fadeInAudio(audio); // Fade in audio volume
-                        setTimeout(() => timeDisplay.classList.add("visible"), 50);
                     }
                     
                     // Smooth letter-by-letter text transition to "Pause"
@@ -651,11 +1023,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
 
+            audio.addEventListener("loadstart", () => {
+                if (audio === currentAudio) {
+                    setTimeDisplayLoading(timeDisplay);
+                    timeDisplay.classList.add("visible");
+                }
+            });
+
+            audio.addEventListener("loadedmetadata", () => {
+                if (audio === currentAudio) {
+                    setTimeDisplayReady(audio, timeDisplay);
+                }
+            });
+
+            audio.addEventListener("play", () => {
+                setWhereBackgroundTargetOpacity(1);
+            });
+
             // Update time display when the audio is playing
             audio.addEventListener("timeupdate", () => {
-                const currentTime = formatTime(audio.currentTime);
-                const duration = formatTime(audio.duration);
-                timeDisplay.textContent = `${currentTime} / ${duration}`;
+                if (Number.isFinite(audio.duration)) {
+                    setTimeDisplayReady(audio, timeDisplay);
+                }
             });
 
             // Reset the display when a track ends
@@ -666,8 +1055,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Smooth letter-by-letter text transition to "Play"
                 animateTextChange(playButton, "Play");
                 
+                resetTimeDisplay(timeDisplay);
                 timeDisplay.classList.remove("visible");
                 currentAudio = null;
+                updateWhereBackgroundFromPlayback();
+            });
+
+            audio.addEventListener("error", () => {
+                if (audio === currentAudio) {
+                    timeDisplay.classList.remove("loading");
+                    timeDisplay.classList.add("ready", "visible");
+                    timeDisplay.textContent = "unavailable";
+                    animateTextChange(playButton, "Play");
+                    currentAudio = null;
+                    stopSpinning();
+                }
+                updateWhereBackgroundFromPlayback();
             });
 
             // Pause event to stop spinning if no other track is playing
@@ -676,6 +1079,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!anyPlaying) {
                     stopSpinning();
                 }
+                updateWhereBackgroundFromPlayback();
             });
         });
 
@@ -686,6 +1090,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 applyTagFilter(tagElement.textContent);
             });
         });
+
+        syncAllTrackCoverHeights();
     }
 
     // Populate tag filter options
@@ -708,8 +1114,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Apply filter by selected tag
     function applyTagFilter(selectedTag) {
-        const filteredTracks = selectedTag === 'all' ? tracks : tracks.filter(track => track.tags.includes(selectedTag) || track.date === selectedTag);
-        populateTrackList(filteredTracks);
+        const filteredTracks = selectedTag === "all"
+            ? tracks
+            : tracks.filter((track) => track.tags.includes(selectedTag) || track.date === selectedTag);
+        populateTrackList(sortTracksByNewest(filteredTracks));
     }
 
     // Filter by selected tag from dropdown
@@ -718,9 +1126,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Initial population of track list and filter
-    preloadTopTrackCovers(tracks);
-    populateTrackList(tracks);
+    await resolveTrackCoverSources(tracks);
+    const sortedTracks = sortTracksByNewest(tracks);
+    preloadTopTrackCovers(sortedTracks);
+    populateTrackList(sortedTracks);
     populateTagFilter(tracks);
+    setWhereBackgroundOpacity(0);
+    updateWhereBackgroundFromPlayback();
 
     window.addEventListener("resize", () => {
         requestAnimationFrame(syncAllTrackCoverHeights);
