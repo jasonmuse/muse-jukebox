@@ -777,7 +777,7 @@ audio {
 
     .record-seek-controls {
         top: -40px;
-        width: min(280px, 86vw);
+        width: min(300px, 86vw);
     }
 
     .record-seek-button {
