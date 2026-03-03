@@ -169,11 +169,25 @@ margin-bottom: 15px;
 #track-list {
 max-height: 400px;
 overflow-y: auto;
-margin: 10px 0;
+margin: 10px 0px 0;
 padding: 10px;
 border: 3px solid #373593;
 border-radius: 10px;
 box-shadow: 0 0 0 3px #ffffff;
+}
+
+.frogquest-link {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 8px 0px 6px 0;
+    line-height: 0;
+}
+
+.frogquest-gif {
+    display: block;
 }
 
 .track {
@@ -456,7 +470,7 @@ audio {
     }
 
     #jukebox {
-        width: calc(100vw - 12px);
+        width: calc(100vw - 50px);
         max-width: none;
         height: calc(100dvh - 84px);
         padding: 10px 10px 8px 10px;
@@ -472,6 +486,10 @@ audio {
         overflow-y: auto;
         margin: 6px 0 0 0;
         padding: 4px;
+    }
+
+    .frogquest-link {
+        padding: 12px 0px 0;
     }
 
     h1 {
@@ -779,5 +797,4 @@ html {
         -webkit-transform: translateZ(0);
     }
 }
-
 

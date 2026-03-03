@@ -132,14 +132,14 @@ const tracks = [
         "file": "audio/clockedout.mp3",
         "cover": "images/clockedout.png",
         "tags": ["Chill", "Ambient", "Lo-fi"],
-        "date": "2024"
+        "date": "2023"
     },
     {
         "title": "Closed Eyes",
         "file": "audio/closedeyes.mp3",
         "cover": "images/closedeyes.png",
         "tags": ["Chill", "Lo-fi", "Ambient"],
-        "date": "2024"
+        "date": "2023"
     },
     {
         "title": "Spit Up",
@@ -188,7 +188,7 @@ const tracks = [
         "file": "audio/blackened.mp3",
         "cover": "images/cover.jpg",
         "tags": ["Old", "Archive", "Unsorted"],
-        "date": "2023"
+        "date": "2024"
     },
     {
         "title": "Beesting",
@@ -240,13 +240,6 @@ const tracks = [
         "date": "2024"
     },
     {
-        "title": "Lockdown",
-        "file": "audio/lockdown.mp3",
-        "cover": "images/cover.jpg",
-        "tags": ["Old", "Archive", "Unsorted"],
-        "date": "2024"
-    },
-    {
         "title": "Terror Tower",
         "file": "audio/terrortower.mp3",
         "cover": "images/cover.jpg",
@@ -286,7 +279,7 @@ const tracks = [
         "file": "audio/braincheck.mp3",
         "cover": "images/pineapplecakelogo.png",
         "tags": ["Chill", "Ambient", "Game OST"],
-        "date": "2024"
+        "date": "2023"
     },
     {
         "title": "Loot Mode",
