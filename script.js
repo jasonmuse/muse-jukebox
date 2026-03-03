@@ -1265,13 +1265,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         applyTagFilter(tagFilter.value);
     });
 
-    // Initial population of track list and filter
+    // Initial population of filter and track list.
+    // Populate tags first so the dropdown has its final option set before skeleton/track content appears.
+    populateTagFilter(tracks);
+    tagFilter.value = "all";
     showTrackListSkeleton();
     await resolveTrackCoverSources(tracks);
     const sortedTracks = sortTracksByNewest(tracks);
     preloadTopTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
-    populateTagFilter(tracks);
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
 
