@@ -668,6 +668,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeDurationMs = 0;
     let recordSeekNudgeFrame = null;
     let viewportLockFrame = null;
+    let trackListScrollAnimationFrame = null;
+    let trackListScrollAnimationResolve = null;
+    let trackListScrollAnimationId = 0;
+    let randomPlayRequestId = 0;
 
     function isMobileViewport() {
         return window.matchMedia("(max-width: 600px)").matches;
@@ -678,6 +682,31 @@ document.addEventListener("DOMContentLoaded", async () => {
             ? window.visualViewport.height
             : window.innerHeight;
         return Math.max(320, Math.round(visualViewportHeight));
+    }
+
+    function prefersReducedMotion() {
+        return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    function easeInOutCubic(progress) {
+        return progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    }
+
+    function stopTrackListScrollAnimation() {
+        if (trackListScrollAnimationFrame !== null) {
+            cancelAnimationFrame(trackListScrollAnimationFrame);
+            trackListScrollAnimationFrame = null;
+        }
+
+        if (typeof trackListScrollAnimationResolve === "function") {
+            const resolve = trackListScrollAnimationResolve;
+            trackListScrollAnimationResolve = null;
+            resolve(false);
+        }
+
+        trackListScrollAnimationId += 1;
     }
 
     function applyMobileViewportLock() {
@@ -703,12 +732,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    function scrollTrackIntoViewWithinList(trackElement, behavior = "smooth") {
+    function getTrackListStickyBounds() {
+        const listRect = trackList.getBoundingClientRect();
+        const listStyles = window.getComputedStyle(trackList);
+        const borderTopWidth = parseFloat(listStyles.borderTopWidth) || 0;
+        const borderBottomWidth = parseFloat(listStyles.borderBottomWidth) || 0;
+        const paddingTop = parseFloat(listStyles.paddingTop) || 0;
+        const paddingBottom = parseFloat(listStyles.paddingBottom) || 0;
+
+        return {
+            top: listRect.top + borderTopWidth + paddingTop,
+            bottom: listRect.bottom - borderBottomWidth - paddingBottom
+        };
+    }
+
+    function getTrackScrollTargetWithinList(trackElement, margin = 12) {
         if (!trackElement || !trackList) return;
 
         const listRect = trackList.getBoundingClientRect();
         const trackRect = trackElement.getBoundingClientRect();
-        const margin = 12;
         let targetScrollTop = trackList.scrollTop;
 
         if (trackRect.top < listRect.top + margin) {
@@ -721,7 +763,85 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const maxScrollTop = Math.max(0, trackList.scrollHeight - trackList.clientHeight);
         targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
-        trackList.scrollTo({ top: targetScrollTop, behavior });
+        return targetScrollTop;
+    }
+
+    function animateTrackListScrollTo(targetScrollTop, durationMs) {
+        if (!trackList) return Promise.resolve(false);
+
+        const startScrollTop = trackList.scrollTop;
+        const distance = targetScrollTop - startScrollTop;
+        if (Math.abs(distance) <= 0.5) {
+            trackList.scrollTop = targetScrollTop;
+            return Promise.resolve(false);
+        }
+
+        if (typeof requestAnimationFrame !== "function") {
+            trackList.scrollTop = targetScrollTop;
+            return Promise.resolve(true);
+        }
+
+        stopTrackListScrollAnimation();
+        const animationId = ++trackListScrollAnimationId;
+        const normalizedDuration = Number.isFinite(durationMs) ? durationMs : 320;
+        const clampedDuration = Math.max(160, Math.min(680, normalizedDuration));
+
+        return new Promise((resolve) => {
+            trackListScrollAnimationResolve = resolve;
+            let startTime = null;
+
+            function step(timestamp) {
+                if (animationId !== trackListScrollAnimationId) {
+                    return;
+                }
+
+                if (startTime === null) {
+                    startTime = timestamp;
+                }
+
+                const elapsedMs = Math.max(0, timestamp - startTime);
+                const progress = Math.min(elapsedMs / clampedDuration, 1);
+                const easedProgress = easeInOutCubic(progress);
+                trackList.scrollTop = startScrollTop + (distance * easedProgress);
+
+                if (progress >= 1 || Math.abs(trackList.scrollTop - targetScrollTop) <= 0.5) {
+                    trackList.scrollTop = targetScrollTop;
+                    trackListScrollAnimationFrame = null;
+                    trackListScrollAnimationResolve = null;
+                    resolve(true);
+                    return;
+                }
+
+                trackListScrollAnimationFrame = requestAnimationFrame(step);
+            }
+
+            trackListScrollAnimationFrame = requestAnimationFrame(step);
+        });
+    }
+
+    function scrollTrackIntoViewWithinList(trackElement, options = "smooth") {
+        const normalizedOptions = typeof options === "string"
+            ? { behavior: options }
+            : (options || {});
+        const behavior = normalizedOptions.behavior === "auto" ? "auto" : "smooth";
+        const margin = Number.isFinite(normalizedOptions.margin)
+            ? Math.max(0, normalizedOptions.margin)
+            : 12;
+        const targetScrollTop = getTrackScrollTargetWithinList(trackElement, margin);
+
+        if (!Number.isFinite(targetScrollTop)) {
+            return Promise.resolve(false);
+        }
+
+        if (behavior === "auto" || prefersReducedMotion()) {
+            stopTrackListScrollAnimation();
+            trackList.scrollTop = targetScrollTop;
+            return Promise.resolve(true);
+        }
+
+        const distance = Math.abs(targetScrollTop - trackList.scrollTop);
+        const durationMs = Math.round(Math.max(180, Math.min(620, 180 + (distance * 0.45))));
+        return animateTrackListScrollTo(targetScrollTop, durationMs);
     }
 
     function syncPlayingTrackStickPosition() {
@@ -734,25 +854,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const listRect = trackList.getBoundingClientRect();
         const trackRect = playingTrack.getBoundingClientRect();
-        const topThreshold = listRect.top + 2;
-        const bottomThreshold = listRect.bottom - 2;
+        const stickyBounds = getTrackListStickyBounds();
+        const topThreshold = stickyBounds.top;
+        const bottomThreshold = stickyBounds.bottom;
+        const epsilon = 0.5;
 
-        if (trackRect.bottom <= topThreshold) {
+        if (trackRect.bottom <= topThreshold + epsilon) {
             playingTrack.classList.add("track-playing-stick-top");
             return;
         }
 
-        if (trackRect.top >= bottomThreshold) {
+        if (trackRect.top >= bottomThreshold - epsilon) {
             playingTrack.classList.add("track-playing-stick-bottom");
             return;
         }
 
-        if (trackRect.top < topThreshold) {
+        const overlapsTopBoundary = trackRect.top < topThreshold + epsilon && trackRect.bottom > topThreshold - epsilon;
+        const overlapsBottomBoundary = trackRect.bottom > bottomThreshold - epsilon && trackRect.top < bottomThreshold + epsilon;
+
+        if (overlapsTopBoundary && !overlapsBottomBoundary) {
             playingTrack.classList.add("track-playing-stick-top");
-        } else if (trackRect.bottom > bottomThreshold) {
+        } else if (overlapsBottomBoundary && !overlapsTopBoundary) {
             playingTrack.classList.add("track-playing-stick-bottom");
+        } else if (overlapsTopBoundary && overlapsBottomBoundary) {
+            const trackMidpoint = (trackRect.top + trackRect.bottom) / 2;
+            const listMidpoint = (topThreshold + bottomThreshold) / 2;
+            playingTrack.classList.add(trackMidpoint <= listMidpoint ? "track-playing-stick-top" : "track-playing-stick-bottom");
         }
     }
 
@@ -773,7 +901,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         syncPlayingTrackStickPosition();
     }
 
-    function playRandomVisibleTrack() {
+    async function playRandomVisibleTrack() {
         const visibleTracks = Array.from(trackList.querySelectorAll(".track"))
             .filter((trackElement) => !trackElement.classList.contains("track-skeleton"));
 
@@ -793,15 +921,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const targetTrack = candidates[Math.floor(Math.random() * candidates.length)];
+        const requestId = ++randomPlayRequestId;
+        await scrollTrackIntoViewWithinList(targetTrack, {
+            behavior: "smooth",
+            margin: isMobileViewport() ? 8 : 12
+        });
+
+        if (requestId !== randomPlayRequestId || !trackList.contains(targetTrack)) {
+            return;
+        }
+
         const playButton = targetTrack.querySelector(".play-button");
         if (!playButton) return;
-
-        const scrollBehavior = isMobileViewport() ? "auto" : "smooth";
-        scrollTrackIntoViewWithinList(targetTrack, scrollBehavior);
-        setTimeout(() => {
-            playButton.click();
-            scheduleMobileViewportLock();
-        }, scrollBehavior === "auto" ? 120 : 220);
+        playButton.click();
+        scheduleMobileViewportLock();
     }
 
     function setWhereBackgroundOpacity(opacityValue) {
@@ -1605,6 +1738,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyMobileViewportLock();
 
     trackList.addEventListener("scroll", syncPlayingTrackStickPosition, { passive: true });
+    trackList.addEventListener("touchstart", stopTrackListScrollAnimation, { passive: true });
+    trackList.addEventListener("pointerdown", stopTrackListScrollAnimation, { passive: true });
+    trackList.addEventListener("wheel", stopTrackListScrollAnimation, { passive: true });
     window.addEventListener("orientationchange", () => {
         setTimeout(scheduleMobileViewportLock, 80);
     });
