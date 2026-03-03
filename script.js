@@ -667,26 +667,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeStartTime = null;
     let whereFadeDurationMs = 0;
     let recordSeekNudgeFrame = null;
-    let mobileScrollHealFrame = null;
+    let viewportLockFrame = null;
 
     function isMobileViewport() {
         return window.matchMedia("(max-width: 600px)").matches;
     }
 
-    function keepPageAnchoredOnMobile() {
-        if (!isMobileViewport()) return;
-        if (window.scrollY === 0) return;
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
+    function getMobileViewportHeight() {
+        const visualViewportHeight = window.visualViewport && Number.isFinite(window.visualViewport.height)
+            ? window.visualViewport.height
+            : window.innerHeight;
+        return Math.max(320, Math.round(visualViewportHeight));
     }
 
-    function scheduleMobileScrollHeal() {
-        if (!isMobileViewport()) return;
-        if (mobileScrollHealFrame !== null) return;
-        mobileScrollHealFrame = requestAnimationFrame(() => {
-            mobileScrollHealFrame = null;
-            keepPageAnchoredOnMobile();
+    function applyMobileViewportLock() {
+        if (!isMobileViewport()) {
+            document.documentElement.style.removeProperty("--app-height");
+            return;
+        }
+
+        document.documentElement.style.setProperty("--app-height", `${getMobileViewportHeight()}px`);
+
+        if (window.scrollY !== 0) {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
+    }
+
+    function scheduleMobileViewportLock() {
+        if (viewportLockFrame !== null) return;
+        viewportLockFrame = requestAnimationFrame(() => {
+            viewportLockFrame = null;
+            applyMobileViewportLock();
         });
     }
 
@@ -709,7 +722,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const maxScrollTop = Math.max(0, trackList.scrollHeight - trackList.clientHeight);
         targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
         trackList.scrollTo({ top: targetScrollTop, behavior });
-        scheduleMobileScrollHeal();
     }
 
     function syncPlayingTrackStickPosition() {
@@ -784,11 +796,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playButton = targetTrack.querySelector(".play-button");
         if (!playButton) return;
 
-        scrollTrackIntoViewWithinList(targetTrack, "smooth");
+        const scrollBehavior = isMobileViewport() ? "auto" : "smooth";
+        scrollTrackIntoViewWithinList(targetTrack, scrollBehavior);
         setTimeout(() => {
             playButton.click();
-            scheduleMobileScrollHeal();
-        }, 220);
+            scheduleMobileViewportLock();
+        }, scrollBehavior === "auto" ? 120 : 220);
     }
 
     function setWhereBackgroundOpacity(opacityValue) {
@@ -1567,7 +1580,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (randomTrackButton) {
-        randomTrackButton.addEventListener("click", playRandomVisibleTrack);
+        randomTrackButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            randomTrackButton.blur();
+            playRandomVisibleTrack();
+        });
     }
 
     // Initial population of filter and track list.
@@ -1585,23 +1602,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     populateTrackList(sortedTracks);
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
+    applyMobileViewportLock();
 
     trackList.addEventListener("scroll", syncPlayingTrackStickPosition, { passive: true });
-    window.addEventListener("scroll", scheduleMobileScrollHeal, { passive: true });
     window.addEventListener("orientationchange", () => {
-        setTimeout(keepPageAnchoredOnMobile, 80);
+        setTimeout(scheduleMobileViewportLock, 80);
     });
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-            scheduleMobileScrollHeal();
+            scheduleMobileViewportLock();
         }
     });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", scheduleMobileViewportLock, { passive: true });
+        window.visualViewport.addEventListener("scroll", scheduleMobileViewportLock, { passive: true });
+    }
 
     window.addEventListener("resize", () => {
         requestAnimationFrame(() => {
             syncAllTrackCoverHeights();
             syncPlayingTrackStickPosition();
-            scheduleMobileScrollHeal();
+            scheduleMobileViewportLock();
             if (coverModal && coverModal.classList.contains("active")) {
                 updateModalImageFrameFromNaturalSize();
             }

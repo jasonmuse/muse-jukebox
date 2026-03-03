@@ -1,11 +1,16 @@
-﻿/* Base reset */
+﻿/* Dynamic viewport height updated from script.js on mobile */
+:root {
+    --app-height: 100vh;
+}
+
+
 html, body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
     font-family: Arial, sans-serif;
     background: radial-gradient(circle, #91cdfa, #2e2372);
-    min-height: 100vh;
+    min-height: var(--app-height, 100vh);
 }
 /* Main body layout */
 body {
@@ -849,29 +854,41 @@ audio {
 /* Mobile */
 @media (max-width: 600px) {
     html, body {
-        height: 100dvh;
+        width: 100%;
+        height: var(--app-height, 100dvh);
+        min-height: var(--app-height, 100dvh);
         overflow: hidden;
     }
 
+    body {
+        position: fixed;
+        inset: 0;
+    }
+
     #jukebox-wrapper {
-        width: 100vw;
-        min-height: 100dvh;
+        width: 100%;
+        height: var(--app-height, 100dvh);
+        min-height: var(--app-height, 100dvh);
         overflow: hidden;
         margin-top: 0;
-        padding: 4px 0;
+        padding: 4px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
         align-items: flex-start;
     }
 
     #jukebox-container {
         width: 100%;
         margin-top: 74px;
-        padding-bottom: 8px;
+        height: calc(100% - 74px);
+        padding-bottom: 0;
+        box-sizing: border-box;
     }
 
     #jukebox {
         width: calc(100vw - 25px);
         max-width: none;
-        height: calc(100dvh - 84px);
+        height: 98%;
+        max-height: 98%;
         padding: 10px 10px 8px 10px;
         box-sizing: border-box;
         display: flex;
@@ -1209,7 +1226,7 @@ html {
     #jukebox-wrapper, #jukebox-container, #jukebox {
 
         zoom: 1 !important;
-        overflow: visible !important;
+
     }
     
     /* Fix iOS Safari weird zoom/scale bug on rotate back */
@@ -1218,3 +1235,4 @@ html {
         -webkit-transform: translateZ(0);
     }
 }
+
