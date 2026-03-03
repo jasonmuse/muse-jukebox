@@ -6,7 +6,8 @@
 
     <title>Muse Jukebox</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="images/musecast.png" />
+    <link rel="icon" type="image/gif" href="images/penguin.gif" />
+    <link rel="icon" type="image/png" href="images/peng.png" />
 </head>
 <body>
   <div id="where-background" aria-hidden="true"></div>
@@ -28,14 +29,23 @@
 
         <h1 class="jukebox-title">
             <div class="title-container">
-                <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
-                 Muse Jukebox
-                <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
+                <span class="penguin-badge">
+                    <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
+                </span>
+                <span class="title-text-main">Muse Jukebox</span>
+                <span class="penguin-badge">
+                    <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
+                </span>
             </div>
         </h1>
 
-
-        <p><span>Welcome to the semi-complete library of my <i>Muse Tunes</i>— gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag catches your eye! 😎</span></p>
+        <p class="jukebox-description">
+            <span class="sign-bolt sign-bolt--tl" aria-hidden="true"></span>
+            <span class="sign-bolt sign-bolt--tr" aria-hidden="true"></span>
+            <span class="sign-bolt sign-bolt--bl" aria-hidden="true"></span>
+            <span class="sign-bolt sign-bolt--br" aria-hidden="true"></span>
+            <span class="jukebox-description-text">Welcome to the semi-complete library of my <i>Muse Tunes</i> - gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag you feel like. 🌊</span>
+        </p>
         <!--
         itchyscratchy image
         <img src="images/itchyscratchy.gif" alt="Itchy and Scratchy" style="position: absolute; top: 150px; left:40%; z-index: 0; opacity: 0.5;">
@@ -44,10 +54,22 @@
 
         <!-- Filter Section -->
         <div id="filters">
-            <label for="tag-filter">Filter by tag:</label>
-            <select id="tag-filter">
-                <option value="all">All</option>
-            </select>
+            <button id="random-track-button" class="random-track-button" type="button" aria-label="Play a random song" title="Play a random song">&#127922;</button>
+            <div class="filter-group">
+                <label for="sort-filter">Sort by:</label>
+                <select id="sort-filter">
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="title-asc">Title (A-Z)</option>
+                    <option value="title-desc">Title (Z-A)</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="tag-filter">Filter by tag:</label>
+                <select id="tag-filter">
+                    <option value="all">All</option>
+                </select>
+            </div>
         </div>
 
         <!-- Track List -->

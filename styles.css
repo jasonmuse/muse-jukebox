@@ -81,6 +81,7 @@ justify-content: center;
     justify-content: space-between;
     align-items: center;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transition: opacity 2520ms cubic-bezier(0.8, 0, 0.2, 1);
     z-index: 3;
@@ -88,7 +89,14 @@ justify-content: center;
 
 .record-seek-controls.visible {
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
+}
+
+body.modal-open .record-seek-controls {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 .record-seek-button {
@@ -106,6 +114,7 @@ justify-content: center;
     align-items: center;
     justify-content: center;
     gap: 1px;
+    opacity: 0.85;
     text-shadow: 0 0 6px rgba(255, 255, 255, 0.45);
     transition: color 160ms ease-out, transform 120ms ease-out, text-shadow 160ms ease-out;
 }
@@ -176,9 +185,51 @@ h1 {
     gap: 10px;
 }
 
+.title-text-main {
+    white-space: nowrap;
+}
+
+.penguin-badge {
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(180deg, rgba(104, 111, 138, 0.45), rgba(62, 67, 84, 0.5));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
 .penguin-icon {
-    transform: scale(2.0);
-    padding: 15px;
+    width: 30px;
+    height: 30px;
+    display: block;
+    transform: scale(1.6);
+    transform-origin: center center;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transition: transform 180ms ease-out;
+}
+
+.penguin-badge:hover .penguin-icon {
+    animation: penguinBounce 560ms cubic-bezier(0.3, 0.8, 0.35, 1.2);
+}
+
+@keyframes penguinBounce {
+    0% {
+        transform: scale(1.6) translateY(0);
+    }
+    35% {
+        transform: scale(1.62) translateY(-3px);
+    }
+    70% {
+        transform: scale(1.58) translateY(1px);
+    }
+    100% {
+        transform: scale(1.6) translateY(0);
+    }
 }
 
 p {
@@ -186,16 +237,122 @@ p {
     line-height: 1.5;
 }
 
-#filters {
-margin-bottom: 15px;
+.jukebox-description {
+    position: relative;
+    margin: 2px 0 12px;
+    padding: 14px 24px 14px 24px;
+    text-align: justify;
+    line-height: 1.4;
+    color: #f3f4f7;
+    border-radius: 10px;
+    border: 1px solid #b6b9c1;
+    background-color: #343946;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 2px 12px rgba(0, 0, 0, 0.24);
 }
 
-#tag-filter {
+.jukebox-description-text {
+    display: block;
+}
+
+.sign-bolt {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(174, 182, 197, 0.72);
+    background: radial-gradient(circle at 32% 30%, #dde2ec 0, #b6bfcd 48%, #8a94a5 100%);
+    box-shadow: 0 0 0 1px rgba(44, 52, 67, 0.24);
+    opacity: 0.82;
+}
+
+.sign-bolt--tl {
+    top: 8px;
+    left: 8px;
+}
+
+.sign-bolt--tr {
+    top: 8px;
+    right: 8px;
+}
+
+.sign-bolt--bl {
+    bottom: 8px;
+    left: 8px;
+}
+
+.sign-bolt--br {
+    bottom: 8px;
+    right: 8px;
+}
+
+#filters {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.filter-group label {
+    color: #dfe5ff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.random-track-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+    border-radius: 9px;
+    border: 1px solid #6f83e8;
+    background: #31367f;
+    color: #f0f3ff;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 34px;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+
+.random-track-button:hover {
+    background: #3c4295;
+    border-color: #8ea1ff;
+    transform: translateY(-1px);
+}
+
+.random-track-button:active {
+    transform: translateY(0);
+}
+
+.random-track-button:focus {
+    outline: none;
+    border-color: #9db0ff;
+    box-shadow: 0 0 0 2px rgba(100, 128, 255, 0.2);
+}
+
+#tag-filter,
+#sort-filter {
     background: #31367f;
     color: #e8ecff;
     border: 1px solid #6f83e8;
     border-radius: 8px;
     padding: 6px 28px 6px 10px;
+    min-width: 0;
+    width: 100%;
     font-size: 0.9rem;
     appearance: none;
     -webkit-appearance: none;
@@ -212,18 +369,21 @@ margin-bottom: 15px;
     transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
-#tag-filter:hover {
+#tag-filter:hover,
+#sort-filter:hover {
     background: #393f8f;
     border-color: #8094f5;
 }
 
-#tag-filter:focus {
+#tag-filter:focus,
+#sort-filter:focus {
     outline: none;
     border-color: #9db0ff;
     box-shadow: 0 0 0 2px rgba(100, 128, 255, 0.2);
 }
 
-#tag-filter option {
+#tag-filter option,
+#sort-filter option {
     background: #2f2c73;
     color: #ffffff;
 }
@@ -353,11 +513,29 @@ box-shadow: 0 0 0 3px #ffffff;
 
 .track {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     margin-bottom: 15px;
     border-bottom: 1px solid #444;
     padding: 10px;
-    --cover-size: 80px;
+    --cover-size: 88px;
+}
+
+.track.track-playing {
+    z-index: 8;
+    border-radius: 12px;
+    background: rgba(54, 58, 88, 0.96);
+    border-bottom-color: rgba(154, 168, 248, 0.35);
+    box-shadow: 0 7px 16px rgba(0, 0, 0, 0.35);
+}
+
+.track.track-playing.track-playing-stick-top {
+    position: sticky;
+    top: 0;
+}
+
+.track.track-playing.track-playing-stick-bottom {
+    position: sticky;
+    bottom: 0;
 }
 
 .track img {
@@ -377,6 +555,7 @@ box-shadow: 0 0 0 3px #ffffff;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
     flex-shrink: 0;
+    align-self: flex-end;
 }
 
 .track img:hover {
@@ -395,11 +574,9 @@ box-shadow: 0 0 0 3px #ffffff;
     flex-direction: column;
     align-items: flex-start;
     justify-content: space-between;
+    flex: 1 1 auto;
     min-width: 0;
-    width: 100%;
-
     box-sizing: border-box;
-    padding: 2px 0 6px 0;
 }
 
 
@@ -423,6 +600,8 @@ box-shadow: 0 0 0 3px #ffffff;
     scrollbar-width: thin;
     touch-action: pan-x;
     overscroll-behavior-x: contain;
+    cursor: grab;
+    user-select: none;
 }
 
 .title-text {
@@ -437,11 +616,36 @@ box-shadow: 0 0 0 3px #ffffff;
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     touch-action: pan-x;
     overscroll-behavior-x: contain;
+    cursor: grab;
+    user-select: none;
+}
+
+.horizontal-scroll.dragging {
+    cursor: grabbing;
+}
+
+.title::-webkit-scrollbar,
+.tags::-webkit-scrollbar {
+    height: 6px;
+}
+
+.title::-webkit-scrollbar-thumb,
+.tags::-webkit-scrollbar-thumb {
+    background: rgba(163, 176, 255, 0.52);
+    border-radius: 999px;
+}
+
+.title::-webkit-scrollbar-track,
+.tags::-webkit-scrollbar-track {
+    background: rgba(59, 63, 99, 0.45);
+    border-radius: 999px;
 }
 
 .tag-bubble {
@@ -693,14 +897,31 @@ audio {
 
     #filters {
         margin-bottom: 6px;
+        gap: 6px;
+    }
+
+    .filter-group {
+        gap: 4px;
+    }
+
+    .filter-group label {
+        font-size: 0.72rem;
+    }
+
+    .random-track-button {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        flex-basis: 30px;
+        font-size: 0.95rem;
     }
 
     .track {
         flex-direction: row;
-        align-items: flex-start;
+        align-items: stretch;
         margin-bottom: 10px;
         padding: 8px 6px;
-        --cover-size: 72px;
+        --cover-size: 78px;
     }
 
     .track img {
@@ -712,7 +933,6 @@ audio {
     .track-info {
         min-width: auto;
         flex: 1;
-        width: 100%;
     }
 
     .title {
@@ -738,27 +958,12 @@ audio {
         max-width: 128px;
     }
 
-    .cover-modal-content {
-        width: 100vw;
-        height: 100vh;
-        max-width: 100vw;
-        max-height: 100vh;
-        border-radius: 0;
-    }
-
-    .cover-modal-content img {
-        border-radius: 0;
-        border: none;
-    }
-
     .cover-modal-close {
-        top: 20px;
-        right: 20px;
-        font-size: 2em;
-        width: 45px;
-        height: 45px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 2px solid rgba(255, 255, 255, 0.4);
+        top: -12px;
+        right: -10px;
+        font-size: 1.3em;
+        width: 32px;
+        height: 32px;
     }
 
     .cover-modal-overlay {
@@ -791,9 +996,16 @@ audio {
         opacity: 1;
     }
 
+    .penguin-badge {
+        width: 42px;
+        height: 42px;
+        flex-basis: 42px;
+    }
+
     .penguin-icon {
+        width: 24px;
+        height: 24px;
         transform: scale(1.45);
-        padding: 8px;
     }
 }
 
@@ -918,10 +1130,10 @@ html {
 .cover-modal-content {
     position: relative;
     z-index: 10001;
-    width: 500px;
-    height: 500px;
-    max-width: 90vw;
-    max-height: 90vh;
+    width: var(--modal-width, 460px);
+    height: var(--modal-height, 460px);
+    max-width: min(84vw, 720px);
+    max-height: min(82vh, 720px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -942,35 +1154,38 @@ html {
 .cover-modal-content img {
     width: 100%;
     height: 100%;
+    max-width: none;
+    max-height: none;
     object-fit: contain;
-    border-radius: 16px;
+    border-radius: 14px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 3px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(220, 224, 238, 0.62);
 }
 
 .cover-modal-close {
     position: absolute;
-    top: -70px;
-    right: 10px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    font-size: 2.5em;
-    width: 50px;
-    height: 50px;
+    top: -14px;
+    right: -14px;
+    background: rgba(30, 32, 44, 0.76);
+    border: 1px solid rgba(206, 212, 231, 0.55);
+    color: rgba(243, 247, 255, 0.92);
+    font-size: 1.35em;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 200ms ease-out, transform 200ms ease-out;
+    transition: background 180ms ease-out, border-color 180ms ease-out, transform 180ms ease-out;
     line-height: 1;
     padding: 0;
 }
 
 .cover-modal-close:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+    background: rgba(47, 51, 69, 0.88);
+    border-color: rgba(242, 246, 255, 0.78);
+    transform: scale(1.06);
 }
 
 /* This is the key part â€” reset everything when back in portrait */

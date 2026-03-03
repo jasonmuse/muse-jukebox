@@ -289,6 +289,8 @@ const tracks = [
 document.addEventListener("DOMContentLoaded", async () => {
     const trackList = document.getElementById("track-list");
     const tagFilter = document.getElementById("tag-filter");
+    const sortFilter = document.getElementById("sort-filter");
+    const randomTrackButton = document.getElementById("random-track-button");
     const record = document.querySelector(".record");
     const recordSeekControls = document.getElementById("record-seek-controls");
     const recordRewindButton = document.getElementById("record-rewind");
@@ -298,6 +300,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     // Cover modal elements
     const coverModal = document.getElementById("cover-modal");
+    const coverModalContent = document.querySelector(".cover-modal-content");
     const coverModalImage = document.getElementById("cover-modal-image");
     const coverModalClose = document.querySelector(".cover-modal-close");
     const coverModalOverlay = document.querySelector(".cover-modal-overlay");
@@ -308,6 +311,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const coverSourceCheckCache = new Map();
     const WHERE_FADE_IN_SECONDS = 30;
     const WHERE_FADE_OUT_SECONDS = 7;
+
+    if (recordSeekControls) {
+        recordSeekControls.classList.remove("visible");
+        recordSeekControls.setAttribute("aria-hidden", "true");
+    }
 
     function toValidCoverSource(source) {
         if (typeof source !== "string") return FALLBACK_COVER;
@@ -345,8 +353,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         return Number.isFinite(year) ? year : Number.NEGATIVE_INFINITY;
     }
 
-    function sortTracksByNewest(trackItems) {
-        return [...trackItems].sort((a, b) => {
+    function sortTracks(trackItems, selectedSort = "newest") {
+        const items = [...trackItems];
+
+        if (selectedSort === "oldest") {
+            return items.sort((a, b) => {
+                const yearDifference = getTrackYearSortValue(a) - getTrackYearSortValue(b);
+                if (yearDifference !== 0) return yearDifference;
+                return a.title.localeCompare(b.title);
+            });
+        }
+
+        if (selectedSort === "title-asc") {
+            return items.sort((a, b) => a.title.localeCompare(b.title));
+        }
+
+        if (selectedSort === "title-desc") {
+            return items.sort((a, b) => b.title.localeCompare(a.title));
+        }
+
+        return items.sort((a, b) => {
             const yearDifference = getTrackYearSortValue(b) - getTrackYearSortValue(a);
             if (yearDifference !== 0) return yearDifference;
             return a.title.localeCompare(b.title);
@@ -496,6 +522,47 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function updateModalImageFrameFromNaturalSize() {
+        if (!coverModalContent || !coverModalImage) return;
+
+        const naturalWidth = Number.isFinite(coverModalImage.naturalWidth) && coverModalImage.naturalWidth > 0
+            ? coverModalImage.naturalWidth
+            : 640;
+        const naturalHeight = Number.isFinite(coverModalImage.naturalHeight) && coverModalImage.naturalHeight > 0
+            ? coverModalImage.naturalHeight
+            : 640;
+
+        const maxWidth = Math.min(window.innerWidth * 0.84, 700);
+        const maxHeight = Math.min(window.innerHeight * 0.8, 700);
+        const minWidth = Math.min(window.innerWidth * 0.52, 430);
+        const minHeight = Math.min(window.innerHeight * 0.46, 330);
+
+        let scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight);
+        if (!Number.isFinite(scale) || scale <= 0) {
+            scale = 1;
+        }
+
+        let targetWidth = naturalWidth * scale;
+        let targetHeight = naturalHeight * scale;
+
+        if (targetWidth < minWidth && targetHeight < minHeight) {
+            const upscale = Math.max(minWidth / naturalWidth, minHeight / naturalHeight);
+            const maxScale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight);
+            const appliedScale = Math.min(upscale, maxScale);
+
+            if (Number.isFinite(appliedScale) && appliedScale > scale) {
+                targetWidth = naturalWidth * appliedScale;
+                targetHeight = naturalHeight * appliedScale;
+            }
+        }
+
+        targetWidth = Math.max(240, Math.min(targetWidth, maxWidth));
+        targetHeight = Math.max(240, Math.min(targetHeight, maxHeight));
+
+        coverModalContent.style.setProperty("--modal-width", `${Math.round(targetWidth)}px`);
+        coverModalContent.style.setProperty("--modal-height", `${Math.round(targetHeight)}px`);
+    }
+
     // Function to open cover modal
     window.openCoverModal = function(imageSrc, title, previewSrc = imageSrc) {
         if (coverModalImage && coverModal) {
@@ -506,6 +573,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             coverModalImage.alt = `${title} Cover`;
             coverModal.classList.add("active");
             document.body.style.overflow = "hidden"; // Prevent background scrolling
+            document.body.classList.add("modal-open");
+            updateModalImageFrameFromNaturalSize();
 
             if (safeImageSrc !== safePreviewSrc) {
                 const fullResImage = new Image();
@@ -513,11 +582,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 fullResImage.onload = () => {
                     if (coverModal.classList.contains("active") && activeModalCover === safeImageSrc) {
                         setSafeImageSource(coverModalImage, safeImageSrc);
+                        updateModalImageFrameFromNaturalSize();
                     }
                 };
                 fullResImage.onerror = () => {
                     if (coverModal.classList.contains("active") && activeModalCover === safeImageSrc) {
                         setSafeImageSource(coverModalImage, FALLBACK_COVER);
+                        updateModalImageFrameFromNaturalSize();
                     }
                 };
             }
@@ -535,6 +606,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (!coverModal.classList.contains("active")) {
                     // Modal is still closed, safe to restore scrolling
                     document.body.style.overflow = ""; // Restore scrolling
+                    document.body.classList.remove("modal-open");
                     activeModalCover = "";
                 }
             }, 300); // Match CSS transition duration
@@ -547,6 +619,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if (coverModalOverlay) {
         coverModalOverlay.addEventListener("click", closeCoverModal);
+    }
+
+    if (coverModalImage) {
+        coverModalImage.addEventListener("click", closeCoverModal);
+        coverModalImage.addEventListener("load", () => {
+            if (coverModal && coverModal.classList.contains("active")) {
+                updateModalImageFrameFromNaturalSize();
+            }
+        });
     }
     
     // Close modal on Escape key
@@ -586,6 +667,84 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeStartTime = null;
     let whereFadeDurationMs = 0;
     let recordSeekNudgeFrame = null;
+
+    function syncPlayingTrackStickPosition() {
+        trackList.querySelectorAll(".track-playing-stick-top, .track-playing-stick-bottom").forEach((trackElement) => {
+            trackElement.classList.remove("track-playing-stick-top", "track-playing-stick-bottom");
+        });
+
+        const playingTrack = trackList.querySelector(".track.track-playing");
+        if (!playingTrack) {
+            return;
+        }
+
+        const listRect = trackList.getBoundingClientRect();
+        const trackRect = playingTrack.getBoundingClientRect();
+        const topThreshold = listRect.top + 2;
+        const bottomThreshold = listRect.bottom - 2;
+
+        if (trackRect.bottom <= topThreshold) {
+            playingTrack.classList.add("track-playing-stick-top");
+            return;
+        }
+
+        if (trackRect.top >= bottomThreshold) {
+            playingTrack.classList.add("track-playing-stick-bottom");
+            return;
+        }
+
+        if (trackRect.top < topThreshold) {
+            playingTrack.classList.add("track-playing-stick-top");
+        } else if (trackRect.bottom > bottomThreshold) {
+            playingTrack.classList.add("track-playing-stick-bottom");
+        }
+    }
+
+    function updatePlayingTrackStickyState() {
+        trackList.querySelectorAll(".track.track-playing").forEach((trackElement) => {
+            trackElement.classList.remove("track-playing");
+        });
+
+        if (!currentAudio || currentAudio.paused || currentAudio.ended) {
+            return;
+        }
+
+        const playingTrack = currentAudio.closest(".track");
+        if (playingTrack && trackList.contains(playingTrack)) {
+            playingTrack.classList.add("track-playing");
+        }
+
+        syncPlayingTrackStickPosition();
+    }
+
+    function playRandomVisibleTrack() {
+        const visibleTracks = Array.from(trackList.querySelectorAll(".track"))
+            .filter((trackElement) => !trackElement.classList.contains("track-skeleton"));
+
+        if (visibleTracks.length === 0) {
+            return;
+        }
+
+        let candidates = visibleTracks;
+        if (currentAudio && visibleTracks.length > 1) {
+            const currentTrack = currentAudio.closest(".track");
+            if (currentTrack) {
+                const nonCurrentTracks = visibleTracks.filter((trackElement) => trackElement !== currentTrack);
+                if (nonCurrentTracks.length > 0) {
+                    candidates = nonCurrentTracks;
+                }
+            }
+        }
+
+        const targetTrack = candidates[Math.floor(Math.random() * candidates.length)];
+        const playButton = targetTrack.querySelector(".play-button");
+        if (!playButton) return;
+
+        targetTrack.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        setTimeout(() => {
+            playButton.click();
+        }, 220);
+    }
 
     function setWhereBackgroundOpacity(opacityValue) {
         if (!whereBackground) return;
@@ -655,6 +814,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const hasActivePlayback = audioElements.some((audioElement) => !audioElement.paused && !audioElement.ended);
         setWhereBackgroundTargetOpacity(hasActivePlayback ? 1 : 0);
         setRecordSeekControlsVisible(hasActivePlayback);
+        updatePlayingTrackStickyState();
     }
 
     function seekCurrentAudioBy(offsetSeconds) {
@@ -1027,6 +1187,66 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function enableHorizontalDragScroll(scrollElement) {
+        if (!scrollElement || scrollElement.dataset.dragScrollEnabled === "true") {
+            return;
+        }
+
+        let pointerActive = false;
+        let startX = 0;
+        let startScrollLeft = 0;
+        let dragged = false;
+
+        scrollElement.addEventListener("pointerdown", (event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) {
+                return;
+            }
+            pointerActive = true;
+            dragged = false;
+            startX = event.clientX;
+            startScrollLeft = scrollElement.scrollLeft;
+            scrollElement.classList.add("dragging");
+        });
+
+        scrollElement.addEventListener("pointermove", (event) => {
+            if (!pointerActive) return;
+            const deltaX = event.clientX - startX;
+            if (Math.abs(deltaX) > 3) {
+                dragged = true;
+            }
+            if (dragged) {
+                event.preventDefault();
+                scrollElement.scrollLeft = startScrollLeft - deltaX;
+            }
+        });
+
+        const endDrag = () => {
+            pointerActive = false;
+            scrollElement.classList.remove("dragging");
+        };
+
+        scrollElement.addEventListener("pointerup", endDrag);
+        scrollElement.addEventListener("pointercancel", endDrag);
+        scrollElement.addEventListener("pointerleave", (event) => {
+            if (event.pointerType === "mouse" && pointerActive) {
+                endDrag();
+            }
+        });
+
+        scrollElement.addEventListener("click", (event) => {
+            if (!dragged) return;
+            event.preventDefault();
+            event.stopPropagation();
+            dragged = false;
+        }, true);
+
+        scrollElement.dataset.dragScrollEnabled = "true";
+    }
+
+    function initializeHorizontalDragScroll() {
+        trackList.querySelectorAll(".horizontal-scroll").forEach(enableHorizontalDragScroll);
+    }
+
     // Populate track list dynamically
     function populateTrackList(tracks) {
         trackList.classList.remove("skeleton-loading", "tracks-ready");
@@ -1043,8 +1263,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             trackElement.innerHTML = `
             <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
-            <p class="title"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></p>
-            <p class="tags">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
+            <p class="title horizontal-scroll"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></p>
+            <p class="tags horizontal-scroll">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
             <span class="time-display">0:00 / --:--</span>
@@ -1220,6 +1440,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         });
 
+        initializeHorizontalDragScroll();
+
         // Add event listeners to each tag bubble for filtering
         document.querySelectorAll(".clickable-tag").forEach(tagElement => {
             tagElement.addEventListener("click", () => {
@@ -1229,6 +1451,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         syncAllTrackCoverHeights();
+        updatePlayingTrackStickyState();
         requestAnimationFrame(() => {
             trackList.classList.add("tracks-ready");
         });
@@ -1252,32 +1475,67 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Apply filter by selected tag
-    function applyTagFilter(selectedTag) {
-        const filteredTracks = selectedTag === "all"
+    function getFilteredTracks(selectedTag) {
+        return selectedTag === "all"
             ? tracks
             : tracks.filter((track) => track.tags.includes(selectedTag) || track.date === selectedTag);
-        populateTrackList(sortTracksByNewest(filteredTracks));
+    }
+
+    // Apply filter and sort selection together
+    function applyCurrentFiltersAndSort() {
+        const selectedTag = tagFilter ? tagFilter.value : "all";
+        const selectedSort = sortFilter ? sortFilter.value : "newest";
+        const filteredTracks = getFilteredTracks(selectedTag);
+        populateTrackList(sortTracks(filteredTracks, selectedSort));
+    }
+
+    // Apply filter by selected tag
+    function applyTagFilter(selectedTag) {
+        if (tagFilter) {
+            tagFilter.value = selectedTag;
+        }
+        applyCurrentFiltersAndSort();
     }
 
     // Filter by selected tag from dropdown
-    tagFilter.addEventListener('change', () => {
-        applyTagFilter(tagFilter.value);
-    });
+    if (tagFilter) {
+        tagFilter.addEventListener("change", applyCurrentFiltersAndSort);
+    }
+
+    if (sortFilter) {
+        sortFilter.addEventListener("change", applyCurrentFiltersAndSort);
+    }
+
+    if (randomTrackButton) {
+        randomTrackButton.addEventListener("click", playRandomVisibleTrack);
+    }
 
     // Initial population of filter and track list.
     // Populate tags first so the dropdown has its final option set before skeleton/track content appears.
     populateTagFilter(tracks);
-    tagFilter.value = "all";
+    if (tagFilter) {
+        tagFilter.value = "all";
+    }
+    if (sortFilter) {
+        sortFilter.value = "newest";
+    }
     showTrackListSkeleton();
     await resolveTrackCoverSources(tracks);
-    const sortedTracks = sortTracksByNewest(tracks);
+    const sortedTracks = sortTracks(tracks, sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
 
+    trackList.addEventListener("scroll", syncPlayingTrackStickPosition, { passive: true });
+
     window.addEventListener("resize", () => {
-        requestAnimationFrame(syncAllTrackCoverHeights);
+        requestAnimationFrame(() => {
+            syncAllTrackCoverHeights();
+            syncPlayingTrackStickPosition();
+            if (coverModal && coverModal.classList.contains("active")) {
+                updateModalImageFrameFromNaturalSize();
+            }
+        });
     });
 });
