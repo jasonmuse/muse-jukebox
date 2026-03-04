@@ -627,7 +627,8 @@ box-shadow: 0 0 0 3px #ffffff;
     max-width: 100%;
     min-width: 0;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     touch-action: auto;
     overscroll-behavior-x: contain;
     cursor: grab;
@@ -650,7 +651,8 @@ box-shadow: 0 0 0 3px #ffffff;
     max-width: 100%;
     min-width: 0;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     touch-action: auto;
     overscroll-behavior-x: contain;
     cursor: grab;
@@ -669,19 +671,9 @@ box-shadow: 0 0 0 3px #ffffff;
 
 .title::-webkit-scrollbar,
 .tags::-webkit-scrollbar {
-    height: 6px;
-}
-
-.title::-webkit-scrollbar-thumb,
-.tags::-webkit-scrollbar-thumb {
-    background: rgba(163, 176, 255, 0.52);
-    border-radius: 999px;
-}
-
-.title::-webkit-scrollbar-track,
-.tags::-webkit-scrollbar-track {
-    background: rgba(59, 63, 99, 0.45);
-    border-radius: 999px;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 .tag-bubble {
