@@ -309,6 +309,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const COVER_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
     const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
     const coverSourceCheckCache = new Map();
+    const coverPreloadCache = new Set();
+    const coverWarmCache = new Set();
     const WHERE_FADE_IN_SECONDS = 30;
     const WHERE_FADE_OUT_SECONDS = 7;
 
@@ -341,11 +343,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     function slugifyTitle(value) {
         if (typeof value !== "string") return "";
         return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-    }
-
-    function isGifSource(source) {
-        if (typeof source !== "string") return false;
-        return /\.gif(?:[?#].*)?$/i.test(source.trim());
     }
 
     function getTrackYearSortValue(track) {
@@ -486,33 +483,67 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         }, {
             root: trackList,
-            rootMargin: "140px",
+            rootMargin: "220px",
             threshold: 0.01
         })
         : null;
 
-    function preloadTopTrackCovers(trackItems, count = 4) {
-        trackItems.slice(0, count).forEach((track) => {
+    function preloadTopTrackCovers(trackItems, count = 6) {
+        trackItems.slice(0, count).forEach((track, index) => {
+            const previewCover = toValidCoverSource(getTrackCoverPreview(track));
+            if (previewCover === FALLBACK_COVER || coverPreloadCache.has(previewCover)) {
+                return;
+            }
+
             const preload = document.createElement("link");
             preload.rel = "preload";
             preload.as = "image";
-            preload.href = getTrackCoverPreview(track);
+            preload.href = previewCover;
+            preload.fetchPriority = index < 2 ? "high" : "auto";
             preload.onerror = () => {
-                preload.href = getTrackCoverFull(track);
+                const fullCover = toValidCoverSource(getTrackCoverFull(track));
+                if (fullCover !== previewCover && fullCover !== FALLBACK_COVER && !coverPreloadCache.has(fullCover)) {
+                    coverPreloadCache.add(fullCover);
+                    preload.href = fullCover;
+                }
             };
+            coverPreloadCache.add(previewCover);
             document.head.appendChild(preload);
         });
+    }
+
+    function warmUpcomingTrackCovers(trackItems, startIndex = 6, count = 10) {
+        const sourcesToWarm = trackItems
+            .slice(startIndex, startIndex + count)
+            .map((track) => toValidCoverSource(getTrackCoverPreview(track)))
+            .filter((source) => source !== FALLBACK_COVER && !coverWarmCache.has(source));
+
+        if (sourcesToWarm.length === 0) {
+            return;
+        }
+
+        const warm = () => {
+            sourcesToWarm.forEach((source) => {
+                if (coverWarmCache.has(source)) return;
+                const warmImage = new Image();
+                warmImage.decoding = "async";
+                warmImage.src = source;
+                coverWarmCache.add(source);
+            });
+        };
+
+        if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(warm, { timeout: 700 });
+        } else {
+            setTimeout(warm, 80);
+        }
     }
     
     function setUpCoverLoad(coverImage, previewCover, isTopPriority) {
         coverImage.dataset.src = previewCover;
-        const isGifPreview = isGifSource(previewCover);
-
-        if (isGifPreview && isTopPriority) {
-            coverImage.decoding = "async";
-            coverImage.loading = "eager";
-            coverImage.fetchPriority = isTopPriority ? "high" : "auto";
-        }
+        coverImage.decoding = "async";
+        coverImage.loading = isTopPriority ? "eager" : "lazy";
+        coverImage.fetchPriority = isTopPriority ? "high" : "low";
 
         if (isTopPriority || !lazyCoverObserver) {
             setSafeImageSource(coverImage, previewCover);
@@ -658,6 +689,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let audioElements = [];
     let isSpinning = false;
     let currentAudio = null;
+    let stickyAudio = null;
     let rotationAngle = 0; // Declare rotationAngle here
     let spinRequest; // Declare spinRequest here
     let whereCurrentOpacity = 0;
@@ -686,6 +718,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function prefersReducedMotion() {
         return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    function canUseNativeSmoothTrackScroll() {
+        return !!(trackList && typeof trackList.scrollTo === "function" && "scrollBehavior" in document.documentElement.style);
     }
 
     function easeInOutCubic(progress) {
@@ -766,7 +802,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return targetScrollTop;
     }
 
-    function animateTrackListScrollTo(targetScrollTop, durationMs) {
+    function animateTrackListScrollToWithRaf(targetScrollTop, durationMs) {
         if (!trackList) return Promise.resolve(false);
 
         const startScrollTop = trackList.scrollTop;
@@ -816,6 +852,78 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             trackListScrollAnimationFrame = requestAnimationFrame(step);
+        });
+    }
+
+    function animateTrackListScrollTo(targetScrollTop, durationMs) {
+        if (!trackList) return Promise.resolve(false);
+
+        const startScrollTop = trackList.scrollTop;
+        const distance = targetScrollTop - startScrollTop;
+        if (Math.abs(distance) <= 0.5) {
+            trackList.scrollTop = targetScrollTop;
+            return Promise.resolve(false);
+        }
+
+        if (!canUseNativeSmoothTrackScroll()) {
+            return animateTrackListScrollToWithRaf(targetScrollTop, durationMs);
+        }
+
+        stopTrackListScrollAnimation();
+        const animationId = ++trackListScrollAnimationId;
+        const normalizedDuration = Number.isFinite(durationMs) ? durationMs : 320;
+        const settleTimeoutMs = Math.max(420, Math.min(1500, Math.round(normalizedDuration * 2.5)));
+        trackList.scrollTo({
+            top: targetScrollTop,
+            behavior: "smooth"
+        });
+
+        return new Promise((resolve) => {
+            trackListScrollAnimationResolve = resolve;
+            let startTime = null;
+            let previousTop = trackList.scrollTop;
+            let stationaryFrames = 0;
+
+            function settle(timestamp) {
+                if (animationId !== trackListScrollAnimationId) {
+                    return;
+                }
+
+                if (startTime === null) {
+                    startTime = timestamp;
+                }
+
+                const elapsedMs = Math.max(0, timestamp - startTime);
+                const currentTop = trackList.scrollTop;
+                const distanceToTarget = Math.abs(currentTop - targetScrollTop);
+                const delta = Math.abs(currentTop - previousTop);
+                previousTop = currentTop;
+
+                if (distanceToTarget <= 1) {
+                    trackList.scrollTop = targetScrollTop;
+                    trackListScrollAnimationFrame = null;
+                    trackListScrollAnimationResolve = null;
+                    resolve(true);
+                    return;
+                }
+
+                if (delta <= 0.2) {
+                    stationaryFrames += 1;
+                } else {
+                    stationaryFrames = 0;
+                }
+
+                if (elapsedMs >= settleTimeoutMs || stationaryFrames >= 10) {
+                    trackListScrollAnimationFrame = null;
+                    trackListScrollAnimationResolve = null;
+                    animateTrackListScrollToWithRaf(targetScrollTop, durationMs).then(resolve);
+                    return;
+                }
+
+                trackListScrollAnimationFrame = requestAnimationFrame(settle);
+            }
+
+            trackListScrollAnimationFrame = requestAnimationFrame(settle);
         });
     }
 
@@ -889,11 +997,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             trackElement.classList.remove("track-playing");
         });
 
-        if (!currentAudio || currentAudio.paused || currentAudio.ended) {
+        if (stickyAudio) {
+            const stickyTrack = stickyAudio.closest(".track");
+            if (stickyAudio.ended || !stickyTrack || !trackList.contains(stickyTrack)) {
+                stickyAudio = null;
+            }
+        }
+
+        if (!stickyAudio && currentAudio && !currentAudio.paused && !currentAudio.ended) {
+            stickyAudio = currentAudio;
+        }
+
+        if (!stickyAudio) {
+            syncPlayingTrackStickPosition();
             return;
         }
 
-        const playingTrack = currentAudio.closest(".track");
+        const playingTrack = stickyAudio.closest(".track");
         if (playingTrack && trackList.contains(playingTrack)) {
             playingTrack.classList.add("track-playing");
         }
@@ -1467,7 +1587,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             trackElement.classList.add("track", "track-enter");
             trackElement.style.setProperty("--track-delay", `${Math.min(index, 14) * 24}ms`);
             trackElement.innerHTML = `
-            <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="lazy" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
+            <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="${isTopPriority ? "eager" : "lazy"}" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
             <p class="title horizontal-scroll"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></p>
             <p class="tags horizontal-scroll">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
@@ -1600,6 +1720,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             audio.addEventListener("play", () => {
+                stickyAudio = audio;
                 updateWhereBackgroundFromPlayback();
             });
 
@@ -1621,10 +1742,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 resetTimeDisplay(timeDisplay);
                 timeDisplay.classList.remove("visible");
                 currentAudio = null;
+                if (stickyAudio === audio) {
+                    stickyAudio = null;
+                }
                 updateWhereBackgroundFromPlayback();
             });
 
             audio.addEventListener("error", () => {
+                if (stickyAudio === audio) {
+                    stickyAudio = null;
+                }
                 if (audio === currentAudio) {
                     timeDisplay.classList.remove("loading");
                     timeDisplay.classList.add("ready", "visible");
@@ -1692,7 +1819,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const selectedTag = tagFilter ? tagFilter.value : "all";
         const selectedSort = sortFilter ? sortFilter.value : "newest";
         const filteredTracks = getFilteredTracks(selectedTag);
-        populateTrackList(sortTracks(filteredTracks, selectedSort));
+        const sortedFilteredTracks = sortTracks(filteredTracks, selectedSort);
+        preloadTopTrackCovers(sortedFilteredTracks);
+        warmUpcomingTrackCovers(sortedFilteredTracks);
+        populateTrackList(sortedFilteredTracks);
     }
 
     // Apply filter by selected tag
@@ -1732,6 +1862,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showTrackListSkeleton();
     const sortedTracks = sortTracks(tracks, sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
+    warmUpcomingTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
