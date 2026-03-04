@@ -963,8 +963,6 @@ audio {
     .track {
         flex-direction: row;
         align-items: stretch;
-        margin-bottom: 10px;
-        padding: 8px 6px;
         --cover-size: 78px;
     }
 
