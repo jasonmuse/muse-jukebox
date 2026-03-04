@@ -704,6 +704,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let trackListScrollAnimationResolve = null;
     let trackListScrollAnimationId = 0;
     let randomPlayRequestId = 0;
+    const TRACK_PLAYING_FADE_OUT_MS = 220;
 
     function isMobileViewport() {
         return window.matchMedia("(max-width: 600px)").matches;
@@ -1015,13 +1016,78 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const playingTrack = stickyAudio.closest(".track");
         if (playingTrack && trackList.contains(playingTrack)) {
+            playingTrack.classList.remove("track-playing-fade-out");
             playingTrack.classList.add("track-playing");
         }
 
         syncPlayingTrackStickPosition();
     }
 
-    async function playRandomVisibleTrack() {
+    function triggerTrackPlayingFadeOut(trackElement) {
+        if (!trackElement || !trackList.contains(trackElement)) {
+            return;
+        }
+
+        trackElement.classList.remove("track-playing-fade-out");
+        // Restart the animation if Random is pressed quickly in succession.
+        void trackElement.offsetWidth;
+        trackElement.classList.add("track-playing-fade-out");
+
+        window.setTimeout(() => {
+            if (trackElement.classList.contains("track-playing-fade-out")) {
+                trackElement.classList.remove("track-playing-fade-out");
+            }
+        }, TRACK_PLAYING_FADE_OUT_MS);
+    }
+
+    function stopCurrentPlaybackForRandom() {
+        const previousAudio = currentAudio;
+        const previousTrack = previousAudio ? previousAudio.closest(".track") : null;
+
+        if (volumeFadeInterval) {
+            clearInterval(volumeFadeInterval);
+            volumeFadeInterval = null;
+        }
+
+        if (previousAudio) {
+            previousAudio.pause();
+            previousAudio.volume = 1.0;
+            previousAudio.currentTime = 0;
+
+            const previousButton = previousAudio.parentElement?.querySelector(".play-button");
+            if (previousButton) {
+                animateTextChange(previousButton, "Play");
+            }
+
+            const previousTimeDisplay = previousAudio.parentElement?.querySelector(".time-display");
+            if (previousTimeDisplay) {
+                previousTimeDisplay.classList.remove("visible");
+                resetTimeDisplay(previousTimeDisplay);
+            }
+
+            if (stickyAudio === previousAudio) {
+                stickyAudio = null;
+            }
+
+            currentAudio = null;
+        } else if (stickyAudio) {
+            stickyAudio = null;
+        }
+
+        if (previousTrack) {
+            triggerTrackPlayingFadeOut(previousTrack);
+        }
+
+        stopSpinning();
+        if (record) {
+            record.classList.remove("up");
+        }
+        updateWhereBackgroundFromPlayback();
+
+        return previousTrack;
+    }
+
+    async function playRandomVisibleTrack(excludedTrack = null) {
         const visibleTracks = Array.from(trackList.querySelectorAll(".track"))
             .filter((trackElement) => !trackElement.classList.contains("track-skeleton"));
 
@@ -1029,14 +1095,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        let blockedTrack = excludedTrack;
+        if (!blockedTrack && currentAudio) {
+            blockedTrack = currentAudio.closest(".track");
+        }
+
         let candidates = visibleTracks;
-        if (currentAudio && visibleTracks.length > 1) {
-            const currentTrack = currentAudio.closest(".track");
-            if (currentTrack) {
-                const nonCurrentTracks = visibleTracks.filter((trackElement) => trackElement !== currentTrack);
-                if (nonCurrentTracks.length > 0) {
-                    candidates = nonCurrentTracks;
-                }
+        if (blockedTrack && visibleTracks.length > 1) {
+            const nonBlockedTracks = visibleTracks.filter((trackElement) => trackElement !== blockedTrack);
+            if (nonBlockedTracks.length > 0) {
+                candidates = nonBlockedTracks;
             }
         }
 
@@ -1846,7 +1914,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         randomTrackButton.addEventListener("click", (event) => {
             event.preventDefault();
             randomTrackButton.blur();
-            playRandomVisibleTrack();
+            const excludedTrack = stopCurrentPlaybackForRandom();
+            playRandomVisibleTrack(excludedTrack);
         });
     }
 
