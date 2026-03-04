@@ -3,11 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Muse Jukebox is an interactive music player featuring original tracks by Jason Muse. Browse songs by mood, tag, and year.">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <link rel="canonical" href="https://jasonmuse.github.io/muse-jukebox/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Muse Jukebox">
+    <meta property="og:title" content="Muse Jukebox">
+    <meta property="og:description" content="Interactive jukebox with original tracks by Jason Muse. Explore songs by vibe, tag, and year.">
+    <meta property="og:url" content="https://jasonmuse.github.io/muse-jukebox/">
+    <meta property="og:image" content="https://jasonmuse.github.io/muse-jukebox/images/cover.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Muse Jukebox">
+    <meta name="twitter:description" content="Interactive jukebox with original tracks by Jason Muse.">
+    <meta name="twitter:image" content="https://jasonmuse.github.io/muse-jukebox/images/cover.jpg">
 
     <title>Muse Jukebox</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/gif" href="images/penguin.gif" />
     <link rel="icon" type="image/png" href="images/peng.png" />
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "MusicPlaylist",
+            "name": "Muse Jukebox",
+            "url": "https://jasonmuse.github.io/muse-jukebox/",
+            "description": "Interactive music player with original tracks by Jason Muse.",
+            "creator": {
+                "@type": "Person",
+                "name": "Jason Muse"
+            }
+        }
+    </script>
 </head>
 <body>
   <div id="where-background" aria-hidden="true"></div>
@@ -44,7 +70,7 @@
             <span class="sign-bolt sign-bolt--tr" aria-hidden="true"></span>
             <span class="sign-bolt sign-bolt--bl" aria-hidden="true"></span>
             <span class="sign-bolt sign-bolt--br" aria-hidden="true"></span>
-            <span class="jukebox-description-text">Welcome to the semi-complete library of my <i>Muse Tunes</i> - gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag you feel like. 🌊</span>
+            <span class="jukebox-description-text">Welcome to the semi-complete library of my <i>Muse Tunes</i> - gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag you feel like. &#127754;</span>
         </p>
         <!--
         itchyscratchy image
@@ -74,6 +100,24 @@
 
         <!-- Track List -->
         <div id="track-list"></div>
+        <noscript>
+            <section aria-label="Track list for search and no-script browsers">
+                <h2>Featured Tracks</h2>
+                <p>JavaScript powers the full jukebox interface. Direct links are available below:</p>
+                <ul>
+                    <li><a href="audio/leafed.mp3">Leafed</a></li>
+                    <li><a href="audio/gallerymuseremix.mp3">Gallery - Muse Remix</a></li>
+                    <li><a href="audio/dropoff.mp3">Dropoff</a></li>
+                    <li><a href="audio/drift.mp3">Drift</a></li>
+                    <li><a href="audio/portal.mp3">Portal</a></li>
+                    <li><a href="audio/hollows.mp3">Hollows</a></li>
+                    <li><a href="audio/rubberbandit.mp3">Rubber Bandit</a></li>
+                    <li><a href="audio/goodbyefroggy.mp3">Farewell Froggy</a></li>
+                    <li><a href="audio/zoom.mp3">Zoom</a></li>
+                    <li><a href="audio/polarcoaster.mp3">Polar Coaster</a></li>
+                </ul>
+            </section>
+        </noscript>
 
         <!-- Cover Art Modal -->
         <div id="cover-modal" class="cover-modal">
@@ -96,3 +140,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+
