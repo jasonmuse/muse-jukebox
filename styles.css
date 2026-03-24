@@ -588,6 +588,10 @@ box-shadow: 0 0 0 3px #ffffff;
     align-self: flex-end;
 }
 
+.track img.cover-loading {
+    filter: brightness(1.5);
+}
+
 .track img:hover {
     transform: scale(1.08);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);

@@ -306,7 +306,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const coverModalOverlay = document.querySelector(".cover-modal-overlay");
     let activeModalCover = "";
     const FALLBACK_COVER = "images/cover.jpg";
-    const COVER_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    const COVER_PLACEHOLDER = "images/static.gif";
     const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
     const coverSourceCheckCache = new Map();
     const coverPreloadCache = new Set();
@@ -544,6 +544,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         coverImage.decoding = "async";
         coverImage.loading = isTopPriority ? "eager" : "lazy";
         coverImage.fetchPriority = isTopPriority ? "high" : "low";
+        coverImage.classList.add("cover-loading");
+        coverImage.addEventListener("load", () => coverImage.classList.remove("cover-loading"), { once: true });
 
         if (isTopPriority || !lazyCoverObserver) {
             setSafeImageSource(coverImage, previewCover);
