@@ -36,6 +36,49 @@
     </script>
 </head>
 <body>
+  <svg class="visual-filter-definitions" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="paused-cover-color-cycle" color-interpolation-filters="sRGB">
+        <feColorMatrix in="SourceGraphic" type="saturate" values="0" result="grayscale" />
+
+        <feColorMatrix in="SourceGraphic" type="matrix" result="red-difference"
+          values="0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0 0
+                  2 -1 -1 0 0" />
+        <feComponentTransfer in="red-difference" result="red-mask">
+          <feFuncA type="linear" slope="2.2" intercept="-0.12" />
+        </feComponentTransfer>
+        <feComposite in="SourceGraphic" in2="red-mask" operator="in" result="red-color" />
+        <feComponentTransfer in="red-color" result="red-phase">
+          <feFuncA type="linear" slope="1">
+            <animate attributeName="slope" values="1;0;1" dur="8s" repeatCount="indefinite" />
+          </feFuncA>
+        </feComponentTransfer>
+
+        <feColorMatrix in="SourceGraphic" type="matrix" result="blue-difference"
+          values="0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0 0
+                  -1 -1 2 0 0" />
+        <feComponentTransfer in="blue-difference" result="blue-mask">
+          <feFuncA type="linear" slope="2.2" intercept="-0.08" />
+        </feComponentTransfer>
+        <feComposite in="SourceGraphic" in2="blue-mask" operator="in" result="blue-color" />
+        <feComponentTransfer in="blue-color" result="blue-phase">
+          <feFuncA type="linear" slope="0">
+            <animate attributeName="slope" values="0;1;0" dur="8s" repeatCount="indefinite" />
+          </feFuncA>
+        </feComponentTransfer>
+
+        <feMerge>
+          <feMergeNode in="grayscale" />
+          <feMergeNode in="red-phase" />
+          <feMergeNode in="blue-phase" />
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
   <div id="where-background" aria-hidden="true"></div>
   <div id="jukebox-wrapper">
   <div id="jukebox-container">
@@ -105,6 +148,8 @@
                 <h2>Featured Tracks</h2>
                 <p>JavaScript powers the full jukebox interface. Direct links are available below:</p>
                 <ul>
+                    <li><a href="audio/countdownisland.mp3">Countdown Island</a></li>
+                    <li><a href="audio/countdownisland_pitch_0.7.mp3">Countdown Island (Paused)</a></li>
                     <li><a href="audio/leafed.mp3">Leafed</a></li>
                     <li><a href="audio/gallerymuseremix.mp3">Gallery - Muse Remix</a></li>
                     <li><a href="audio/dropoff.mp3">Dropoff</a></li>
@@ -140,4 +185,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-

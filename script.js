@@ -2,11 +2,42 @@
 const tracks = [
 
     {
+        "title": "Countdown Island",
+        "file": "audio/countdownisland.mp3",
+        "cover": "images/countdownisland.png",
+        "thumbnail": "images/countdownisland-thumb.webp",
+        "tags": ["Featured", "Game OST"],
+        "date": "2026",
+        "featured": true,
+        "game": {
+            "name": "Countdown Island",
+            "url": "https://amused.itch.io/countdown-island",
+            "icon": "&#128163;",
+            "iconClass": "game-link-icon--bomb"
+        }
+    },
+    {
+        "title": "Countdown Island (Paused)",
+        "file": "audio/countdownisland_pitch_0.7.mp3",
+        "cover": "images/countdownisland.png",
+        "thumbnail": "images/countdownisland-thumb.webp",
+        "tags": ["Featured", "Game OST", "Slowed"],
+        "date": "2026",
+        "featured": true,
+        "grayscaleCover": true,
+        "game": {
+            "name": "Countdown Island",
+            "url": "https://amused.itch.io/countdown-island",
+            "icon": "&#128163;",
+            "iconClass": "game-link-icon--bomb"
+        }
+    },
+    {
         "title": "Runaway",
         "file": "audio/runawaynovocals.mp3",
         "cover": "images/runaway.gif",
         "tags": ["Chill", "Ambient", "Lo-fi"],
-        "date": "2027"
+        "date": "2026"
     },
     {
         "title": "Leafed",
@@ -90,14 +121,24 @@ const tracks = [
         "file": "audio/goodbyefroggy.mp3",
         "cover": "images/goodbyefroggy.png",
         "tags": ["Emotional", "Ambient", "Melancholic", "Game OST"],
-        "date": "2024"
+        "date": "2024",
+        "game": {
+            "name": "Frog Quest",
+            "url": "https://amused.itch.io/frog-quest",
+            "icon": "&#128056;"
+        }
     },
     {
         "title": "Frog God",
         "file": "audio/FROGGOD.mp3",
         "cover": "images/Baby_Bowser.png",
         "tags": ["Hype", "Dark", "Mysterious", "Game OST"],
-        "date": "2024"
+        "date": "2024",
+        "game": {
+            "name": "Frog Quest",
+            "url": "https://amused.itch.io/frog-quest",
+            "icon": "&#128056;"
+        }
     },
     {
         "title": "Bell Drop",
@@ -258,7 +299,12 @@ const tracks = [
         "file": "audio/bottletop.mp3",
         "cover": "images/boomslide.png",
         "tags": ["Chill", "Ambient", "Lo-fi", "Game OST"],
-        "date": "2024"
+        "date": "2024",
+        "game": {
+            "name": "Boombox Swarm",
+            "url": "https://amused.itch.io/boombox-swarm",
+            "icon": "&#128251;"
+        }
     },
     {
         "title": "Brain Check",
@@ -370,6 +416,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         return items.sort((a, b) => {
+            const featuredDifference = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+            if (featuredDifference !== 0) return featuredDifference;
             const yearDifference = getTrackYearSortValue(b) - getTrackYearSortValue(a);
             if (yearDifference !== 0) return yearDifference;
             return a.title.localeCompare(b.title);
@@ -597,12 +645,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Function to open cover modal
-    window.openCoverModal = function(imageSrc, title, previewSrc = imageSrc) {
+    window.openCoverModal = function(imageSrc, title, previewSrc = imageSrc, grayscale = false) {
         if (coverModalImage && coverModal) {
             const safeImageSrc = toValidCoverSource(imageSrc);
             const safePreviewSrc = toValidCoverSource(previewSrc);
             activeModalCover = safeImageSrc;
             setSafeImageSource(coverModalImage, safePreviewSrc);
+            coverModalImage.classList.toggle("cover-grayscale", grayscale);
             coverModalImage.alt = `${title} Cover`;
             coverModal.classList.add("active");
             document.body.style.overflow = "hidden"; // Prevent background scrolling
@@ -1434,7 +1483,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Function to move the record down briefly before starting the next spin
     function moveRecordDownAndUp(callback) {
         switchSound.volume = 0.5;
-        switchSound.play();
+        const switchPlayPromise = switchSound.play();
+        if (switchPlayPromise && typeof switchPlayPromise.catch === "function") {
+            switchPlayPromise.catch(() => {});
+        }
         record.classList.remove("up");
         setTimeout(() => {
             record.classList.add("up");
@@ -1568,6 +1620,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function syncTitleMarquees() {
+        trackList.querySelectorAll(".title").forEach((titleElement) => {
+            const titleContent = titleElement.querySelector(".title-scroll-content");
+            if (!titleContent) return;
+
+            titleElement.classList.remove("title-overflowing");
+            titleElement.style.removeProperty("--title-scroll-distance");
+            titleElement.style.removeProperty("--title-scroll-duration");
+
+            const naturalOverflowDistance = Math.ceil(titleContent.scrollWidth - titleElement.clientWidth);
+            if (naturalOverflowDistance <= 2) return;
+
+            titleElement.classList.add("title-overflowing");
+            const overflowDistance = naturalOverflowDistance + 2;
+            const durationSeconds = Math.max(12, Math.min(24, 9 + overflowDistance / 10));
+            titleElement.style.setProperty("--title-scroll-distance", `${overflowDistance}px`);
+            titleElement.style.setProperty("--title-scroll-duration", `${durationSeconds}s`);
+        });
+    }
+
     function enableHorizontalDragScroll(scrollElement) {
         if (!scrollElement || scrollElement.dataset.dragScrollEnabled === "true") {
             return;
@@ -1653,14 +1725,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             const previewCover = getTrackCoverPreview(track);
             const fullCover = getTrackCoverFull(track);
             const isTopPriority = index < 4;
+            const tagMarkup = track.game
+                ? ""
+                : track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('');
+            const gameLinkMarkup = track.game
+                ? `<a class="game-link" href="${track.game.url}" target="_blank" rel="noopener noreferrer"><span class="game-link-icon ${track.game.iconClass || ""}" aria-hidden="true">${track.game.icon}</span><span>Featured in ${track.game.name}</span><svg class="game-link-external" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.25 2.75 7.5 8.5M7 3.5H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9"/></svg></a>`
+                : "";
             const trackElement = document.createElement("div");
             trackElement.classList.add("track", "track-enter");
             trackElement.style.setProperty("--track-delay", `${Math.min(index, 14) * 24}ms`);
             trackElement.innerHTML = `
             <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="${isTopPriority ? "eager" : "lazy"}" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
-            <p class="title horizontal-scroll"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></p>
-            <p class="tags horizontal-scroll">${track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('')}</p>
+            <p class="title"><span class="title-scroll-content"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></span></p>
+            <p class="tags horizontal-scroll">${tagMarkup}${gameLinkMarkup}</p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
             <span class="time-display">0:00 / --:--</span>
@@ -1674,6 +1752,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const playButton = trackElement.querySelector(".play-button");
             const timeDisplay = trackElement.querySelector(".time-display");
             const coverImage = trackElement.querySelector("img");
+            coverImage.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
 
             
             // Initialize button with letter spans
@@ -1683,7 +1762,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             coverImage.addEventListener("click", (e) => {
                 e.stopPropagation(); // Prevent any other click handlers
                 if (window.openCoverModal) {
-                    window.openCoverModal(fullCover, track.title, coverImage.currentSrc || coverImage.src);
+                    window.openCoverModal(fullCover, track.title, coverImage.currentSrc || coverImage.src, Boolean(track.grayscaleCover));
                 }
             });
             
@@ -1727,20 +1806,43 @@ document.addEventListener("DOMContentLoaded", async () => {
                             setTimeDisplayReady(audio, timeDisplay, 0);
                         }
 
+                        audio.volume = 0;
+                        const playbackStartTime = performance.now() + 300;
+                        const startFromBeginningAfterRecordEffect = () => {
+                            const remainingDelay = Math.max(0, playbackStartTime - performance.now());
+                            setTimeout(() => {
+                                if (currentAudio === audio && !audio.paused) {
+                                    const revealAudioAtBeginning = () => {
+                                        audio.removeEventListener("seeked", revealAudioAtBeginning);
+                                        if (currentAudio === audio && !audio.paused) {
+                                            audio.volume = 1;
+                                        }
+                                    };
+
+                                    audio.addEventListener("seeked", revealAudioAtBeginning, { once: true });
+                                    audio.currentTime = 0;
+                                    if (!audio.seeking) {
+                                        revealAudioAtBeginning();
+                                    }
+                                }
+                            }, remainingDelay);
+                        };
+                        const playPromise = audio.play();
                         moveRecordDownAndUp(() => startSpinning());
-                        setTimeout(() => {
-                            const playPromise = audio.play();
-                            if (playPromise && typeof playPromise.catch === "function") {
-                                playPromise.catch(() => {
+                        if (playPromise && typeof playPromise.then === "function") {
+                            playPromise
+                                .then(startFromBeginningAfterRecordEffect)
+                                .catch(() => {
+                                    audio.volume = 1;
                                     animateTextChange(playButton, "Play");
                                     resetTimeDisplay(timeDisplay);
                                     timeDisplay.classList.remove("visible");
                                     currentAudio = null;
                                     updateWhereBackgroundFromPlayback();
                                 });
-                            }
-                            fadeInAudio(audio); // Fade in audio volume
-                        }, 300);
+                        } else {
+                            startFromBeginningAfterRecordEffect();
+                        }
                     } else {
                         timeDisplay.classList.add("visible");
                         if (audio.readyState < 1 || !Number.isFinite(audio.duration)) {
@@ -1844,6 +1946,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         initializeHorizontalDragScroll();
+        syncTitleMarquees();
 
         // Add event listeners to each tag bubble for filtering
         document.querySelectorAll(".clickable-tag").forEach(tagElement => {
@@ -1959,6 +2062,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.addEventListener("resize", () => {
         requestAnimationFrame(() => {
             syncAllTrackCoverHeights();
+            syncTitleMarquees();
             syncPlayingTrackStickPosition();
             scheduleMobileViewportLock();
             if (coverModal && coverModal.classList.contains("active")) {
