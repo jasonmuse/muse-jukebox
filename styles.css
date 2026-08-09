@@ -767,6 +767,57 @@ box-shadow: 0 0 0 3px #ffffff;
     user-select: none;
 }
 
+.tags-scroll-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: max-content;
+    transform: translateX(0);
+    will-change: transform;
+}
+
+.tags.tags-overflowing {
+    --title-left-edge-opacity: 1;
+    --title-right-edge-opacity: 0;
+    overflow-x: hidden;
+    cursor: default;
+    -webkit-mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
+    mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
+    animation: titleEdgeVisibility var(--tag-scroll-duration, 12s) linear infinite;
+}
+
+.tags.tags-overflowing .tags-scroll-content {
+    animation: tagMarquee var(--tag-scroll-duration, 12s) ease-in-out infinite;
+}
+
+@keyframes tagMarquee {
+    0%, 20% {
+        transform: translateX(0);
+    }
+
+    45%, 65% {
+        transform: translateX(calc(-1 * var(--tag-scroll-distance, 0px)));
+    }
+
+    90%, 100% {
+        transform: translateX(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tags.tags-overflowing {
+        overflow-x: auto;
+        cursor: grab;
+        animation: none;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .tags.tags-overflowing .tags-scroll-content {
+        animation: none;
+    }
+}
+
 .game-link {
     display: inline-flex;
     align-items: center;
@@ -821,9 +872,12 @@ box-shadow: 0 0 0 3px #ffffff;
 }
 
 #track-list .play-button,
-#track-list img,
-#track-list .clickable-tag {
+#track-list img {
     touch-action: pan-y;
+}
+
+#track-list .tags > * {
+    touch-action: pan-x pan-y;
 }
 
 .horizontal-scroll.dragging {
@@ -856,7 +910,7 @@ box-shadow: 0 0 0 3px #ffffff;
     background-color: #476bfc;
 }
 
-.tags > .clickable-tag:first-child {
+.tags-scroll-content > .clickable-tag:first-child {
     transform-origin: left center;
 }
 
@@ -1134,7 +1188,7 @@ audio {
     }
 
     .track-info {
-        min-width: auto;
+        min-width: 0;
         flex: 1;
     }
 

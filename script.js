@@ -51,7 +51,7 @@ const tracks = [
         "file": "audio/gallerymuseremix.mp3",
         "cover": "images/gallerymuseremix.png",
         "tags": ["Trap", "Bass", "Remix", "Game OST"],
-        "date": "2026"
+        "date": "2025"
     },
     {
         "title": "Dropoff",
@@ -1640,6 +1640,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function syncTagMarquees() {
+        trackList.querySelectorAll(".tags").forEach((tagsElement) => {
+            const tagsContent = tagsElement.querySelector(".tags-scroll-content");
+            if (!tagsContent) return;
+
+            tagsElement.classList.remove("tags-overflowing");
+            tagsElement.style.removeProperty("--tag-scroll-distance");
+            tagsElement.style.removeProperty("--tag-scroll-duration");
+            tagsElement.scrollLeft = 0;
+
+            const naturalOverflowDistance = Math.ceil(tagsContent.scrollWidth - tagsElement.clientWidth);
+            if (naturalOverflowDistance <= 2) return;
+
+            tagsElement.classList.add("tags-overflowing");
+            const overflowDistance = naturalOverflowDistance + 2;
+            const durationSeconds = Math.max(12, Math.min(24, 9 + overflowDistance / 10));
+            tagsElement.style.setProperty("--tag-scroll-distance", `${overflowDistance}px`);
+            tagsElement.style.setProperty("--tag-scroll-duration", `${durationSeconds}s`);
+        });
+    }
+
+    function syncMarquees() {
+        syncTitleMarquees();
+        syncTagMarquees();
+    }
+
     function enableHorizontalDragScroll(scrollElement) {
         if (!scrollElement || scrollElement.dataset.dragScrollEnabled === "true") {
             return;
@@ -1653,6 +1679,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         let pointerId = null;
 
         scrollElement.addEventListener("pointerdown", (event) => {
+            if (scrollElement.classList.contains("tags-overflowing")) {
+                return;
+            }
             if (event.pointerType === "mouse" && event.button !== 0) {
                 return;
             }
@@ -1738,7 +1767,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="${isTopPriority ? "eager" : "lazy"}" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
             <div class="track-info">
             <p class="title"><span class="title-scroll-content"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></span></p>
-            <p class="tags horizontal-scroll">${tagMarkup}${gameLinkMarkup}</p>
+            <p class="tags horizontal-scroll"><span class="tags-scroll-content">${tagMarkup}${gameLinkMarkup}</span></p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
             <span class="time-display">0:00 / --:--</span>
@@ -1946,7 +1975,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         initializeHorizontalDragScroll();
-        syncTitleMarquees();
+        syncMarquees();
 
         // Add event listeners to each tag bubble for filtering
         document.querySelectorAll(".clickable-tag").forEach(tagElement => {
@@ -2038,6 +2067,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     preloadTopTrackCovers(sortedTracks);
     warmUpcomingTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
+
+    if (document.fonts?.ready) {
+        document.fonts.ready.then(() => requestAnimationFrame(syncMarquees));
+    }
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
     applyMobileViewportLock();
@@ -2062,7 +2095,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.addEventListener("resize", () => {
         requestAnimationFrame(() => {
             syncAllTrackCoverHeights();
-            syncTitleMarquees();
+            syncMarquees();
             syncPlayingTrackStickPosition();
             scheduleMobileViewportLock();
             if (coverModal && coverModal.classList.contains("active")) {
