@@ -17,7 +17,7 @@ const tracks = [
         }
     },
     {
-        "title": "Countdown Island (Paused)",
+        "title": "Countdown Paused",
         "file": "audio/countdownisland_pitch_0.7.mp3",
         "cover": "images/countdownisland.png",
         "thumbnail": "images/countdownisland-thumb.webp",
@@ -31,6 +31,13 @@ const tracks = [
             "icon": "&#128163;",
             "iconClass": "game-link-icon--bomb"
         }
+    },
+    {
+        "title": "Exhale",
+        "file": "audio/exhale.mp3",
+        "cover": "images/crows_nest.png",
+        "tags": ["Chill", "Atmospheric", "Fast"],
+        "date": "2026"
     },
     {
         "title": "Runaway",
