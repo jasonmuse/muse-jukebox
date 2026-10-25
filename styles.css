@@ -2468,8 +2468,6 @@ html {
 
 .flip-sign:focus-visible,
 .back-flip-button:focus-visible,
-.battery-cover:focus-visible,
-.battery-replay:focus-visible,
 .track-clear:focus-visible,
 .np-clear:focus-visible {
     outline: 2px solid #d6e6ff;
@@ -2560,8 +2558,7 @@ html {
     color: transparent;
 }
 
-.back-flip-button,
-.battery-replay {
+.back-flip-button {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -2583,8 +2580,7 @@ html {
     touch-action: manipulation;
 }
 
-.back-flip-button:active,
-.battery-replay:active {
+.back-flip-button:active {
     transform: scale(0.95);
 }
 
@@ -2608,7 +2604,7 @@ html {
 }
 
 .back-tips,
-.battery-game {
+.jukebot {
     flex: 0 0 auto;
     padding: 12px 14px;
     border-radius: 12px;
@@ -2617,7 +2613,7 @@ html {
 }
 
 .back-tips h3,
-.battery-game-header h3 {
+.jb-header h3 {
     margin: 0;
     font-size: 0.78rem;
     font-weight: 700;
@@ -2636,406 +2632,6 @@ html {
     color: rgba(255, 255, 255, 0.85);
 }
 
-/* Battery bay mini game */
-.battery-game-header {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-bottom: 8px;
-}
-
-.battery-status {
-    min-height: 1.3em;
-    font-size: 0.88rem;
-    line-height: 1.3;
-    color: rgba(255, 255, 255, 0.75);
-}
-
-.battery-game.is-fixed .battery-status {
-    color: #7bed9f;
-    font-weight: 700;
-}
-
-.battery-bay {
-    --charge: 0;
-    position: relative;
-    height: 170px;
-    border-radius: 12px;
-    overflow: hidden;
-    background: radial-gradient(ellipse at 50% 0%, rgba(115, 143, 255, 0.12), transparent 70%), #1d1f2c;
-    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.65), inset 0 0 0 2px #3a3f55;
-    touch-action: manipulation;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    transition: box-shadow 400ms ease;
-}
-
-/* Copper contact strips */
-.battery-bay::before,
-.battery-bay::after {
-    content: "";
-    position: absolute;
-    top: 12px;
-    bottom: 12px;
-    width: 8px;
-    border-radius: 3px;
-    background: repeating-linear-gradient(180deg, #d79a5b 0 6px, #9c6533 6px 9px);
-    opacity: 0.8;
-}
-
-.battery-bay::before {
-    left: 8px;
-}
-
-.battery-bay::after {
-    right: 8px;
-}
-
-.battery-game.is-fixed .battery-bay {
-    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.65), inset 0 0 0 2px #7bed9f, 0 0 22px rgba(123, 237, 159, 0.35);
-}
-
-.battery-row {
-    position: absolute;
-    inset: 14px 30px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.battery {
-    position: relative;
-    height: 26px;
-    margin-right: 8px;
-    border-radius: 6px;
-    background: linear-gradient(180deg, #4d5267, #2c3040 60%, #23262f);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 4px rgba(0, 0, 0, 0.4);
-}
-
-.battery::before {
-    content: "MUSE  AA";
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.3em;
-    white-space: pre;
-    color: rgba(255, 255, 255, 0.4);
-}
-
-.battery::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    right: -7px;
-    width: 7px;
-    height: 11px;
-    transform: translateY(-50%);
-    border-radius: 0 3px 3px 0;
-    background: #c9ced9;
-}
-
-.battery--flip {
-    margin-right: 0;
-    margin-left: 8px;
-}
-
-.battery--flip::after {
-    right: auto;
-    left: -7px;
-    border-radius: 3px 0 0 3px;
-}
-
-.battery-level {
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 4px;
-    width: calc((100% - 8px) * max(var(--charge), 0.08));
-    border-radius: 3px;
-    background: hsl(calc(var(--charge) * 120) 80% 52%);
-    box-shadow: 0 0 8px hsl(calc(var(--charge) * 120) 80% 52% / 0.6);
-    transition: width 420ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 420ms ease, box-shadow 420ms ease;
-}
-
-.battery--flip .battery-level {
-    left: auto;
-    right: 4px;
-}
-
-.battery-game.is-fixed .battery-level {
-    animation: batteryCharged 1.4s ease-in-out infinite;
-}
-
-@keyframes batteryCharged {
-    50% {
-        filter: brightness(1.35);
-    }
-}
-
-.battery-critters {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.battery-bug {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 34px;
-    height: 34px;
-    will-change: transform;
-}
-
-.battery-bug svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.5));
-}
-
-.bug-legs,
-.bug-antennae {
-    fill: none;
-    stroke: #2b2233;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-}
-
-.bug-antennae {
-    stroke-width: 1.6;
-}
-
-.bug-legs {
-    transform-origin: 20px 22px;
-    animation: bugCrawl 150ms steps(2) infinite alternate;
-}
-
-.bug-head {
-    fill: #2b2233;
-}
-
-.bug-seam {
-    stroke: rgba(0, 0, 0, 0.35);
-    stroke-width: 1.4;
-}
-
-.bug-spot {
-    fill: rgba(0, 0, 0, 0.3);
-}
-
-@keyframes bugCrawl {
-    to {
-        transform: scaleY(0.86) skewY(7deg);
-    }
-}
-
-.battery-bug.is-squashed svg {
-    animation: bugSquash 420ms ease-out forwards;
-}
-
-@keyframes bugSquash {
-    30% {
-        transform: scale(1.25, 0.45);
-    }
-
-    100% {
-        transform: scale(1.35, 0.2);
-        opacity: 0;
-    }
-}
-
-.battery-splat {
-    position: absolute;
-    width: 42px;
-    height: 42px;
-    margin: -21px 0 0 -21px;
-    background:
-        radial-gradient(circle at 50% 50%, var(--splat) 0 30%, transparent 31%),
-        radial-gradient(circle at 18% 30%, var(--splat) 0 10%, transparent 11%),
-        radial-gradient(circle at 80% 24%, var(--splat) 0 9%, transparent 10%),
-        radial-gradient(circle at 72% 80%, var(--splat) 0 11%, transparent 12%),
-        radial-gradient(circle at 24% 78%, var(--splat) 0 8%, transparent 9%);
-    opacity: 0.85;
-    animation: splatFade 1.5s ease-out forwards;
-}
-
-@keyframes splatFade {
-    0% {
-        transform: scale(0.3);
-    }
-
-    15% {
-        transform: scale(1.12);
-    }
-
-    25% {
-        transform: scale(1);
-    }
-
-    65% {
-        opacity: 0.8;
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 0;
-    }
-}
-
-.battery-cover {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    background:
-        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 10px),
-        linear-gradient(180deg, #5b6178, #3c4156);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -3px 0 rgba(0, 0, 0, 0.3);
-    color: #ffffff;
-    font: inherit;
-    cursor: pointer;
-    transition: transform 520ms cubic-bezier(0.65, 0, 0.35, 1), opacity 360ms ease 220ms;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-}
-
-.battery-cover-grip {
-    width: 64px;
-    height: 8px;
-    border-radius: 999px;
-    background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0 3px, rgba(255, 255, 255, 0.15) 3px 6px);
-}
-
-.battery-cover-label {
-    padding: 8px 16px;
-    border-radius: 10px;
-    background: #7BA8D0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    font-size: 0.95rem;
-    font-weight: 700;
-    transition: background-color 160ms ease-out, transform 140ms ease-out;
-}
-
-.battery-cover:active .battery-cover-label {
-    transform: scale(0.95);
-}
-
-.battery-cover-hint {
-    font-size: 0.8rem;
-    line-height: 1.3;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.78);
-}
-
-.battery-bay.is-open .battery-cover {
-    transform: translateY(105%);
-    opacity: 0;
-    pointer-events: none;
-}
-
-.battery-swatter {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    z-index: 4;
-    width: 40px;
-    height: 70px;
-    margin: -18px 0 0 -20px;
-    opacity: 0;
-    pointer-events: none;
-    transform-origin: 50% 100%;
-    transform: rotate(-12deg);
-    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-    transition: opacity 150ms ease-out;
-}
-
-.battery-swatter svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-}
-
-.battery-swatter.is-visible {
-    opacity: 1;
-}
-
-.battery-swatter.is-swinging {
-    animation: swatterSwing 260ms cubic-bezier(0.3, 0.7, 0.4, 1);
-}
-
-@keyframes swatterSwing {
-    30% {
-        transform: rotate(-36deg) scale(1.06);
-    }
-
-    55% {
-        transform: rotate(6deg) scale(0.9);
-    }
-}
-
-.swatter-mesh {
-    fill: rgba(123, 168, 208, 0.6);
-    stroke: #ffffff;
-    stroke-width: 3;
-}
-
-.swatter-grid {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.6);
-    stroke-width: 1.5;
-}
-
-.swatter-handle {
-    fill: #e9edf6;
-}
-
-@media (hover: hover) and (pointer: fine) {
-    .battery-bay.is-open {
-        cursor: none;
-    }
-
-    .battery-cover:hover .battery-cover-label,
-    .back-flip-button:hover,
-    .battery-replay:hover {
-        background-color: #6B98C0;
-    }
-}
-
-.battery-game-footer {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 34px;
-    margin-top: 8px;
-    font-size: 0.85rem;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.75);
-}
-
-.battery-best {
-    margin-left: auto;
-}
-
-.battery-replay[hidden] {
-    display: none;
-}
-
 @media (max-width: 600px) {
     .back-title {
         font-size: 1.3rem;
@@ -3043,14 +2639,6 @@ html {
 
     .back-tips ul {
         font-size: 0.84rem;
-    }
-
-    .battery-bay {
-        height: 150px;
-    }
-
-    .battery {
-        height: 22px;
     }
 }
 
@@ -3380,5 +2968,1219 @@ body.has-side-rail .track.track-playing.track-playing-stick-bottom {
         z-index: 1;
         pointer-events: none;
         box-shadow: inset 0 0 40px 14px #1e1a4d;
+    }
+}
+
+/* ───── FIX JUKEBOT (mini game on the back) ───── */
+.jb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.jb-hud {
+    display: flex;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.jb-hud-item {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+}
+
+.jb-hud-time {
+    min-width: 3.6em;
+    text-align: center;
+}
+
+.jb-status {
+    min-height: 1.3em;
+    margin: 6px 0 8px;
+    font-size: 0.86rem;
+    line-height: 1.3;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.jb-stage {
+    position: relative;
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+.jb-scene {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* While playing, the scene eats every gesture: no scrolling, no zooming */
+.jb-scene.is-playing {
+    touch-action: none;
+    cursor: crosshair;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .jb-scene.is-playing {
+        cursor: none;
+    }
+
+    .back-flip-button:hover,
+    .jb-button:hover {
+        background-color: #6B98C0;
+    }
+
+    .jb-button--ghost:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+    }
+}
+
+/* Robot body */
+.jb-body {
+    fill: #464d78;
+    stroke: #cfd6ff;
+    stroke-width: 3;
+}
+
+.jb-handle {
+    fill: #8a92bd;
+    stroke: #cfd6ff;
+    stroke-width: 2;
+}
+
+.jb-titlebar {
+    fill: #e9edf8;
+}
+
+.jb-name {
+    font: 900 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 2px;
+    fill: #3b4166;
+}
+
+.jb-btn--min {
+    fill: #ff9f43;
+}
+
+.jb-btn--close {
+    fill: #48dbfb;
+}
+
+.jb-gear {
+    fill: #ffcf4a;
+    stroke: #c48a12;
+    stroke-width: 1.4;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.jb-gear circle {
+    fill: #fff3c4;
+}
+
+.jb-scene.is-fixed .jb-gear {
+    animation: jbSpin 2.4s linear infinite;
+}
+
+.jb-bulb-neck {
+    fill: #b6bdd9;
+}
+
+.jb-bulb-glass {
+    fill: #7d84a8;
+    stroke: #cfd6ff;
+    stroke-width: 1.5;
+    transition: fill 300ms ease, filter 300ms ease;
+}
+
+.jb-bulb.is-lit .jb-bulb-glass {
+    fill: #ffe066;
+    filter: drop-shadow(0 0 6px #ffe066);
+    animation: jbBulbOn 420ms ease-out;
+}
+
+@keyframes jbBulbOn {
+    0% {
+        fill: #ffffff;
+    }
+
+    40% {
+        filter: drop-shadow(0 0 14px #fff7c2);
+    }
+}
+
+/* Smoke + glitching while broken */
+.jb-smoke {
+    display: none;
+}
+
+.jb-scene.is-broken .jb-smoke {
+    display: inline;
+}
+
+.jb-puff {
+    fill: #2b2b38;
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbPuff 2.4s ease-out infinite;
+}
+
+.jb-puff:nth-child(2) {
+    animation-delay: 0.8s;
+}
+
+.jb-puff:nth-child(3) {
+    animation-delay: 1.6s;
+}
+
+@keyframes jbPuff {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.5);
+    }
+
+    20% {
+        opacity: 0.85;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(6px, -30px) scale(1.8);
+    }
+}
+
+/* Inside */
+.jb-board {
+    fill: #1b1e2d;
+}
+
+.jb-traces {
+    fill: none;
+    stroke: #c99a3a;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.6;
+}
+
+.jb-chip {
+    fill: #2c3048;
+    stroke: #6c739c;
+    stroke-width: 1.2;
+}
+
+.jb-cap {
+    fill: #3e7bd6;
+    stroke: #a9c6ff;
+    stroke-width: 1.2;
+}
+
+.jb-fan-ring {
+    fill: #262a3d;
+    stroke: #6c739c;
+    stroke-width: 1.5;
+}
+
+.jb-fan-blades {
+    fill: #8a92bd;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbSpin 1.6s linear infinite;
+}
+
+.jb-scene.is-broken .jb-fan-blades {
+    animation-duration: 9s;
+}
+
+.jb-core-plate {
+    fill: #f2b53c;
+    stroke: #fff0c2;
+    stroke-width: 2;
+}
+
+/* Front cover */
+.jb-cover {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    transition: transform 560ms cubic-bezier(0.55, 0, 0.75, 0.4), opacity 420ms ease 140ms;
+}
+
+.jb-scene.cover-off .jb-cover {
+    transform: translate(10px, 70px) rotate(14deg);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.jb-scene.cover-closing .jb-cover {
+    transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.15), opacity 200ms ease;
+}
+
+.jb-cover-plate {
+    fill: url(#jb-grid);
+    stroke: #2a6e45;
+    stroke-width: 2;
+}
+
+.jb-meter-face {
+    fill: #1f4f37;
+    stroke: #c8f7d4;
+    stroke-width: 2;
+}
+
+.jb-meter-arc {
+    fill: none;
+    stroke: #c8f7d4;
+    stroke-width: 2;
+    stroke-dasharray: 2 3;
+}
+
+.jb-needle {
+    stroke: #ff5d5d;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+}
+
+.jb-needle-wrap {
+    transform-box: view-box;
+    transform-origin: 0 4px;
+    transform: rotate(-30deg);
+}
+
+.jb-scene.is-broken .jb-needle-wrap {
+    animation: jbNeedleBroken 1.6s steps(3) infinite;
+}
+
+.jb-scene.is-fixed .jb-needle-wrap {
+    animation: jbNeedleDance 0.5s ease-in-out infinite alternate;
+}
+
+.jb-meter:nth-of-type(2) .jb-needle-wrap {
+    animation-delay: -0.25s;
+}
+
+@keyframes jbNeedleBroken {
+    0% {
+        transform: rotate(-62deg);
+    }
+
+    50% {
+        transform: rotate(-48deg);
+    }
+
+    100% {
+        transform: rotate(-66deg);
+    }
+}
+
+@keyframes jbNeedleDance {
+    from {
+        transform: rotate(-35deg);
+    }
+
+    to {
+        transform: rotate(40deg);
+    }
+}
+
+.jb-screen {
+    fill: #e8edff;
+    stroke: #cfd6ff;
+    stroke-width: 2;
+}
+
+.jb-scene.is-broken .jb-face--outer {
+    animation: jbGlitch 2.2s steps(1) infinite;
+}
+
+@keyframes jbGlitch {
+    0%, 100% {
+        transform: none;
+        opacity: 1;
+    }
+
+    46% {
+        transform: translateX(3px);
+        opacity: 0.6;
+    }
+
+    48% {
+        transform: translateX(-2px);
+        opacity: 1;
+    }
+
+    50% {
+        transform: none;
+    }
+}
+
+.jb-lcd {
+    fill: #f4f6ff;
+    stroke: #2a6e45;
+    stroke-width: 2;
+}
+
+.jb-lcd-text {
+    font: 800 10.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 1px;
+    text-anchor: middle;
+    fill: #3b4166;
+}
+
+.jb-scene.is-broken .jb-lcd-text {
+    fill: #d6334d;
+}
+
+.jb-slider {
+    fill: #d9ddea;
+    stroke: #2a6e45;
+    stroke-width: 1.5;
+}
+
+.jb-knob {
+    fill: #8a8fa6;
+    stroke: #e9edf8;
+    stroke-width: 2;
+}
+
+.jb-screw-head circle {
+    fill: #d9ddea;
+    stroke: #6c739c;
+    stroke-width: 1.6;
+}
+
+.jb-screw-head path {
+    stroke: #5a6080;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.jb-screw-head {
+    transform: rotate(var(--turn, 0deg));
+    transition: transform 260ms cubic-bezier(0.3, 0.7, 0.4, 1.3);
+}
+
+.jb-screw {
+    transition: opacity 260ms ease;
+}
+
+.jb-screw.is-out {
+    opacity: 0;
+    animation: jbScrewPop 300ms ease-out;
+}
+
+@keyframes jbScrewPop {
+    from {
+        opacity: 1;
+    }
+}
+
+.jb-scene.is-fixed .jb-screw.is-turning .jb-screw-head {
+    animation: jbScrewIn 500ms ease-out;
+}
+
+@keyframes jbScrewIn {
+    from {
+        transform: rotate(400deg) scale(1.4);
+    }
+}
+
+/* Faces: CSS shows the expression for the current mood */
+.jb-face .jb-eyes,
+.jb-face .jb-mouth {
+    display: none;
+}
+
+.jb-eyes--round circle {
+    fill: #3b4166;
+}
+
+.jb-eyes--round .jb-pupil {
+    fill: #ffffff;
+}
+
+.jb-eyes--x,
+.jb-eyes--happy,
+.jb-mouth {
+    fill: none;
+    stroke: #3b4166;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.jb-face--inner .jb-eyes--x,
+.jb-face--inner .jb-eyes--happy,
+.jb-face--inner .jb-mouth {
+    stroke: #6b3f12;
+    stroke-width: 2.6;
+}
+
+.jb-face--inner .jb-eyes--round circle {
+    fill: #6b3f12;
+}
+
+.jb-face--inner .jb-eyes--round .jb-pupil {
+    fill: #ffffff;
+}
+
+.mood-broken .jb-eyes--x,
+.mood-broken .jb-mouth--zigzag,
+.mood-worried .jb-eyes--round,
+.mood-worried .jb-mouth--wobble,
+.mood-ouch .jb-eyes--x,
+.mood-ouch .jb-mouth--o,
+.mood-happy .jb-eyes--happy,
+.mood-happy .jb-mouth--smile {
+    display: inline;
+}
+
+.mood-worried .jb-pupil {
+    animation: jbLookAround 1.8s steps(1) infinite;
+}
+
+@keyframes jbLookAround {
+    0%, 100% {
+        transform: none;
+    }
+
+    33% {
+        transform: translate(-3px, 1px);
+    }
+
+    66% {
+        transform: translate(1px, 2px);
+    }
+}
+
+/* Bugs */
+.jb-bug-art {
+    transition: opacity 200ms ease;
+}
+
+.jb-wing {
+    fill: rgba(235, 244, 255, 0.82);
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 0.8;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbWingBuzz 80ms linear infinite alternate;
+}
+
+@keyframes jbWingBuzz {
+    to {
+        transform: scaleY(0.35);
+    }
+}
+
+.jb-fly-body {
+    fill: #7a3f2c;
+}
+
+.jb-fly-stripes {
+    stroke: #3a1f17;
+    stroke-width: 1.2;
+}
+
+.jb-fly-eye {
+    fill: #ff4d6d;
+}
+
+.jb-eye-shine {
+    fill: #ffffff;
+}
+
+.jb-beetle-legs,
+.jb-beetle-antennae {
+    fill: none;
+    stroke: #2b2233;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+}
+
+.jb-beetle-legs {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbCrawl 160ms steps(2) infinite alternate;
+}
+
+@keyframes jbCrawl {
+    to {
+        transform: scaleY(0.84) skewY(6deg);
+    }
+}
+
+.jb-beetle-shell {
+    fill: #3fb87f;
+    stroke: #1f6b47;
+    stroke-width: 1.2;
+}
+
+.jb-beetle-seam {
+    stroke: rgba(0, 0, 0, 0.35);
+    stroke-width: 1.2;
+}
+
+.jb-beetle-spot {
+    fill: rgba(0, 0, 0, 0.28);
+}
+
+.jb-beetle-head {
+    fill: #2b2233;
+}
+
+.jb-beetle-crack {
+    display: none;
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+}
+
+.jb-bug--beetle.is-cracked .jb-beetle-crack {
+    display: inline;
+}
+
+.jb-bug--beetle.is-cracked .jb-beetle-shell {
+    fill: #e8834a;
+    stroke: #8c3d17;
+}
+
+.jb-glow-halo {
+    animation: jbGlowPulse 1.1s ease-in-out infinite alternate;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+@keyframes jbGlowPulse {
+    from {
+        opacity: 0.55;
+        transform: scale(0.85);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+.jb-glow-wing {
+    animation-duration: 140ms;
+}
+
+.jb-glow-tail {
+    fill: #e7ff6b;
+    filter: drop-shadow(0 0 4px #e7ff6b);
+}
+
+.jb-glow-body {
+    fill: #4b3f6b;
+}
+
+.jb-glow-head {
+    fill: #2b2233;
+}
+
+.jb-queen-wing {
+    fill: #a77cf5;
+    stroke: #e9dcff;
+    stroke-width: 1.2;
+    animation-duration: 200ms;
+}
+
+.jb-queen-wing.jb-wing--left {
+    transform-origin: right center;
+}
+
+.jb-queen-wing.jb-wing--right {
+    transform-origin: left center;
+}
+
+.jb-queen-wing {
+    animation-name: jbQueenFlap;
+}
+
+@keyframes jbQueenFlap {
+    to {
+        transform: scaleX(0.55);
+    }
+}
+
+.jb-queen-eyespot {
+    fill: #ffd23f;
+    stroke: #6b3fa8;
+    stroke-width: 1.2;
+}
+
+.jb-queen-body {
+    fill: #5b3a8a;
+}
+
+.jb-queen-stripes {
+    stroke: #ffd23f;
+    stroke-width: 1.4;
+}
+
+.jb-queen-head {
+    fill: #3a2552;
+}
+
+.jb-queen-crown {
+    fill: #ffd23f;
+    stroke: #c48a12;
+    stroke-width: 0.8;
+}
+
+.jb-hp-track {
+    fill: rgba(0, 0, 0, 0.5);
+}
+
+.jb-hp {
+    fill: #ff6b81;
+    transition: width 200ms ease;
+}
+
+.jb-bug.is-hit .jb-bug-art {
+    animation: jbHit 260ms ease-out;
+}
+
+@keyframes jbHit {
+    30% {
+        transform: scale(0.75);
+        filter: brightness(2);
+    }
+}
+
+.jb-bug.is-squashed .jb-bug-art {
+    animation: jbSquash 360ms ease-out forwards;
+}
+
+@keyframes jbSquash {
+    30% {
+        transform: scale(1.3, 0.4);
+    }
+
+    100% {
+        transform: scale(1.4, 0.15);
+        opacity: 0;
+    }
+}
+
+.jb-bug.is-fleeing .jb-bug-art {
+    opacity: 0.75;
+}
+
+.jb-splat {
+    fill: var(--goo);
+    opacity: 1;
+    transition: opacity 120ms linear;
+}
+
+.jb-splat > :first-child {
+    animation: jbSplatIn 260ms cubic-bezier(0.3, 1.6, 0.5, 1);
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+@keyframes jbSplatIn {
+    from {
+        transform: scale(0.2);
+    }
+}
+
+/* Effects */
+.jb-pop {
+    font: 900 11px system-ui, -apple-system, Arial, sans-serif;
+    text-anchor: middle;
+    fill: #ffffff;
+    paint-order: stroke;
+    stroke: rgba(20, 22, 36, 0.85);
+    stroke-width: 3px;
+    animation: jbPopUp 800ms ease-out forwards;
+}
+
+.jb-pop--miss {
+    fill: rgba(255, 255, 255, 0.6);
+    font-size: 9px;
+}
+
+.jb-pop--penalty {
+    fill: #ff6b81;
+}
+
+@keyframes jbPopUp {
+    from {
+        opacity: 1;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-14px);
+    }
+}
+
+.jb-sparkle {
+    fill: #ffffff;
+    filter: drop-shadow(0 0 3px #fff7c2);
+    animation: jbSparkle 900ms ease-out forwards;
+}
+
+@keyframes jbSparkle {
+    0% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+
+    30% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(0.6) rotate(90deg);
+    }
+}
+
+.jb-bubble {
+    fill: rgba(255, 255, 255, 0.75);
+    animation: jbBubble 700ms ease-out forwards;
+}
+
+@keyframes jbBubble {
+    to {
+        opacity: 0;
+        transform: translateY(-12px);
+    }
+}
+
+@keyframes jbSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Tools */
+.jb-tool {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
+.jb-tool.is-visible {
+    opacity: 1;
+}
+
+.jb-tool-art {
+    display: none;
+    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.5));
+}
+
+.tool-screwdriver .jb-tool--screwdriver,
+.tool-swatter .jb-tool--swatter,
+.tool-sponge .jb-tool--sponge {
+    display: inline;
+}
+
+.jb-tool-metal {
+    fill: #d6dbe6;
+    stroke: #8a92ad;
+    stroke-width: 0.8;
+}
+
+.jb-tool-handle {
+    fill: #ffcf4a;
+    stroke: #c48a12;
+    stroke-width: 1.2;
+}
+
+.jb-tool-grip {
+    stroke: #c48a12;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+}
+
+.jb-tool-stick {
+    fill: #e9edf6;
+    stroke: #8a92ad;
+    stroke-width: 0.8;
+}
+
+.jb-tool-mesh {
+    fill: rgba(91, 125, 255, 0.75);
+    stroke: #ffffff;
+    stroke-width: 2.2;
+}
+
+.jb-tool-mesh-grid {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.7);
+    stroke-width: 1.2;
+}
+
+.jb-tool-sponge {
+    fill: #ffd84a;
+    stroke: #c49a12;
+    stroke-width: 1.2;
+}
+
+.jb-tool-sponge-top {
+    fill: #5ccf8a;
+}
+
+.jb-tool-pore {
+    fill: #d8a91c;
+}
+
+.tool-screwdriver .jb-tool.is-using .jb-tool-motion {
+    animation: jbTwist 300ms ease-in-out;
+}
+
+.tool-swatter .jb-tool.is-using .jb-tool-motion {
+    animation: jbSwat 240ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.tool-sponge .jb-tool.is-using .jb-tool-motion {
+    animation: jbWipe 260ms ease-in-out;
+}
+
+@keyframes jbTwist {
+    50% {
+        transform: rotate(-70deg);
+    }
+}
+
+@keyframes jbSwat {
+    0% {
+        transform: scale(1.35) rotate(-14deg);
+    }
+
+    45% {
+        transform: scale(0.82) rotate(4deg);
+    }
+}
+
+@keyframes jbWipe {
+    30% {
+        transform: translateX(-4px) rotate(-8deg);
+    }
+
+    70% {
+        transform: translateX(4px) rotate(8deg);
+    }
+}
+
+/* Combo badge + speech bubble */
+.jb-combo,
+.jb-speech {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.jb-combo {
+    top: 30%;
+    right: 4%;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #ff9f43;
+    color: #ffffff;
+    font-size: 0.85rem;
+    transform: scale(0.6) rotate(-6deg);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.jb-combo.is-visible {
+    animation: jbComboPop 900ms cubic-bezier(0.34, 1.6, 0.64, 1) forwards;
+}
+
+@keyframes jbComboPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.6) rotate(-6deg);
+    }
+
+    20% {
+        opacity: 1;
+        transform: scale(1.1) rotate(-6deg);
+    }
+
+    80% {
+        opacity: 1;
+        transform: scale(1) rotate(-6deg);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1) rotate(-6deg) translateY(-6px);
+    }
+}
+
+.jb-speech {
+    top: -2%;
+    left: 22%;
+    padding: 6px 12px;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #3b4166;
+    font-size: 0.9rem;
+    transform-origin: bottom left;
+    transform: scale(0.4);
+    transition: opacity 200ms ease, transform 360ms cubic-bezier(0.34, 1.6, 0.64, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.jb-speech::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    bottom: -6px;
+    border: 7px solid transparent;
+    border-top-color: #ffffff;
+    border-bottom: 0;
+}
+
+.jb-speech.is-visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Start / results overlays */
+.jb-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 14px;
+    box-sizing: border-box;
+    border-radius: 14px;
+    background: rgba(24, 26, 42, 0.74);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    text-align: center;
+    animation: jbOverlayIn 260ms ease-out;
+}
+
+.jb-overlay[hidden] {
+    display: none;
+}
+
+@keyframes jbOverlayIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+.jb-overlay p {
+    margin: 0;
+    text-align: center;
+}
+
+.jb-overlay-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.jb-overlay-hint,
+.jb-results-note {
+    max-width: 30em;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.jb-level-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.jb-level-label {
+    min-width: 5.5em;
+    font-weight: 800;
+    color: #aebcff;
+}
+
+.jb-icon-button {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jb-icon-button svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.jb-icon-button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.jb-level-best,
+.jb-results-stats {
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.jb-button {
+    min-height: 36px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 10px;
+    background-color: #7BA8D0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    color: #ffffff;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 140ms ease-out, background-color 160ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jb-button:active,
+.jb-icon-button:active {
+    transform: scale(0.94);
+}
+
+.jb-button--ghost {
+    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.jb-button:focus-visible,
+.jb-icon-button:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+.jb-overlay-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.jb-stars {
+    font-size: 1.7rem;
+    letter-spacing: 4px;
+    line-height: 1;
+}
+
+.jb-star {
+    color: rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
+
+.jb-star.is-earned {
+    color: #ffd23f;
+    text-shadow: 0 0 10px rgba(255, 210, 63, 0.6);
+    animation: jbStarIn 500ms cubic-bezier(0.34, 1.6, 0.64, 1) both;
+}
+
+.jb-star.is-earned:nth-child(2) {
+    animation-delay: 150ms;
+}
+
+.jb-star.is-earned:nth-child(3) {
+    animation-delay: 300ms;
+}
+
+@keyframes jbStarIn {
+    from {
+        transform: scale(0) rotate(-90deg);
+    }
+}
+
+@media (max-width: 600px) {
+    .jb-overlay-title {
+        font-size: 1rem;
+    }
+
+    .jb-overlay {
+        gap: 5px;
+        padding: 8px 10px;
+    }
+
+    .jb-button {
+        min-height: 32px;
+        font-size: 0.88rem;
+    }
+}
+
+/* ───── NO DOUBLE-TAP ZOOM ─────
+   Fast taps (play buttons, swatting bugs) shouldn't zoom the page on phones */
+html,
+body {
+    touch-action: manipulation;
+}
+
+/* ───── FLIP SIGN: drop the extra words when space runs out ───── */
+.flip-sign {
+    container-type: inline-size;
+    overflow: hidden;
+}
+
+@container (max-width: 400px) {
+    .flip-sign-extra {
+        display: none;
+    }
+}
+
+/* ───── LANDSCAPE DECK TITLE: size to the panel so the penguins stay inside ───── */
+@media (orientation: landscape) and (pointer: coarse) {
+    h1 {
+        font-size: clamp(1.15rem, min(6.5vh, 4.6vw), 2.8rem);
+    }
+
+    .title-container {
+        gap: 0.22em;
+    }
+
+    .penguin-badge {
+        width: 1.2em;
+        height: 1.2em;
+        flex-basis: 1.2em;
+    }
+
+    .penguin-icon {
+        width: 0.66em;
+        height: 0.66em;
     }
 }

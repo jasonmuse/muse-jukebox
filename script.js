@@ -375,15 +375,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const npShuffle = document.getElementById("np-shuffle");
     const npClear = document.getElementById("np-clear");
     const jukeboxPanel = document.getElementById("jukebox");
-    const batteryGame = document.getElementById("battery-game");
-    const batteryBay = document.getElementById("battery-bay");
-    const batteryCritters = document.getElementById("battery-critters");
-    const batteryCover = document.getElementById("battery-cover");
-    const batterySwatter = document.getElementById("battery-swatter");
-    const batteryStatus = document.getElementById("battery-status");
-    const batteryScore = document.getElementById("battery-score");
-    const batteryBest = document.getElementById("battery-best");
-    const batteryReplay = document.getElementById("battery-replay");
     const switchSound = new Audio("audio/jukeboxswitch.mp3");
     
     // Cover modal elements
@@ -1485,9 +1476,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const direction = Math.sign(appliedSeekOffsetSeconds);
         const tenSecondUnits = Math.abs(appliedSeekOffsetSeconds) / 10;
         const turnsPerTenSeconds = 2.25;
-        const totalDegrees = direction * turnsPerTenSeconds * tenSecondUnits * 360;
-        const durationMs = 170;
+        spinRecordBy(direction * turnsPerTenSeconds * tenSecondUnits * 360, 170);
+    }
 
+    // Extra spin on top of any playback spin (seeking, flipping the jukebox, fixing Jukebot)
+    function spinRecordBy(totalDegrees, durationMs) {
         if (recordSeekNudgeFrame !== null) {
             cancelAnimationFrame(recordSeekNudgeFrame);
             recordSeekNudgeFrame = null;
@@ -1515,6 +1508,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         recordSeekNudgeFrame = requestAnimationFrame(animateNudge);
+    }
+
+    // Pop the record up (if it's tucked away) and give it a whirl
+    function showOffRecordSpin(totalDegrees, durationMs) {
+        const wasUp = record ? record.classList.contains("up") : true;
+        if (!wasUp) {
+            record.classList.add("up");
+        }
+        spinRecordBy(totalDegrees, durationMs);
+        if (!wasUp) {
+            setTimeout(() => {
+                if (!currentTrackData) {
+                    record.classList.remove("up");
+                }
+            }, durationMs + 400);
+        }
     }
 
     function toggleCurrentTrackFromRecord() {
@@ -2573,16 +2582,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateSideRailState();
     }
 
-    // ───── Back of the jukebox: flip animation + battery bay bug hunt ─────
-    const BUG_TOTAL = 8;
-    const BUG_MAX_ON_SCREEN = 3;
-    const BUG_SIZE = 34;
-    const BUG_COLORS = ["#7ed957", "#ff9f43", "#ff6b81", "#c56cf0", "#feca57", "#48dbfb"];
-    const BUG_QUIPS = ["Splat!", "Got one!", "Bzzt... gone.", "Nice swing!", "Squashed!", "Bug-free zone!"];
-    const BUG_IDLE_STATUS = "Something's buzzing in here...";
+    // ───── Back of the jukebox: flip animation (the Jukebot game lives in jukebot.js) ─────
     let isJukeboxFlipping = false;
-    let bugGame = null;
-    let swatterHideTimer = null;
 
     function setJukeboxSide(showBack) {
         if (showBack) {
@@ -2592,7 +2593,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         } else {
             jukeboxPanel.style.height = "";
-            resetBugGame();
+            if (window.jukebot) {
+                window.jukebot.reset();
+            }
         }
 
         jukeboxPanel.classList.toggle("is-flipped", showBack);
@@ -2619,6 +2622,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // The record whirls along with the flip, in the direction the jukebox turns
+        showOffRecordSpin(showBack ? 720 : -720, 900);
+
         isJukeboxFlipping = true;
         jukeboxPanel.classList.add("flip-out");
         setTimeout(() => {
@@ -2636,249 +2642,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 210);
     }
 
-    function getBugMarkup(color) {
-        return `<svg viewBox="0 0 40 40" aria-hidden="true"><path class="bug-legs" d="M14 17 6 12M14 22H5M14 27l-8 5M26 17l8-5M26 22h9M26 27l8 5"/><path class="bug-antennae" d="M17 8 13 2M23 8l4-6"/><ellipse class="bug-body" cx="20" cy="24" rx="8.5" ry="10.5" fill="${color}"/><path class="bug-seam" d="M20 14v20"/><circle class="bug-head" cx="20" cy="11.5" r="5"/><circle class="bug-spot" cx="16.5" cy="22" r="1.8"/><circle class="bug-spot" cx="23.5" cy="27.5" r="1.8"/></svg>`;
-    }
-
-    function formatGameSeconds(milliseconds) {
-        return `${(milliseconds / 1000).toFixed(1)}s`;
-    }
-
-    function readBestBugTime() {
-        try {
-            const value = Number(localStorage.getItem("museJukeboxBugBest"));
-            return value > 0 ? value : null;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    function saveBestBugTime(milliseconds) {
-        try {
-            localStorage.setItem("museJukeboxBugBest", String(Math.round(milliseconds)));
-        } catch (error) {
-            // Storage unavailable; the best time just isn't remembered
-        }
-    }
-
-    function updateBatteryHud() {
-        const swatted = bugGame ? bugGame.swatted : 0;
-        batteryScore.textContent = `${swatted} / ${BUG_TOTAL} bugs`;
-        const best = readBestBugTime();
-        batteryBest.textContent = best ? `Best: ${formatGameSeconds(best)}` : "Best: --";
-        batteryBay.style.setProperty("--charge", String(swatted / BUG_TOTAL));
-    }
-
-    function resetBugGame() {
-        if (bugGame && bugGame.frame) {
-            cancelAnimationFrame(bugGame.frame);
-        }
-        bugGame = null;
-        batteryCritters.innerHTML = "";
-        batteryBay.classList.remove("is-open");
-        batteryGame.classList.remove("is-fixed");
-        batterySwatter.classList.remove("is-visible", "is-swinging");
-        batteryReplay.hidden = true;
-        batteryStatus.textContent = BUG_IDLE_STATUS;
-        updateBatteryHud();
-    }
-
-    function startBugGame() {
-        resetBugGame();
-        const now = performance.now();
-        bugGame = {
-            swatted: 0,
-            spawned: 0,
-            bugs: [],
-            startTime: now,
-            lastFrame: null,
-            nextSpawnAt: now + 450,
-            frame: null
-        };
-        batteryBay.classList.add("is-open");
-        batteryStatus.textContent = "Swat 'em!";
-        updateBatteryHud();
-        bugGame.frame = requestAnimationFrame(stepBugGame);
-    }
-
-    function spawnBug() {
-        const width = batteryBay.clientWidth;
-        const height = batteryBay.clientHeight;
-        const color = BUG_COLORS[Math.floor(Math.random() * BUG_COLORS.length)];
-        const element = document.createElement("span");
-        element.className = "battery-bug";
-        element.style.setProperty("--bug-color", color);
-        element.innerHTML = getBugMarkup(color);
-
-        // Crawl in from a random edge
-        const edge = Math.floor(Math.random() * 4);
-        let x = Math.random() * (width - BUG_SIZE);
-        let y = Math.random() * (height - BUG_SIZE);
-        if (edge === 0) y = -BUG_SIZE;
-        if (edge === 1) x = width;
-        if (edge === 2) y = height;
-        if (edge === 3) x = -BUG_SIZE;
-
-        const bug = {
-            element,
-            color,
-            x,
-            y,
-            angle: 0,
-            turn: 0,
-            speed: 60 + Math.random() * 50 + bugGame.spawned * 6,
-            entered: false,
-            alive: true
-        };
-        batteryCritters.appendChild(element);
-        bugGame.bugs.push(bug);
-        bugGame.spawned += 1;
-    }
-
-    function stepBugGame(timestamp) {
-        const game = bugGame;
-        if (!game) return;
-
-        const deltaSeconds = game.lastFrame === null ? 0 : Math.min(0.05, (timestamp - game.lastFrame) / 1000);
-        game.lastFrame = timestamp;
-        const width = batteryBay.clientWidth;
-        const height = batteryBay.clientHeight;
-        const maxX = width - BUG_SIZE;
-        const maxY = height - BUG_SIZE;
-        const aliveBugs = game.bugs.filter((bug) => bug.alive);
-
-        if (game.spawned < BUG_TOTAL && aliveBugs.length < BUG_MAX_ON_SCREEN && timestamp >= game.nextSpawnAt) {
-            spawnBug();
-            game.nextSpawnAt = timestamp + 450 + Math.random() * 650;
-        }
-
-        aliveBugs.forEach((bug) => {
-            if (!bug.entered) {
-                // Head for the middle until fully inside the bay
-                bug.angle = Math.atan2((height / 2) - bug.y - (BUG_SIZE / 2), (width / 2) - bug.x - (BUG_SIZE / 2));
-            } else {
-                bug.turn = Math.max(-2.6, Math.min(2.6, bug.turn + ((Math.random() - 0.5) * 9 * deltaSeconds)));
-                bug.angle += bug.turn * deltaSeconds;
-            }
-
-            bug.x += Math.cos(bug.angle) * bug.speed * deltaSeconds;
-            bug.y += Math.sin(bug.angle) * bug.speed * deltaSeconds;
-
-            if (bug.entered) {
-                if (bug.x < 0 || bug.x > maxX) {
-                    bug.x = Math.max(0, Math.min(maxX, bug.x));
-                    bug.angle = Math.PI - bug.angle;
-                }
-                if (bug.y < 0 || bug.y > maxY) {
-                    bug.y = Math.max(0, Math.min(maxY, bug.y));
-                    bug.angle = -bug.angle;
-                }
-            } else if (bug.x >= 0 && bug.x <= maxX && bug.y >= 0 && bug.y <= maxY) {
-                bug.entered = true;
-            }
-
-            bug.element.style.transform = `translate(${bug.x.toFixed(1)}px, ${bug.y.toFixed(1)}px) rotate(${(bug.angle + (Math.PI / 2)).toFixed(3)}rad)`;
-        });
-
-        game.frame = requestAnimationFrame(stepBugGame);
-    }
-
-    function squashBug(bug) {
-        bug.alive = false;
-        bug.element.classList.add("is-squashed");
-        setTimeout(() => bug.element.remove(), 450);
-
-        const splat = document.createElement("span");
-        splat.className = "battery-splat";
-        splat.style.setProperty("--splat", bug.color);
-        splat.style.left = `${bug.x + (BUG_SIZE / 2)}px`;
-        splat.style.top = `${bug.y + (BUG_SIZE / 2)}px`;
-        batteryCritters.appendChild(splat);
-        setTimeout(() => splat.remove(), 1600);
-
-        if (typeof navigator.vibrate === "function") {
-            navigator.vibrate(12);
-        }
-
-        bugGame.swatted += 1;
-        batteryStatus.textContent = BUG_QUIPS[Math.floor(Math.random() * BUG_QUIPS.length)];
-        updateBatteryHud();
-
-        if (bugGame.swatted >= BUG_TOTAL) {
-            finishBugGame();
-        }
-    }
-
-    function finishBugGame() {
-        const elapsed = performance.now() - bugGame.startTime;
-        cancelAnimationFrame(bugGame.frame);
-        bugGame.frame = null;
-
-        const best = readBestBugTime();
-        const isNewBest = !best || elapsed < best;
-        if (isNewBest) {
-            saveBestBugTime(elapsed);
-        }
-
-        batteryGame.classList.add("is-fixed");
-        batteryStatus.textContent = `Jukebox fixed in ${formatGameSeconds(elapsed)}${isNewBest ? " - new best!" : "!"}`;
-        batteryReplay.hidden = false;
-        updateBatteryHud();
-
-        jukeboxPanel.classList.remove("powered-up");
-        void jukeboxPanel.offsetWidth;
-        jukeboxPanel.classList.add("powered-up");
-        setTimeout(() => jukeboxPanel.classList.remove("powered-up"), 1300);
-    }
-
-    function moveSwatter(event) {
-        const bayRect = batteryBay.getBoundingClientRect();
-        batterySwatter.style.left = `${event.clientX - bayRect.left}px`;
-        batterySwatter.style.top = `${event.clientY - bayRect.top}px`;
-    }
-
-    function swingSwatter(event) {
-        moveSwatter(event);
-        batterySwatter.classList.add("is-visible");
-        batterySwatter.classList.remove("is-swinging");
-        void batterySwatter.offsetWidth;
-        batterySwatter.classList.add("is-swinging");
-
-        clearTimeout(swatterHideTimer);
-        if (event.pointerType !== "mouse") {
-            swatterHideTimer = setTimeout(() => batterySwatter.classList.remove("is-visible"), 550);
-        }
-    }
-
-    function handleBaySwat(event) {
-        if (!bugGame || bugGame.frame === null || !batteryBay.classList.contains("is-open")) return;
-        event.preventDefault();
-        swingSwatter(event);
-
-        // Generous hit test so taps on small screens still land
-        const bayRect = batteryBay.getBoundingClientRect();
-        const pointerX = event.clientX - bayRect.left;
-        const pointerY = event.clientY - bayRect.top;
-        const hitRadius = event.pointerType === "mouse" ? 24 : 32;
-        let closestBug = null;
-        let closestDistance = Infinity;
-
-        bugGame.bugs.forEach((bug) => {
-            if (!bug.alive) return;
-            const distance = Math.hypot(pointerX - (bug.x + (BUG_SIZE / 2)), pointerY - (bug.y + (BUG_SIZE / 2)));
-            if (distance < hitRadius && distance < closestDistance) {
-                closestBug = bug;
-                closestDistance = distance;
-            }
-        });
-
-        if (closestBug) {
-            squashBug(closestBug);
-        }
-    }
-
     function setUpJukeboxBack() {
-        if (!jukeboxPanel || !batteryBay) return;
+        if (!jukeboxPanel) return;
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
             button.addEventListener("click", () => flipJukebox(button.dataset.flipJukebox === "back"));
@@ -2890,21 +2655,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
 
-        batteryCover.addEventListener("click", startBugGame);
-        batteryReplay.addEventListener("click", startBugGame);
-        batteryBay.addEventListener("pointerdown", handleBaySwat);
-        batteryBay.addEventListener("pointermove", (event) => {
-            if (event.pointerType !== "mouse" || !batteryBay.classList.contains("is-open")) return;
-            moveSwatter(event);
-            batterySwatter.classList.add("is-visible");
+        // Jukebot fixed: the jukebox powers up and the record does a victory spin
+        document.addEventListener("jukebot:fixed", () => {
+            jukeboxPanel.classList.remove("powered-up");
+            void jukeboxPanel.offsetWidth;
+            jukeboxPanel.classList.add("powered-up");
+            setTimeout(() => jukeboxPanel.classList.remove("powered-up"), 1300);
+            showOffRecordSpin(1080, 1400);
         });
-        batteryBay.addEventListener("pointerleave", (event) => {
-            if (event.pointerType === "mouse") {
-                batterySwatter.classList.remove("is-visible");
-            }
-        });
-
-        updateBatteryHud();
     }
 
     continuousPlayEnabled = readPlaybackModePreference("museJukeboxContinuousPlay");
