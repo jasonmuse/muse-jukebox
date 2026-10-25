@@ -124,8 +124,10 @@
         <!-- Filter Section -->
         <div id="filters">
             <button id="random-track-button" class="random-track-button" type="button" aria-label="Play a random song" title="Play a random song">&#127922;</button>
+            <button id="continuous-play-button" class="random-track-button playback-mode-button" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">&#128257;</button>
+            <button id="shuffle-button" class="random-track-button playback-mode-button" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs" hidden>&#128256;</button>
             <div class="filter-group">
-                <label for="sort-filter">Sort by:</label>
+                <label for="sort-filter">Sort<span class="filter-label-extra"> by</span>:</label>
                 <select id="sort-filter">
                     <option value="newest">Newest</option>
                     <option value="oldest">Oldest</option>
@@ -134,7 +136,7 @@
                 </select>
             </div>
             <div class="filter-group">
-                <label for="tag-filter">Filter by tag:</label>
+                <label for="tag-filter"><span class="filter-label-extra">Filter by tag</span><span class="filter-label-short">Tag</span>:</label>
                 <select id="tag-filter">
                     <option value="all">All</option>
                 </select>

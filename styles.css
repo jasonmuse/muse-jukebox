@@ -371,6 +371,40 @@ p {
     box-shadow: 0 0 0 2px rgba(100, 128, 255, 0.2);
 }
 
+.filter-label-short {
+    display: none;
+}
+
+.playback-mode-button {
+    opacity: 0.6;
+}
+
+.playback-mode-button:hover {
+    opacity: 0.85;
+}
+
+.playback-mode-button.active {
+    opacity: 1;
+    background: #5560d6;
+    border-color: #b4c2ff;
+    box-shadow: 0 0 8px rgba(140, 160, 255, 0.55);
+}
+
+.playback-mode-button[hidden] {
+    display: none;
+}
+
+#shuffle-button:not([hidden]) {
+    animation: playback-mode-pop-in 180ms ease-out;
+}
+
+@keyframes playback-mode-pop-in {
+    from {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+}
+
 #tag-filter,
 #sort-filter {
     background: #31367f;
@@ -1165,6 +1199,14 @@ audio {
 
     .filter-group label {
         font-size: 0.72rem;
+    }
+
+    .filter-label-extra {
+        display: none;
+    }
+
+    .filter-label-short {
+        display: inline;
     }
 
     .random-track-button {

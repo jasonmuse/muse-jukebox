@@ -344,6 +344,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tagFilter = document.getElementById("tag-filter");
     const sortFilter = document.getElementById("sort-filter");
     const randomTrackButton = document.getElementById("random-track-button");
+    const continuousPlayButton = document.getElementById("continuous-play-button");
+    const shuffleButton = document.getElementById("shuffle-button");
     const record = document.querySelector(".record");
     const recordSeekControls = document.getElementById("record-seek-controls");
     const recordRewindButton = document.getElementById("record-rewind");
@@ -762,6 +764,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let trackListScrollAnimationResolve = null;
     let trackListScrollAnimationId = 0;
     let randomPlayRequestId = 0;
+    let continuousPlayEnabled = false;
+    let shuffleEnabled = false;
     const TRACK_PLAYING_FADE_OUT_MS = 220;
 
     function isMobileViewport() {
@@ -1146,8 +1150,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function playRandomVisibleTrack(excludedTrack = null) {
-        const visibleTracks = Array.from(trackList.querySelectorAll(".track"))
-            .filter((trackElement) => !trackElement.classList.contains("track-skeleton"));
+        const visibleTracks = getVisibleTracks();
 
         if (visibleTracks.length === 0) {
             return;
@@ -1167,6 +1170,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const targetTrack = candidates[Math.floor(Math.random() * candidates.length)];
+        await playTrackElement(targetTrack);
+    }
+
+    function getVisibleTracks() {
+        return Array.from(trackList.querySelectorAll(".track"))
+            .filter((trackElement) => !trackElement.classList.contains("track-skeleton"));
+    }
+
+    async function playTrackElement(targetTrack) {
         const requestId = ++randomPlayRequestId;
         await scrollTrackIntoViewWithinList(targetTrack, {
             behavior: "smooth",
@@ -1181,6 +1193,49 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!playButton) return;
         playButton.click();
         scheduleMobileViewportLock();
+    }
+
+    // Called when a track finishes and "keep playing" is on
+    function playNextTrackAfter(finishedTrack) {
+        if (shuffleEnabled) {
+            playRandomVisibleTrack(finishedTrack);
+            return;
+        }
+
+        const visibleTracks = getVisibleTracks();
+        if (visibleTracks.length === 0) return;
+
+        const finishedIndex = visibleTracks.indexOf(finishedTrack);
+        const nextTrack = visibleTracks[(finishedIndex + 1) % visibleTracks.length];
+        playTrackElement(nextTrack);
+    }
+
+    function readPlaybackModePreference(key) {
+        try {
+            return localStorage.getItem(key) === "true";
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function savePlaybackModePreference(key, value) {
+        try {
+            localStorage.setItem(key, String(value));
+        } catch (error) {
+            // Storage unavailable; the mode still works for this visit
+        }
+    }
+
+    function updatePlaybackModeButtons() {
+        if (continuousPlayButton) {
+            continuousPlayButton.classList.toggle("active", continuousPlayEnabled);
+            continuousPlayButton.setAttribute("aria-pressed", String(continuousPlayEnabled));
+        }
+        if (shuffleButton) {
+            shuffleButton.hidden = !continuousPlayEnabled;
+            shuffleButton.classList.toggle("active", shuffleEnabled);
+            shuffleButton.setAttribute("aria-pressed", String(shuffleEnabled));
+        }
     }
 
     function setWhereBackgroundOpacity(opacityValue) {
@@ -1954,6 +2009,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     stickyAudio = null;
                 }
                 updateWhereBackgroundFromPlayback();
+
+                if (continuousPlayEnabled) {
+                    playNextTrackAfter(trackElement);
+                }
             });
 
             audio.addEventListener("error", () => {
@@ -2057,6 +2116,26 @@ document.addEventListener("DOMContentLoaded", async () => {
             randomTrackButton.blur();
             const excludedTrack = stopCurrentPlaybackForRandom();
             playRandomVisibleTrack(excludedTrack);
+        });
+    }
+
+    continuousPlayEnabled = readPlaybackModePreference("museJukeboxContinuousPlay");
+    shuffleEnabled = readPlaybackModePreference("museJukeboxShuffle");
+    updatePlaybackModeButtons();
+
+    if (continuousPlayButton) {
+        continuousPlayButton.addEventListener("click", () => {
+            continuousPlayEnabled = !continuousPlayEnabled;
+            savePlaybackModePreference("museJukeboxContinuousPlay", continuousPlayEnabled);
+            updatePlaybackModeButtons();
+        });
+    }
+
+    if (shuffleButton) {
+        shuffleButton.addEventListener("click", () => {
+            shuffleEnabled = !shuffleEnabled;
+            savePlaybackModePreference("museJukeboxShuffle", shuffleEnabled);
+            updatePlaybackModeButtons();
         });
     }
 
