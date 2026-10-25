@@ -1,17 +1,17 @@
-// Fix Jukebot: a little repair mini game on the back of the jukebox.
-// Unscrew the panel, swat the bugs inside (but not the glowbugs), wipe up the goo.
+// Fix Jukebot: the jukebox is Jukebot. Unscrew its rear panel, swat the bugs in its
+// wiring (but not the glowbugs), wipe up the goo, and close it back up.
 (() => {
     const SVG_NS = "http://www.w3.org/2000/svg";
-    const BOARD = { x0: 26, y0: 68, x1: 274, y1: 220 };
+    const EDGE = 4;
     const SCREW_TURNS_NEEDED = 2;
     const STORAGE_KEY = "museJukeboxJukebot";
     const HAPPY_LINES = ["Super duper!", "Good as new!", "Beep boop, thank you!", "Back in the groove!"];
     const SQUASH_LINES = ["Splat!", "Got one!", "Squashed!", "Nice swing!", "Bzzt... gone."];
     const BUG_TYPES = {
-        fly: { radius: 11, hp: 1, speed: [80, 120], goo: "#c8e64a" },
-        beetle: { radius: 12, hp: 2, speed: [30, 44], goo: "#6fd36f" },
-        glowbug: { radius: 11, hp: 1, speed: [24, 34], goo: "#f4ff9a", friendly: true },
-        queen: { radius: 24, hp: 6, speed: [34, 42], goo: "#c56cf0" }
+        fly: { radius: 13, hp: 1, speed: [95, 140], goo: "#c8e64a", scale: 1.2 },
+        beetle: { radius: 14, hp: 2, speed: [36, 52], goo: "#6fd36f", scale: 1.2 },
+        glowbug: { radius: 13, hp: 1, speed: [28, 40], goo: "#f4ff9a", scale: 1.2, friendly: true },
+        queen: { radius: 30, hp: 6, speed: [44, 54], goo: "#c56cf0", scale: 1.3 }
     };
 
     function svgEl(tag, attributes, parent) {
@@ -36,6 +36,17 @@
             [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
         }
         return copy;
+    }
+
+    // Small seeded random so the circuit board looks the same every time
+    function seededRandom(seed) {
+        let state = seed;
+        return () => {
+            state = (state + 0x6D2B79F5) | 0;
+            let value = Math.imul(state ^ (state >>> 15), 1 | state);
+            value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+            return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+        };
     }
 
     function getLevelConfig(level) {
@@ -73,6 +84,27 @@
         } catch (error) {
             // Storage unavailable; progress lasts for this visit only
         }
+    }
+
+    // Jukebot's face: every expression is drawn, CSS shows the one for the current mood
+    function getFaceMarkup(scale) {
+        const eyeX = 20 * scale;
+        const eyeY = -5 * scale;
+        const eyeRadius = 5.5 * scale;
+        const mouthY = 13 * scale;
+        const mouthWidth = 14 * scale;
+        const cross = 4 * scale;
+        const zig = mouthWidth / 3.5;
+        const zigY = 3 * scale;
+        const f = (value) => value.toFixed(1);
+        return `
+            <g class="jb-eyes jb-eyes--round"><circle cx="${f(-eyeX)}" cy="${f(eyeY)}" r="${f(eyeRadius)}"/><circle cx="${f(eyeX)}" cy="${f(eyeY)}" r="${f(eyeRadius)}"/><circle class="jb-pupil" cx="${f(-eyeX + (1.5 * scale))}" cy="${f(eyeY - (1.5 * scale))}" r="${f(1.8 * scale)}"/><circle class="jb-pupil" cx="${f(eyeX + (1.5 * scale))}" cy="${f(eyeY - (1.5 * scale))}" r="${f(1.8 * scale)}"/></g>
+            <path class="jb-eyes jb-eyes--x" d="M${f(-eyeX - cross)} ${f(eyeY - cross)}l${f(2 * cross)} ${f(2 * cross)}m0 ${f(-2 * cross)}l${f(-2 * cross)} ${f(2 * cross)}M${f(eyeX - cross)} ${f(eyeY - cross)}l${f(2 * cross)} ${f(2 * cross)}m0 ${f(-2 * cross)}l${f(-2 * cross)} ${f(2 * cross)}"/>
+            <path class="jb-eyes jb-eyes--happy" d="M${f(-eyeX - eyeRadius)} ${f(eyeY + (2 * scale))}q${f(eyeRadius)} ${f(-9 * scale)} ${f(2 * eyeRadius)} 0M${f(eyeX - eyeRadius)} ${f(eyeY + (2 * scale))}q${f(eyeRadius)} ${f(-9 * scale)} ${f(2 * eyeRadius)} 0"/>
+            <path class="jb-mouth jb-mouth--zigzag" d="M${f(-mouthWidth)} ${f(mouthY)}l${f(zig)} ${f(-zigY)} ${f(zig)} ${f(zigY)} ${f(zig)} ${f(-zigY)} ${f(zig)} ${f(zigY)} ${f(zig)} ${f(-zigY)} ${f(zig)} ${f(zigY)} ${f(zig)} ${f(-zigY)}"/>
+            <path class="jb-mouth jb-mouth--wobble" d="M${f(-mouthWidth * 0.7)} ${f(mouthY)}q${f(mouthWidth * 0.35)} ${f(-4 * scale)} ${f(mouthWidth * 0.7)} 0t${f(mouthWidth * 0.7)} 0"/>
+            <circle class="jb-mouth jb-mouth--o" cx="0" cy="${f(mouthY)}" r="${f(4 * scale)}"/>
+            <path class="jb-mouth jb-mouth--smile" d="M${f(-mouthWidth * 0.8)} ${f(mouthY - (3 * scale))}q${f(mouthWidth * 0.8)} ${f(12 * scale)} ${f(mouthWidth * 1.6)} 0"/>`;
     }
 
     function drawBugArt(type, art) {
@@ -127,27 +159,28 @@
         const root = document.getElementById("jukebot");
         if (!root) return;
 
-        const scene = document.getElementById("jb-scene");
-        const cover = document.getElementById("jb-cover");
+        const internals = document.getElementById("jb-internals");
+        const boardLayer = document.getElementById("jb-board");
+        const core = document.getElementById("jb-core");
         const bugLayer = document.getElementById("jb-bugs");
         const splatLayer = document.getElementById("jb-splats");
         const fxLayer = document.getElementById("jb-fx");
         const tool = document.getElementById("jb-tool");
-        const screws = Array.from(scene.querySelectorAll(".jb-screw"));
-        const bulbs = Array.from(scene.querySelectorAll(".jb-bulb"));
-        const lcdText = document.getElementById("jb-lcd-text");
+        const screws = Array.from(root.querySelectorAll(".jb-screw"));
+        const lights = Array.from(document.querySelectorAll(".jb-light"));
         const statusText = document.getElementById("jb-status");
         const hudLevel = document.getElementById("jb-level");
         const hudBugs = document.getElementById("jb-bug-count");
         const hudTime = document.getElementById("jb-time");
         const comboBadge = document.getElementById("jb-combo");
         const speech = document.getElementById("jb-speech");
-        const startOverlay = document.getElementById("jb-start");
+        const stickerFace = document.getElementById("jb-sticker-face");
+        const stickerTitle = document.getElementById("jb-sticker-title");
+        const stickerText = document.getElementById("jb-sticker-text");
         const levelLabel = document.getElementById("jb-level-label");
         const levelBest = document.getElementById("jb-level-best");
         const levelPrev = document.getElementById("jb-level-prev");
         const levelNext = document.getElementById("jb-level-next");
-        const startButton = document.getElementById("jb-start-button");
         const resultsOverlay = document.getElementById("jb-results");
         const resultsTitle = document.getElementById("jb-results-title");
         const resultsStars = Array.from(document.querySelectorAll("#jb-stars .jb-star"));
@@ -155,13 +188,22 @@
         const resultsNote = document.getElementById("jb-results-note");
         const replayButton = document.getElementById("jb-replay");
         const nextButton = document.getElementById("jb-next");
+        const closeResultsButton = document.getElementById("jb-results-close");
 
         let progress = readProgress();
         let selectedLevel = progress.unlocked;
         let game = null;
+        let size = { width: 0, height: 0 };
         let moodTimer = null;
         let comboTimer = null;
         let toolHideTimer = null;
+
+        // Jukebot's face lives on the main chip inside, and on the service sticker outside
+        svgEl("rect", { class: "jb-core-plate", x: -58, y: -36, width: 116, height: 72, rx: 12 }, core);
+        const coreFace = svgEl("g", { class: "jb-face jb-face--inner" }, core);
+        coreFace.innerHTML = getFaceMarkup(1);
+        const stickerFaceGroup = svgEl("g", { class: "jb-face jb-face--sticker" }, stickerFace);
+        stickerFaceGroup.innerHTML = getFaceMarkup(0.75);
 
         // ───── Small helpers ─────
         function later(callback, delay) {
@@ -170,40 +212,54 @@
             return id;
         }
 
+        function getBounds() {
+            return { x0: EDGE, y0: EDGE, x1: size.width - EDGE, y1: size.height - EDGE };
+        }
+
         function setMood(mood, holdMs) {
-            ["broken", "worried", "ouch", "happy"].forEach((name) => scene.classList.toggle(`mood-${name}`, name === mood));
+            ["broken", "worried", "ouch", "happy"].forEach((name) => root.classList.toggle(`mood-${name}`, name === mood));
             clearTimeout(moodTimer);
             if (holdMs && game) {
-                const restoreMood = ["clean", "closing", "done"].includes(game.stage) ? "happy" : "worried";
-                moodTimer = setTimeout(() => setMood(restoreMood), holdMs);
+                moodTimer = setTimeout(() => {
+                    setMood(game && ["clean", "closing", "done"].includes(game.stage) ? "happy" : "worried");
+                }, holdMs);
             }
         }
 
         function setTool(name) {
-            ["screwdriver", "swatter", "sponge"].forEach((toolName) => scene.classList.toggle(`tool-${toolName}`, toolName === name));
+            ["screwdriver", "swatter", "sponge"].forEach((toolName) => root.classList.toggle(`tool-${toolName}`, toolName === name));
             if (!name) tool.classList.remove("is-visible");
         }
 
         function setStatus(message) {
             statusText.textContent = message;
+            statusText.classList.toggle("is-visible", Boolean(message));
         }
 
-        function toScenePoint(event) {
-            const matrix = scene.getScreenCTM();
-            if (!matrix) return { x: 0, y: 0 };
-            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-            return { x: point.x, y: point.y };
+        function lightUp(count) {
+            lights.forEach((light, index) => light.classList.toggle("is-lit", index < count));
+        }
+
+        function toLocalPoint(event) {
+            const rect = root.getBoundingClientRect();
+            return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        }
+
+        function getElementCenter(element) {
+            const rect = element.getBoundingClientRect();
+            const rootRect = root.getBoundingClientRect();
+            return { x: rect.left + (rect.width / 2) - rootRect.left, y: rect.top + (rect.height / 2) - rootRect.top };
         }
 
         function moveTool(point) {
-            tool.setAttribute("transform", `translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})`);
+            tool.style.transform = `translate(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px)`;
         }
 
         function useTool(point, isTouch) {
             moveTool(point);
             tool.classList.add("is-visible");
             tool.classList.remove("is-using");
-            void tool.getBoundingClientRect();
+            void tool.offsetWidth;
             tool.classList.add("is-using");
             clearTimeout(toolHideTimer);
             if (isTouch) {
@@ -213,16 +269,22 @@
             }
         }
 
-        function popText(x, y, text, className) {
-            const label = svgEl("text", { class: `jb-pop ${className || ""}`, x: x.toFixed(1), y: y.toFixed(1) }, fxLayer);
-            label.textContent = text;
-            setTimeout(() => label.remove(), 800);
+        function spawnFx(className, point, text, lifetime) {
+            const element = document.createElement("span");
+            element.className = className;
+            element.style.left = `${point.x.toFixed(1)}px`;
+            element.style.top = `${point.y.toFixed(1)}px`;
+            if (text) element.textContent = text;
+            fxLayer.appendChild(element);
+            setTimeout(() => element.remove(), lifetime);
         }
 
-        function sparkle(x, y, size) {
-            const star = svgEl("g", { transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${size || 1})` }, fxLayer);
-            svgEl("path", { class: "jb-sparkle", d: "M0-6 1.4-1.4 6 0 1.4 1.4 0 6-1.4 1.4-6 0-1.4-1.4z" }, star);
-            setTimeout(() => star.remove(), 900);
+        function popText(point, text, variant) {
+            spawnFx(`jb-pop ${variant || ""}`, point, text, 800);
+        }
+
+        function sparkle(point) {
+            spawnFx("jb-sparkle", point, "", 900);
         }
 
         function showCombo(combo) {
@@ -242,9 +304,8 @@
 
         function getHostileRemaining() {
             if (!game) return 0;
-            const queued = game.queue.length;
             const alive = game.bugs.filter((bug) => !bug.spec.friendly && bug.state === "alive").length;
-            return queued + alive;
+            return game.queue.length + alive;
         }
 
         function updateHud() {
@@ -264,45 +325,117 @@
             levelBest.textContent = formatBest(selectedLevel);
             levelPrev.disabled = selectedLevel <= 1;
             levelNext.disabled = selectedLevel >= progress.unlocked;
-            hudLevel.textContent = `Lv ${selectedLevel}`;
+        }
+
+        // ───── The circuit board fills whatever space the back of the jukebox has ─────
+        function drawBoard() {
+            const { width, height } = size;
+            boardLayer.textContent = "";
+            svgEl("rect", { class: "jb-board", x: 0, y: 0, width, height }, boardLayer);
+
+            const random = seededRandom(7);
+            const coreX = width / 2;
+            const coreY = Math.max(70, height * 0.34);
+            const traces = [];
+            for (let index = 0; index < 9; index += 1) {
+                let x = Math.round(random() * width);
+                let y = Math.round(random() * height);
+                let d = `M${x} ${y}`;
+                for (let step = 0; step < 3; step += 1) {
+                    if (step % 2 === 0) {
+                        x = Math.round(Math.min(width - 12, Math.max(12, x + ((random() - 0.5) * width * 0.6))));
+                        d += `H${x}`;
+                    } else {
+                        y = Math.round(Math.min(height - 12, Math.max(12, y + ((random() - 0.5) * height * 0.5))));
+                        d += `V${y}`;
+                    }
+                }
+                traces.push(d);
+                svgEl("circle", { class: "jb-via", cx: x, cy: y, r: 3 }, boardLayer);
+            }
+            svgEl("path", { class: "jb-traces", d: traces.join("") }, boardLayer);
+
+            const awayFromCore = (x, y, margin) => Math.abs(x - coreX) > 58 + margin || Math.abs(y - coreY) > 36 + margin;
+            for (let index = 0, placed = 0; index < 40 && placed < 6; index += 1) {
+                const chipWidth = 26 + (random() * 26);
+                const chipHeight = 16 + (random() * 14);
+                const x = 10 + (random() * (width - chipWidth - 20));
+                const y = 10 + (random() * (height - chipHeight - 20));
+                if (!awayFromCore(x + (chipWidth / 2), y + (chipHeight / 2), 30)) continue;
+                svgEl("rect", { class: "jb-chip", x: x.toFixed(1), y: y.toFixed(1), width: chipWidth.toFixed(1), height: chipHeight.toFixed(1), rx: 3 }, boardLayer);
+                placed += 1;
+            }
+            for (let index = 0; index < 5; index += 1) {
+                const x = 14 + (random() * (width - 28));
+                const y = 14 + (random() * (height - 28));
+                if (!awayFromCore(x, y, 16)) continue;
+                svgEl("circle", { class: "jb-cap", cx: x.toFixed(1), cy: y.toFixed(1), r: (5 + (random() * 3)).toFixed(1) }, boardLayer);
+            }
+            const fan = svgEl("g", { class: "jb-fan", transform: `translate(${(width * 0.24).toFixed(1)} ${(Math.min(height - 40, coreY + 110)).toFixed(1)})` }, boardLayer);
+            svgEl("circle", { class: "jb-fan-ring", r: 18 }, fan);
+            svgEl("path", { class: "jb-fan-blades", d: "M0 0C5-13 13-10 10 0M0 0C13 5 10 13 0 10M0 0C-5 13-13 10-10 0M0 0C-13-5-10-13 0-10" }, fan);
+            const label = svgEl("text", { class: "jb-silkscreen", x: width - 12, y: height - 12 }, boardLayer);
+            label.textContent = "JKB-01 · MUSE";
+
+            core.setAttribute("transform", `translate(${coreX.toFixed(1)} ${coreY.toFixed(1)})`);
+        }
+
+        function handleResize() {
+            const width = Math.round(root.clientWidth);
+            const height = Math.round(root.clientHeight);
+            if (!width || !height || (width === size.width && height === size.height)) return;
+            size = { width, height };
+            internals.setAttribute("viewBox", `0 0 ${width} ${height}`);
+            internals.setAttribute("width", width);
+            internals.setAttribute("height", height);
+            drawBoard();
+
+            if (game) {
+                const bounds = getBounds();
+                game.bugs.forEach((bug) => {
+                    bug.x = Math.max(bounds.x0, Math.min(bounds.x1, bug.x));
+                    bug.y = Math.max(bounds.y0, Math.min(bounds.y1, bug.y));
+                    renderBug(bug);
+                });
+            }
         }
 
         // ───── Reset / start ─────
-        function clearBoard() {
-            bugLayer.textContent = "";
-            splatLayer.textContent = "";
-            fxLayer.textContent = "";
-        }
-
         function resetScrews() {
             screws.forEach((screw) => {
-                screw.classList.remove("is-out", "is-turning");
+                screw.classList.remove("is-out", "is-turning", "is-screwing-in");
+                screw.disabled = false;
                 screw.style.setProperty("--turn", "0deg");
             });
         }
 
-        function reset() {
+        function stopGame() {
             if (game) {
                 cancelAnimationFrame(game.frame);
                 game.timers.forEach((id) => clearTimeout(id));
             }
             game = null;
-            clearBoard();
+        }
+
+        function reset() {
+            stopGame();
+            bugLayer.textContent = "";
+            splatLayer.textContent = "";
+            fxLayer.textContent = "";
             resetScrews();
-            scene.classList.remove("is-fixed", "cover-off", "is-playing", "cover-closing");
-            scene.classList.add("is-broken");
-            bulbs.forEach((bulb) => bulb.classList.remove("is-lit"));
+            root.classList.remove("is-fixed", "cover-off", "is-playing", "is-running");
+            root.classList.add("is-broken");
+            lightUp(0);
             setMood("broken");
             setTool(null);
-            lcdText.textContent = "ERR: NO GROOVE";
             speech.classList.remove("is-visible");
             comboBadge.classList.remove("is-visible");
             resultsOverlay.hidden = true;
-            startOverlay.hidden = false;
-            setStatus("Jukebot is glitching! Can you fix it?");
+            stickerTitle.textContent = "Help! I'm glitching!";
+            stickerText.textContent = "Bugs got into my wiring. Unscrew my 4 corner screws to open me up and fix me.";
+            setStatus("");
             updateLevelPicker();
-            hudBugs.textContent = "Bugs 0";
-            hudTime.textContent = "0.0s";
+            updateHud();
         }
 
         function start(level) {
@@ -343,39 +476,42 @@
                 timers: []
             };
 
-            startOverlay.hidden = true;
-            scene.classList.add("is-playing");
+            root.classList.add("is-running");
             setTool("screwdriver");
-            setMood("broken");
-            lcdText.textContent = "OPEN ME UP...";
-            setStatus("Tap each screw to unscrew the panel.");
+            stickerTitle.textContent = "That's it, keep going!";
+            stickerText.textContent = "Twist every corner screw out (two turns each).";
             updateHud();
             game.frame = requestAnimationFrame(step);
         }
 
-        // ───── Stage 1: unscrew ─────
-        function handleScrewTap(point, isTouch) {
-            const reach = isTouch ? 18 : 12;
-            screws.forEach((screw, index) => {
-                if (screw.classList.contains("is-out")) return;
-                const [x, y] = [index % 2 === 0 ? 40 : 260, index < 2 ? 82 : 206];
-                if (Math.hypot(point.x - x, point.y - y) > reach) return;
+        // ───── Stage 1: unscrew the rear panel ─────
+        function handleScrewTap(screw, isTouch) {
+            if (!game || game.stage === "done") {
+                start(selectedLevel);
+            }
+            if (game.stage !== "unscrew" || screw.classList.contains("is-out")) return;
 
-                game.screwTurns[index] += 1;
-                screw.style.setProperty("--turn", `${game.screwTurns[index] * -200}deg`);
-                screw.classList.remove("is-turning");
-                void screw.getBoundingClientRect();
-                screw.classList.add("is-turning");
-                useTool({ x, y }, isTouch);
+            const index = Number(screw.dataset.screw);
+            const center = getElementCenter(screw);
+            game.screwTurns[index] += 1;
+            screw.style.setProperty("--turn", `${game.screwTurns[index] * -200}deg`);
+            screw.classList.remove("is-turning");
+            void screw.offsetWidth;
+            screw.classList.add("is-turning");
+            useTool(center, isTouch);
 
-                if (game.screwTurns[index] >= SCREW_TURNS_NEEDED) {
-                    later(() => {
-                        screw.classList.add("is-out");
-                        sparkle(x, y - 6, 0.8);
-                        checkCoverOff();
-                    }, 160);
-                }
-            });
+            if (game.screwTurns[index] >= SCREW_TURNS_NEEDED) {
+                screw.disabled = true;
+                later(() => {
+                    screw.classList.add("is-out");
+                    sparkle({ x: center.x, y: center.y - 8 });
+                    const left = screws.filter((item) => !item.classList.contains("is-out")).length;
+                    if (left) {
+                        stickerText.textContent = `${left} screw${left === 1 ? "" : "s"} to go...`;
+                    }
+                    checkCoverOff();
+                }, 160);
+            }
         }
 
         function checkCoverOff() {
@@ -383,14 +519,13 @@
             if (!screws.every((screw) => screw.classList.contains("is-out"))) return;
 
             game.stage = "opening";
-            scene.classList.add("cover-off");
-            bulbs[0].classList.add("is-lit");
+            root.classList.add("cover-off", "is-playing");
+            lightUp(1);
             later(() => {
                 game.stage = "swat";
                 setTool("swatter");
                 setMood("worried");
-                lcdText.textContent = "BUGS DETECTED";
-                setStatus("Bugs in the wiring! Swat them all. Don't hit the glowbugs.");
+                setStatus("Bugs in my wiring! Swat them all. Not the glowbugs!");
                 const now = performance.now();
                 game.nextSpawnAt = now + 250;
                 game.nextGlowAt = now + 2200;
@@ -400,6 +535,7 @@
         // ───── Stage 2: swat ─────
         function spawnBug(type, x, y) {
             const spec = BUG_TYPES[type];
+            const bounds = getBounds();
             const group = svgEl("g", { class: `jb-bug jb-bug--${type}` }, bugLayer);
             const art = svgEl("g", { class: "jb-bug-art" }, group);
             drawBugArt(type, art);
@@ -414,12 +550,12 @@
             if (startX === undefined) {
                 // Crawl in from a random edge of the board
                 const edge = Math.floor(Math.random() * 4);
-                startX = randomBetween(BOARD.x0 + 20, BOARD.x1 - 20);
-                startY = randomBetween(BOARD.y0 + 20, BOARD.y1 - 20);
-                if (edge === 0) startY = BOARD.y0 - spec.radius;
-                if (edge === 1) startX = BOARD.x1 + spec.radius;
-                if (edge === 2) startY = BOARD.y1 + spec.radius;
-                if (edge === 3) startX = BOARD.x0 - spec.radius;
+                startX = randomBetween(bounds.x0 + 30, bounds.x1 - 30);
+                startY = randomBetween(bounds.y0 + 30, bounds.y1 - 30);
+                if (edge === 0) startY = bounds.y0 - spec.radius;
+                if (edge === 1) startX = bounds.x1 + spec.radius;
+                if (edge === 2) startY = bounds.y1 + spec.radius;
+                if (edge === 3) startX = bounds.x0 - spec.radius;
             }
 
             const bug = {
@@ -447,7 +583,7 @@
             const aliveHostile = game.bugs.filter((bug) => !bug.spec.friendly && bug.state === "alive").length;
             if (game.queue.length && aliveHostile < game.config.maxOnBoard && now >= game.nextSpawnAt) {
                 spawnBug(game.queue.shift());
-                game.nextSpawnAt = now + randomBetween(420, 950) / game.config.speedScale;
+                game.nextSpawnAt = now + (randomBetween(420, 950) / game.config.speedScale);
             }
 
             const aliveGlow = game.bugs.filter((bug) => bug.spec.friendly && bug.state === "alive").length;
@@ -460,21 +596,24 @@
 
         function renderBug(bug) {
             const rotation = bug.type === "queen" ? 0 : ((bug.angle * 180) / Math.PI) + 90;
-            bug.element.setAttribute("transform", `translate(${bug.x.toFixed(1)} ${bug.y.toFixed(1)}) rotate(${rotation.toFixed(1)})`);
+            bug.element.setAttribute("transform", `translate(${bug.x.toFixed(1)} ${bug.y.toFixed(1)}) rotate(${rotation.toFixed(1)}) scale(${bug.spec.scale})`);
         }
 
         function updateBug(bug, deltaSeconds, seconds) {
+            const bounds = getBounds();
             const radius = bug.spec.radius;
-            const minX = BOARD.x0 + radius;
-            const maxX = BOARD.x1 - radius;
-            const minY = BOARD.y0 + radius;
-            const maxY = BOARD.y1 - radius;
+            const minX = bounds.x0 + radius;
+            const maxX = bounds.x1 - radius;
+            const minY = bounds.y0 + radius;
+            const maxY = bounds.y1 - radius;
+            const centerX = size.width / 2;
+            const centerY = size.height / 2;
 
             if (bug.state === "fleeing") {
                 bug.x += Math.cos(bug.angle) * bug.speed * 2.6 * deltaSeconds;
                 bug.y += Math.sin(bug.angle) * bug.speed * 2.6 * deltaSeconds;
                 renderBug(bug);
-                if (bug.x < BOARD.x0 - 40 || bug.x > BOARD.x1 + 40 || bug.y < BOARD.y0 - 40 || bug.y > BOARD.y1 + 40) {
+                if (bug.x < -50 || bug.x > size.width + 50 || bug.y < -50 || bug.y > size.height + 50) {
                     bug.state = "gone";
                     bug.element.remove();
                 }
@@ -482,9 +621,7 @@
             }
 
             if (!bug.entered) {
-                const centerX = (BOARD.x0 + BOARD.x1) / 2;
-                const centerY = (BOARD.y0 + BOARD.y1) / 2;
-                bug.angle = Math.atan2(centerY - bug.y, centerX - bug.x) + (Math.sin(seconds * 3 + bug.phase) * 0.3);
+                bug.angle = Math.atan2(centerY - bug.y, centerX - bug.x) + (Math.sin((seconds * 3) + bug.phase) * 0.3);
                 if (bug.x >= minX && bug.x <= maxX && bug.y >= minY && bug.y <= maxY) {
                     bug.entered = true;
                 }
@@ -505,10 +642,8 @@
                 }
             } else if (bug.type === "queen") {
                 // Loops around the board in a figure eight
-                const centerX = (BOARD.x0 + BOARD.x1) / 2;
-                const centerY = (BOARD.y0 + BOARD.y1) / 2;
-                const targetX = centerX + (Math.sin((seconds * 0.7) + bug.phase) * 88);
-                const targetY = centerY + (Math.sin((seconds * 1.4) + bug.phase) * 40);
+                const targetX = centerX + (Math.sin((seconds * 0.7) + bug.phase) * (size.width * 0.34));
+                const targetY = centerY + (Math.sin((seconds * 1.4) + bug.phase) * (size.height * 0.3));
                 bug.angle = Math.atan2(targetY - bug.y, targetX - bug.x);
             }
 
@@ -531,9 +666,7 @@
 
         function flee(bug) {
             bug.state = "fleeing";
-            const centerX = (BOARD.x0 + BOARD.x1) / 2;
-            const centerY = (BOARD.y0 + BOARD.y1) / 2;
-            bug.angle = Math.atan2(bug.y - centerY, bug.x - centerX);
+            bug.angle = Math.atan2(bug.y - (size.height / 2), bug.x - (size.width / 2));
             bug.element.classList.add("is-fleeing");
         }
 
@@ -553,14 +686,14 @@
             bug.state = "squashed";
             bug.element.classList.add("is-squashed");
             setTimeout(() => bug.element.remove(), 380);
-            addSplat(bug.x, bug.y, bug.spec.goo, bug.type === "queen" ? 1.9 : 1);
-            popText(bug.x, bug.y - 14, pick(SQUASH_LINES));
+            addSplat(bug.x, bug.y, bug.spec.goo, bug.type === "queen" ? 2.2 : 1.3);
+            popText({ x: bug.x, y: bug.y - 18 }, pick(SQUASH_LINES));
             if (typeof navigator.vibrate === "function") navigator.vibrate(12);
         }
 
         function handleSwat(point, isTouch) {
             useTool(point, isTouch);
-            const reachBonus = isTouch ? 8 : 3;
+            const reachBonus = isTouch ? 10 : 4;
             let target = null;
             let closest = Infinity;
             game.bugs.forEach((bug) => {
@@ -575,7 +708,7 @@
             if (!target) {
                 game.misses += 1;
                 game.combo = 0;
-                popText(point.x, point.y - 10, "whiff", "jb-pop--miss");
+                popText({ x: point.x, y: point.y - 12 }, "whiff", "jb-pop--miss");
                 return;
             }
 
@@ -586,8 +719,8 @@
                 game.penaltyMs += 3000;
                 flee(target);
                 setMood("ouch", 900);
-                popText(target.x, target.y - 14, "+3s", "jb-pop--penalty");
-                setStatus("Hey! Glowbugs help power Jukebot. Leave them be!");
+                popText({ x: target.x, y: target.y - 18 }, "+3s", "jb-pop--penalty");
+                setStatus("Hey! Glowbugs help power me. Leave them be!");
                 return;
             }
 
@@ -604,11 +737,11 @@
                 if (target.type === "beetle") {
                     target.element.classList.add("is-cracked");
                     target.speed *= 1.6;
-                    popText(target.x, target.y - 14, "crack!");
+                    popText({ x: target.x, y: target.y - 18 }, "crack!");
                 }
                 if (target.type === "queen") {
                     target.hpBar.setAttribute("width", String(36 * (target.hp / target.spec.hp)));
-                    popText(target.x, target.y - 30, "bonk!");
+                    popText({ x: target.x, y: target.y - 40 }, "bonk!");
                     if (game.queenSpawns < 3) {
                         game.queenSpawns += 1;
                         spawnBug("fly", target.x, target.y);
@@ -631,10 +764,9 @@
             game.bugs.forEach((bug) => {
                 if (bug.state === "alive" && bug.spec.friendly) flee(bug);
             });
-            bulbs[1].classList.add("is-lit");
+            lightUp(2);
             setTool("sponge");
             setMood("happy", 700);
-            lcdText.textContent = "GOO LEVELS: HIGH";
             setStatus("Bugs gone! Now scrub off all the goo.");
         }
 
@@ -643,31 +775,25 @@
             let cleanedAny = false;
             game.splats.forEach((splat) => {
                 if (splat.dirt <= 0) return;
-                if (Math.hypot(point.x - splat.x, point.y - splat.y) > splat.radius + 10) return;
+                if (Math.hypot(point.x - splat.x, point.y - splat.y) > splat.radius + 12) return;
                 splat.dirt = Math.max(0, splat.dirt - amount);
                 splat.element.style.opacity = String(splat.dirt);
                 cleanedAny = true;
                 if (splat.dirt <= 0) {
                     splat.element.remove();
-                    sparkle(splat.x, splat.y, 1);
+                    sparkle({ x: splat.x, y: splat.y });
                 }
             });
 
             if (cleanedAny && Math.random() < 0.35) {
-                const bubble = svgEl("circle", {
-                    class: "jb-bubble",
-                    cx: (point.x + randomBetween(-10, 10)).toFixed(1),
-                    cy: (point.y + randomBetween(-8, 8)).toFixed(1),
-                    r: randomBetween(1.5, 3.5).toFixed(1)
-                }, fxLayer);
-                setTimeout(() => bubble.remove(), 700);
+                spawnFx("jb-bubble", { x: point.x + randomBetween(-12, 12), y: point.y + randomBetween(-10, 10) }, "", 700);
             }
 
             const dirtyLeft = game.splats.filter((splat) => splat.dirt > 0).length;
             if (dirtyLeft === 0) {
                 closeUp();
             } else if (cleanedAny) {
-                lcdText.textContent = `GOO LEFT: ${dirtyLeft}`;
+                setStatus(`${dirtyLeft} goo splat${dirtyLeft === 1 ? "" : "s"} left`);
             }
         }
 
@@ -678,22 +804,22 @@
             game.endTime = performance.now();
             game.scrubbing = false;
             setTool(null);
-            bulbs[2].classList.add("is-lit");
-            scene.classList.remove("cover-off");
-            scene.classList.add("cover-closing");
-            setStatus("Closing him back up...");
+            lightUp(3);
+            setStatus("");
+            root.classList.remove("cover-off", "is-playing", "is-running");
 
             later(() => {
                 resetScrews();
-                screws.forEach((screw) => screw.classList.add("is-turning"));
-                scene.classList.remove("is-broken", "cover-closing");
-                scene.classList.add("is-fixed");
+                screws.forEach((screw) => screw.classList.add("is-screwing-in"));
+                root.classList.remove("is-broken");
+                root.classList.add("is-fixed");
                 setMood("happy");
-                lcdText.textContent = "♪ GOOD AS NEW ♪";
+                stickerTitle.textContent = pick(HAPPY_LINES);
+                stickerText.textContent = "All fixed up. Thanks for the repair!";
                 speech.textContent = pick(HAPPY_LINES);
                 speech.classList.add("is-visible");
-                for (let index = 0; index < 10; index += 1) {
-                    later(() => sparkle(randomBetween(30, 270), randomBetween(20, 220), randomBetween(0.8, 1.6)), index * 70);
+                for (let index = 0; index < 12; index += 1) {
+                    later(() => sparkle({ x: randomBetween(20, size.width - 20), y: randomBetween(20, size.height - 20) }), index * 70);
                 }
                 document.dispatchEvent(new CustomEvent("jukebot:fixed", { detail: { level: game.level } }));
             }, 560);
@@ -717,10 +843,8 @@
             };
             progress.unlocked = Math.max(progress.unlocked, game.level + 1);
             saveProgress(progress);
-            selectedLevel = Math.min(game.level + 1, progress.unlocked);
 
             game.stage = "done";
-            scene.classList.remove("is-playing");
             resultsTitle.textContent = `Level ${game.level} fixed!`;
             resultsStars.forEach((star, index) => star.classList.toggle("is-earned", index < stars));
             resultsStats.textContent = `${time.toFixed(1)}s · ${Math.round(accuracy * 100)}% aim · best combo x${game.bestCombo}`;
@@ -731,8 +855,17 @@
             if (stars < 3) notes.push(`3 stars: under ${Math.round(game.config.par)}s, 75% aim, no glowbugs`);
             resultsNote.textContent = notes.join(" · ");
             nextButton.textContent = `Level ${game.level + 1}`;
+            selectedLevel = game.level;
+            updateLevelPicker();
             resultsOverlay.hidden = false;
-            setStatus(stars === 3 ? "Perfect repair!" : "Jukebot's grooving again. Can you do it faster?");
+        }
+
+        // Pick a level and wait for the first screw (the clock starts then)
+        function prepareLevel(level) {
+            selectedLevel = Math.max(1, Math.min(progress.unlocked, level));
+            reset();
+            stickerTitle.textContent = `Level ${selectedLevel}: I'm glitching again!`;
+            stickerText.textContent = "Unscrew my 4 corner screws to start.";
         }
 
         // ───── Main loop ─────
@@ -759,29 +892,39 @@
         }
 
         // ───── Input ─────
-        scene.addEventListener("pointerdown", (event) => {
-            if (!game || !["unscrew", "swat", "clean"].includes(game.stage)) return;
+        screws.forEach((screw) => {
+            screw.addEventListener("pointerdown", (event) => {
+                event.preventDefault();
+                handleScrewTap(screw, event.pointerType !== "mouse");
+            });
+            // Keyboard users
+            screw.addEventListener("click", (event) => {
+                if (event.detail === 0) handleScrewTap(screw, false);
+            });
+        });
+
+        const isPlayStage = () => game && (game.stage === "swat" || game.stage === "clean");
+
+        root.addEventListener("pointerdown", (event) => {
+            if (!isPlayStage() || event.target.closest("button")) return;
             event.preventDefault();
-            const point = toScenePoint(event);
+            const point = toLocalPoint(event);
             const isTouch = event.pointerType !== "mouse";
 
-            if (game.stage === "unscrew") {
-                handleScrewTap(point, isTouch);
-                if (!isTouch) moveTool(point);
-            } else if (game.stage === "swat") {
+            if (game.stage === "swat") {
                 handleSwat(point, isTouch);
             } else {
                 game.scrubbing = true;
                 game.lastScrub = point;
-                scene.setPointerCapture(event.pointerId);
+                root.setPointerCapture(event.pointerId);
                 useTool(point, false);
                 scrubAt(point, 0.3);
             }
         });
 
-        scene.addEventListener("pointermove", (event) => {
+        root.addEventListener("pointermove", (event) => {
             if (!game || !["unscrew", "swat", "clean"].includes(game.stage)) return;
-            const point = toScenePoint(event);
+            const point = toLocalPoint(event);
             if (event.pointerType === "mouse") {
                 moveTool(point);
                 tool.classList.add("is-visible");
@@ -802,25 +945,28 @@
                 toolHideTimer = setTimeout(() => tool.classList.remove("is-visible"), 300);
             }
         };
-        scene.addEventListener("pointerup", stopScrubbing);
-        scene.addEventListener("pointercancel", stopScrubbing);
-        scene.addEventListener("pointerleave", (event) => {
+        root.addEventListener("pointerup", stopScrubbing);
+        root.addEventListener("pointercancel", stopScrubbing);
+        root.addEventListener("pointerleave", (event) => {
             if (event.pointerType === "mouse") tool.classList.remove("is-visible");
         });
 
-        startButton.addEventListener("click", () => start(selectedLevel));
-        replayButton.addEventListener("click", () => start(game ? game.level : selectedLevel));
-        nextButton.addEventListener("click", () => start(game ? game.level + 1 : selectedLevel));
-        levelPrev.addEventListener("click", () => {
-            selectedLevel = Math.max(1, selectedLevel - 1);
-            updateLevelPicker();
+        replayButton.addEventListener("click", () => prepareLevel(game ? game.level : selectedLevel));
+        nextButton.addEventListener("click", () => prepareLevel(game ? game.level + 1 : selectedLevel + 1));
+        closeResultsButton.addEventListener("click", () => {
+            resultsOverlay.hidden = true;
         });
-        levelNext.addEventListener("click", () => {
-            selectedLevel = Math.min(progress.unlocked, selectedLevel + 1);
-            updateLevelPicker();
-        });
+        levelPrev.addEventListener("click", () => prepareLevel(selectedLevel - 1));
+        levelNext.addEventListener("click", () => prepareLevel(selectedLevel + 1));
+
+        if ("ResizeObserver" in window) {
+            new ResizeObserver(handleResize).observe(root);
+        } else {
+            window.addEventListener("resize", handleResize);
+        }
 
         reset();
+        handleResize();
         window.jukebot = { reset };
     }
 

@@ -894,8 +894,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     function getTrackScrollTargetWithinList(trackElement, margin = 12) {
         if (!trackElement || !trackList) return;
 
+        // A stuck (sticky) playing card reports where it's pinned, not where it sits
+        // in the list, so measure it unstuck
+        const stuckClasses = ["track-playing-stick-top", "track-playing-stick-bottom"]
+            .filter((className) => trackElement.classList.contains(className));
+        trackElement.classList.remove(...stuckClasses);
         const listRect = trackList.getBoundingClientRect();
         const trackRect = trackElement.getBoundingClientRect();
+        trackElement.classList.add(...stuckClasses);
         let targetScrollTop = trackList.scrollTop;
 
         if (trackRect.top < listRect.top + margin) {
