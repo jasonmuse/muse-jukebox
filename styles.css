@@ -22,6 +22,8 @@ html, body {
     overflow-x: hidden;
     font-family: Arial, sans-serif;
     background: radial-gradient(circle, #91cdfa, #2e2372);
+    /* Solid fallback for areas the gradient can't reach (notches, side bars, overscroll) */
+    background-color: #1e1a4d;
     min-height: var(--app-height, 100vh);
 }
 /* Main body layout */
@@ -63,6 +65,9 @@ padding: 0;
 overflow-x: hidden;
 position: relative;
 z-index: 2;
+padding-left: env(safe-area-inset-left, 0px);
+padding-right: env(safe-area-inset-right, 0px);
+box-sizing: border-box;
 }
 
 /* Record + Jukebox container */
@@ -420,7 +425,8 @@ p {
 }
 
 #track-list {
-max-height: 400px;
+max-height: clamp(180px, calc(100vh - 500px), 400px);
+max-height: clamp(180px, calc(100dvh - 500px), 400px);
 overflow-y: auto;
 overflow-x: hidden;
 overscroll-behavior: contain;
@@ -583,11 +589,13 @@ box-shadow: 0 0 0 3px #ffffff;
 .track.track-playing.track-playing-stick-top {
     position: sticky;
     top: 0;
+    background: #363a58;
 }
 
 .track.track-playing.track-playing-stick-bottom {
     position: sticky;
     bottom: 0;
+    background: #363a58;
 }
 
 .track img {
@@ -1248,8 +1256,9 @@ audio {
     flex: 0 0 auto;
 }
 
-/* Mobile */
-@media (max-width: 600px) {
+/* Mobile + touch tablets held upright: full-height app layout.
+   Keep in sync with APP_LAYOUT_QUERY in script.js */
+@media (max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px) {
     html, body {
         width: 100%;
         height: var(--app-height, 100dvh);
@@ -1268,7 +1277,11 @@ audio {
         min-height: var(--app-height, 100dvh);
         overflow: hidden;
         margin-top: 0;
-        padding: 4px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+        padding:
+            calc(4px + env(safe-area-inset-top, 0px))
+            env(safe-area-inset-right, 0px)
+            calc(4px + env(safe-area-inset-bottom, 0px))
+            env(safe-area-inset-left, 0px);
         box-sizing: border-box;
         align-items: flex-start;
     }
@@ -1282,7 +1295,7 @@ audio {
     }
 
     #jukebox {
-        width: calc(100vw - 25px);
+        width: calc(100% - 25px);
         max-width: none;
         height: 98%;
         max-height: 98%;
@@ -1548,32 +1561,6 @@ html {
     background: linear-gradient(135deg, #8ba8ff, #7a2eff);
 }
 
-/* FORCE PORTRAIT + AUTO-RESET WHEN ROTATING BACK */
-@media screen and (orientation: landscape) and (max-width: 920px) {
-    /* Full-screen "rotate back" message */
-    body::before {
-        content: "Please rotate to portrait â†‘";
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.95);
-        color: #fff;
-        font-size: 1.8rem;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 40px;
-        z-index: 99999;
-        backdrop-filter: blur(8px);
-    }
-
-    /* Hide all real content while in landscape */
-    body > * {
-        visibility: hidden !important;
-    }
-}
-
 /* Cover Art Modal */
 .cover-modal {
     display: none;
@@ -1675,13 +1662,6 @@ html {
 
 /* This is the key part â€” reset everything when back in portrait */
 @media screen and (orientation: portrait) {
-    body::before {
-        display: none !important;
-    }
-    body > * {
-        visibility: visible !important;
-    }
-    
     /* Force a full refresh of layout when returning to portrait */
     #jukebox-wrapper, #jukebox-container, #jukebox {
 
@@ -1693,5 +1673,729 @@ html {
     body {
         transform: translateZ(0);
         -webkit-transform: translateZ(0);
+    }
+}
+
+/* Touch tablets / unfolded foldables held upright: same app layout, roomier sizing */
+@media (min-width: 601px) and (max-width: 1100px) and (orientation: portrait) and (pointer: coarse) {
+    #jukebox-container {
+        margin-top: 116px;
+        height: calc(100% - 116px);
+    }
+
+    #jukebox {
+        width: min(720px, calc(100% - 48px));
+        padding: 18px 18px 10px;
+    }
+
+    h1 {
+        font-size: clamp(2.4rem, 6.2vw, 3.4em);
+        margin-bottom: 12px;
+    }
+
+    #jukebox > .jukebox-description {
+        font-size: 1rem;
+        line-height: 1.4;
+        padding: 14px 24px;
+    }
+
+    .filter-label-extra {
+        display: inline;
+    }
+
+    .filter-label-short {
+        display: none;
+    }
+
+    .filter-group label {
+        font-size: 0.85rem;
+    }
+
+    .random-track-button {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        flex-basis: 34px;
+        font-size: 1.05rem;
+    }
+
+    .track {
+        --cover-size: 92px;
+        padding: 15px 10px;
+    }
+
+    .title {
+        font-size: 1.35rem;
+    }
+
+    .tag-bubble {
+        font-size: 0.85em;
+        padding: 3px 8px;
+    }
+
+    .play-button {
+        font-size: 0.95em;
+        min-height: 36px;
+        min-width: 76px;
+        padding: 0 18px;
+    }
+
+    .mode-button {
+        --mode-size: 36px;
+    }
+
+    .time-display {
+        font-size: 0.85em;
+        padding: 5px 12px;
+    }
+
+    .record {
+        width: 300px;
+        height: 300px;
+    }
+
+    .record.up {
+        top: -104px;
+    }
+
+    .record-seek-controls {
+        top: -46px;
+        width: min(420px, 80vw);
+    }
+
+    .record-seek-button {
+        min-width: 50px;
+        font-size: 1rem;
+    }
+
+    .penguin-badge {
+        width: 54px;
+        height: 54px;
+        flex-basis: 54px;
+    }
+
+    .penguin-icon {
+        width: 30px;
+        height: 30px;
+        transform: scale(1.6);
+    }
+}
+
+/* ───── NOW PLAYING DECK (landscape on touch screens) ───── */
+.now-playing {
+    display: none;
+    position: relative;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(6px, 1.8vh, 16px);
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(10px, 2.6vh, 24px) clamp(12px, 2vw, 24px);
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: #2e2e3d;
+    box-shadow: 0 0 0 3px #ffffff;
+    border: 3px solid #738fff;
+    overflow: hidden;
+    isolation: isolate;
+    color: #fff;
+    z-index: 2;
+}
+
+.np-backdrop {
+    position: absolute;
+    inset: -20%;
+    width: 140%;
+    height: 140%;
+    object-fit: cover;
+    filter: blur(36px) saturate(1.3);
+    opacity: 0.4;
+    z-index: -2;
+    pointer-events: none;
+    transition: opacity 600ms ease;
+}
+
+.now-playing::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(46, 46, 61, 0.15), rgba(46, 46, 61, 0.88) 78%);
+    z-index: -1;
+    pointer-events: none;
+}
+
+.now-playing.is-empty .np-backdrop {
+    opacity: 0.16;
+}
+
+.now-playing.np-grayscale .np-backdrop {
+    filter: blur(36px) grayscale(1);
+}
+
+.np-stage {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+}
+
+.np-turntable {
+    position: relative;
+    width: min(100cqw, 100cqh);
+    height: min(100cqw, 100cqh);
+}
+
+.np-record {
+    position: absolute;
+    top: 7%;
+    left: 2%;
+    width: 86%;
+    height: 86%;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.5));
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.np-record-vinyl {
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.np-record-label {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 35%;
+    height: 35%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+.now-playing.np-grayscale .np-record-label {
+    filter: grayscale(1);
+}
+
+.now-playing.is-empty .np-record-label {
+    image-rendering: pixelated;
+    background: #cfd9ff;
+}
+
+/* Spindle */
+.np-record::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 4%;
+    height: 4%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffffff, #9aa3b8 70%);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.np-record:focus-visible {
+    outline: 3px solid #d6e6ff;
+    outline-offset: 4px;
+}
+
+.np-tonearm {
+    position: absolute;
+    top: 4%;
+    right: 6%;
+    width: 4%;
+    height: 58%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #8c94a8, #eef1f8 45%, #8c94a8);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+    transform-origin: 50% 3%;
+    transform: rotate(-4deg);
+    transition: transform 900ms cubic-bezier(0.3, 0.7, 0.3, 1);
+    pointer-events: none;
+}
+
+.np-tonearm::before {
+    content: "";
+    position: absolute;
+    top: -5%;
+    left: 50%;
+    width: 280%;
+    aspect-ratio: 1;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f3f5fb, #8f97ab 70%);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+
+.np-tonearm-head {
+    position: absolute;
+    bottom: -7%;
+    left: 50%;
+    width: 210%;
+    height: 13%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #b9c0d2, #eef1f8);
+    transform: translateX(-62%) rotate(16deg);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+.now-playing.is-playing .np-tonearm {
+    transform: rotate(22deg);
+}
+
+.np-meta {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+}
+
+.np-meta.np-swap {
+    animation: npSwap 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes npSwap {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+        filter: blur(2px);
+    }
+}
+
+.np-eyebrow,
+.np-sub {
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.np-eyebrow {
+    margin: 0 0 2px;
+    font-size: clamp(0.6rem, 1.7vh, 0.76rem);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    color: #aebcff;
+}
+
+.np-title {
+    margin: 0;
+    font-size: clamp(1.05rem, 4.4vh, 1.9rem);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.np-sub {
+    margin: 2px 0 0;
+    font-size: clamp(0.72rem, 2vh, 0.92rem);
+    line-height: 1.3;
+    color: rgba(255, 255, 255, 0.66);
+}
+
+.np-progress {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.np-time {
+    min-width: 3.2em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: clamp(0.66rem, 1.9vh, 0.8rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.np-seek {
+    --progress: 0%;
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.np-seek::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #a9cbea 0 var(--progress), rgba(255, 255, 255, 0.18) var(--progress) 100%);
+}
+
+.np-seek::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #a9cbea 0 var(--progress), rgba(255, 255, 255, 0.18) var(--progress) 100%);
+}
+
+.np-seek::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+    transition: transform 150ms ease-out;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.np-seek::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: 0;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.np-seek:active::-webkit-slider-thumb {
+    transform: scale(1.3);
+}
+
+.np-seek:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.np-seek:disabled::-webkit-slider-thumb {
+    transform: scale(0);
+}
+
+.np-transport {
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.np-button {
+    --size: clamp(30px, min(9.5vh, 5.6vw), 48px);
+    flex: 0 0 auto;
+    position: relative;
+    width: var(--size);
+    height: var(--size);
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    background: rgba(123, 168, 208, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(162, 196, 228, 0.3);
+    cursor: pointer;
+    transition: transform 140ms ease-out, background-color 180ms ease-out, box-shadow 180ms ease-out, opacity 260ms ease-out, visibility 0s linear 0s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.np-button svg {
+    width: 46%;
+    height: 46%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.np-button .np-fill {
+    fill: currentColor;
+    stroke: none;
+}
+
+.np-button:active {
+    transform: scale(0.92);
+}
+
+.np-button:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+.np-play {
+    --size: clamp(40px, min(13vh, 7.6vw), 64px);
+    border-radius: 50%;
+    background: #7BA8D0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(123, 168, 208, 0.22);
+}
+
+.np-play svg {
+    position: absolute;
+    width: 44%;
+    height: 44%;
+    transition: opacity 200ms ease-out, transform 320ms cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.np-icon-play {
+    margin-left: 3%;
+}
+
+.np-icon-pause,
+.np-play.is-playing .np-icon-play {
+    opacity: 0;
+    transform: scale(0.4) rotate(90deg);
+}
+
+.np-play.is-playing .np-icon-pause {
+    opacity: 1;
+    transform: none;
+}
+
+.np-mode svg {
+    opacity: 0.72;
+    transition: opacity 180ms ease-out, transform 380ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+.now-playing.continuous-on #np-continuous,
+.now-playing.shuffle-on #np-shuffle {
+    background: #7BA8D0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 12px rgba(123, 168, 208, 0.45);
+}
+
+.now-playing.continuous-on #np-continuous svg,
+.now-playing.shuffle-on #np-shuffle svg {
+    opacity: 1;
+}
+
+.now-playing.continuous-on #np-continuous svg {
+    transform: rotate(180deg);
+}
+
+.now-playing.shuffle-on #np-shuffle svg {
+    transform: scaleX(-1);
+}
+
+/* Shuffle only appears once keep-playing is on (its slot stays reserved) */
+.np-mode--shuffle {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: scale(0.6) translateX(-12px);
+    transition: transform 380ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 180ms ease-out, box-shadow 180ms ease-out, opacity 220ms ease-out, visibility 0s linear 380ms;
+}
+
+.now-playing.continuous-on .np-mode--shuffle {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 180ms ease-out, box-shadow 180ms ease-out, opacity 260ms ease-out 60ms, visibility 0s linear 0s;
+}
+
+.now-playing.continuous-on .np-mode--shuffle:active {
+    transform: scale(0.92);
+}
+
+@media (hover: hover) {
+    .np-button:hover {
+        background: rgba(123, 168, 208, 0.4);
+    }
+
+    .np-play:hover,
+    .now-playing.continuous-on #np-continuous:hover,
+    .now-playing.shuffle-on #np-shuffle:hover {
+        background: #6B98C0;
+    }
+}
+
+/* Landscape on touch screens (phones, tablets, unfolded foldables): two-panel jukebox.
+   Keep in sync with APP_LAYOUT_QUERY in script.js */
+@media (orientation: landscape) and (pointer: coarse) {
+    html, body {
+        width: 100%;
+        height: var(--app-height, 100dvh);
+        min-height: var(--app-height, 100dvh);
+        overflow: hidden;
+    }
+
+    body {
+        position: fixed;
+        inset: 0;
+    }
+
+    #jukebox-wrapper {
+        width: 100%;
+        height: var(--app-height, 100dvh);
+        min-height: 0;
+        overflow: hidden;
+        margin-top: 0;
+        padding:
+            max(10px, env(safe-area-inset-top, 0px))
+            max(12px, env(safe-area-inset-right, 0px))
+            max(10px, env(safe-area-inset-bottom, 0px))
+            max(12px, env(safe-area-inset-left, 0px));
+        box-sizing: border-box;
+        align-items: stretch;
+    }
+
+    #jukebox-container {
+        width: 100%;
+        max-width: 1280px;
+        height: 100%;
+        margin: 0 auto;
+        padding: 3px;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: clamp(12px, 2vw, 24px);
+    }
+
+    .record,
+    .record-seek-controls {
+        display: none !important;
+    }
+
+    .now-playing {
+        display: flex;
+    }
+
+    #jukebox {
+        width: auto;
+        max-width: none;
+        height: 100%;
+        max-height: none;
+        min-height: 0;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        padding: clamp(8px, 2vh, 18px) clamp(8px, 1.4vw, 16px) 6px;
+    }
+
+    h1 {
+        font-size: clamp(1.4rem, 6.5vh, 2.8rem);
+        line-height: 1.05;
+        margin: 0 0 clamp(4px, 1.4vh, 12px);
+    }
+
+    .penguin-badge {
+        width: clamp(30px, 8vh, 54px);
+        height: clamp(30px, 8vh, 54px);
+        flex-basis: clamp(30px, 8vh, 54px);
+    }
+
+    .penguin-icon {
+        width: clamp(18px, 4.6vh, 30px);
+        height: clamp(18px, 4.6vh, 30px);
+        transform: scale(1.5);
+    }
+
+    #jukebox > .jukebox-description {
+        margin: 0 0 8px;
+        padding: 10px 22px;
+        font-size: clamp(0.74rem, 2.1vh, 0.95rem);
+        line-height: 1.3;
+    }
+
+    #filters {
+        margin-bottom: 6px;
+        gap: 6px;
+    }
+
+    #track-list {
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+        margin: 4px 0 0;
+        padding: 4px;
+    }
+
+    .frogquest-link {
+        padding: 6px 0 2px;
+    }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-width: 720px) {
+    #jukebox-container {
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 640px) {
+    .jukebox-description {
+        display: none;
+    }
+}
+
+/* Phones on their side */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
+    .frogquest-link,
+    .np-eyebrow {
+        display: none;
+    }
+
+    .track {
+        --cover-size: 64px;
+        padding: 10px 6px;
+    }
+
+    .title {
+        font-size: 1.05rem;
+    }
+
+    .tag-bubble {
+        font-size: 0.72em;
+        padding: 2px 6px;
+    }
+
+    .play-button {
+        font-size: 0.86em;
+        min-height: 30px;
+        min-width: 60px;
+        padding: 0 12px;
+    }
+
+    .mode-button {
+        --mode-size: 30px;
+    }
+
+    .filter-label-extra {
+        display: none;
+    }
+
+    .filter-label-short {
+        display: inline;
+    }
+
+    .filter-group label {
+        font-size: 0.72rem;
+    }
+
+    .random-track-button {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        flex-basis: 30px;
+        font-size: 0.95rem;
+    }
+
+    .np-progress {
+        gap: 6px;
     }
 }

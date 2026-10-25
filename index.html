@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1e1a4d">
     <meta name="description" content="Muse Jukebox is an interactive music player featuring original tracks by Jason Muse. Browse songs by mood, tag, and year.">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <link rel="canonical" href="https://jasonmuse.github.io/muse-jukebox/">
@@ -94,6 +95,47 @@
                 <span class="seek-arrow" aria-hidden="true">&#8635;</span>
             </button>
         </div>
+        <!-- Landscape "now playing" deck (shown by CSS on touch screens held sideways) -->
+        <aside id="now-playing" class="now-playing is-empty" aria-label="Now playing">
+            <img id="np-backdrop" class="np-backdrop" src="images/penguin.gif" alt="" aria-hidden="true">
+            <div class="np-stage">
+                <div class="np-turntable">
+                    <button id="np-record" class="np-record" type="button" aria-label="Play or pause">
+                        <img class="np-record-vinyl" src="images/record.png" alt="">
+                        <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
+                    </button>
+                    <span class="np-tonearm" aria-hidden="true"><span class="np-tonearm-head"></span></span>
+                </div>
+            </div>
+            <div class="np-meta">
+                <p id="np-eyebrow" class="np-eyebrow">Muse Jukebox</p>
+                <h2 id="np-title" class="np-title">Pick a song</h2>
+                <p id="np-sub" class="np-sub">Press play and let the jukebox spin</p>
+            </div>
+            <div class="np-progress">
+                <span id="np-elapsed" class="np-time">0:00</span>
+                <input id="np-seek" class="np-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" disabled>
+                <span id="np-duration" class="np-time">--:--</span>
+            </div>
+            <div class="np-transport">
+                <button id="np-continuous" class="np-button np-mode" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg>
+                </button>
+                <button id="np-prev" class="np-button" type="button" aria-label="Previous song" title="Previous song">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>
+                </button>
+                <button id="np-play" class="np-button np-play" type="button" aria-label="Play">
+                    <svg class="np-icon-play" viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M8 5.3v13.4a1 1 0 0 0 1.53.85l10.6-6.7a1 1 0 0 0 0-1.7L9.53 4.45A1 1 0 0 0 8 5.3Z"/></svg>
+                    <svg class="np-icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect class="np-fill" x="6" y="5" width="4.2" height="14" rx="1.2"/><rect class="np-fill" x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>
+                </button>
+                <button id="np-next" class="np-button" type="button" aria-label="Next song" title="Next song">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>
+                </button>
+                <button id="np-shuffle" class="np-button np-mode np-mode--shuffle" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>
+                </button>
+            </div>
+        </aside>
     <div id="jukebox">
 
         <h1 class="jukebox-title">
