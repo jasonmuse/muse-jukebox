@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#1e1a4d">
+    <!-- Add to Home Screen: opens full screen without the browser's toolbars -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="images/app-icon-180.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Muse Jukebox">
     <meta name="description" content="Muse Jukebox is an interactive music player featuring original tracks by Jason Muse. Browse songs by mood, tag, and year.">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <link rel="canonical" href="https://jasonmuse.github.io/muse-jukebox/">
@@ -81,19 +88,31 @@
     </defs>
   </svg>
   <div id="where-background" aria-hidden="true"></div>
+  <!-- Fades the page edges into the browser's toolbar colour on phones -->
+  <div class="edge-blend" aria-hidden="true"></div>
   <div id="jukebox-wrapper">
   <div id="jukebox-container">
         <!-- Record Image -->
         <img src="images/record.png" class="record" alt="Record">
         <div id="record-seek-controls" class="record-seek-controls" aria-hidden="true">
-            <button id="record-rewind" class="record-seek-button record-seek-button--rewind" type="button" aria-label="Rewind 10 seconds">
-                <span class="seek-arrow" aria-hidden="true">&#8634;</span>
-                <span class="seek-seconds" aria-hidden="true">10s</span>
-            </button>
-            <button id="record-forward" class="record-seek-button record-seek-button--forward" type="button" aria-label="Forward 10 seconds">
-                <span class="seek-seconds" aria-hidden="true">10s</span>
-                <span class="seek-arrow" aria-hidden="true">&#8635;</span>
-            </button>
+            <div class="record-seek-group">
+                <button id="record-prev" class="record-seek-button record-skip-button" type="button" aria-label="Previous song" title="Previous song">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>
+                </button>
+                <button id="record-rewind" class="record-seek-button record-seek-button--rewind" type="button" aria-label="Rewind 10 seconds">
+                    <span class="seek-arrow" aria-hidden="true">&#8634;</span>
+                    <span class="seek-seconds" aria-hidden="true">10s</span>
+                </button>
+            </div>
+            <div class="record-seek-group">
+                <button id="record-forward" class="record-seek-button record-seek-button--forward" type="button" aria-label="Forward 10 seconds">
+                    <span class="seek-seconds" aria-hidden="true">10s</span>
+                    <span class="seek-arrow" aria-hidden="true">&#8635;</span>
+                </button>
+                <button id="record-next" class="record-seek-button record-skip-button" type="button" aria-label="Next song" title="Next song">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>
+                </button>
+            </div>
         </div>
         <!-- Landscape "now playing" deck (shown by CSS on touch screens held sideways) -->
         <aside id="now-playing" class="now-playing is-empty" aria-label="Now playing">
@@ -278,7 +297,9 @@
                     <h3>Tips</h3>
                     <ul>
                         <li>Press Play, then the repeat button to keep songs rolling on their own, even with your screen off. Shuffle shows up once it's on.</li>
+                        <li>Use the skip buttons next to the record to jump to the previous or next song.</li>
                         <li>Turn your phone or tablet sideways for the full jukebox deck.</li>
+                        <li>On screens with a side strip (like a folded Duo), the music controls live in the strip. Drag them up or down to move them.</li>
                         <li>Tap the record to pause, or use the 10s buttons to skip around.</li>
                         <li>Tap any tag or year on a song to filter the list.</li>
                         <li>The &times; on the playing song stops it and clears it away.</li>
@@ -289,6 +310,23 @@
     </div>
     </div>
     </div>
+
+    <!-- Side rail: music controls that live in a screen's side strip (e.g. a folded Duo) -->
+    <nav id="side-rail" class="side-rail" aria-label="Music controls">
+        <button id="rail-prev" class="rail-button" type="button" aria-label="Previous song">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>
+        </button>
+        <button id="rail-play" class="rail-button rail-play" type="button" aria-label="Play">
+            <img id="rail-cover" class="rail-cover" src="images/penguin.gif" alt="">
+            <svg class="rail-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="rail-ring-track" cx="22" cy="22" r="20"/><circle id="rail-ring-progress" class="rail-ring-progress" cx="22" cy="22" r="20"/></svg>
+            <svg class="rail-icon rail-icon-play" viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M8 5.3v13.4a1 1 0 0 0 1.53.85l10.6-6.7a1 1 0 0 0 0-1.7L9.53 4.45A1 1 0 0 0 8 5.3Z"/></svg>
+            <svg class="rail-icon rail-icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect class="np-fill" x="6" y="5" width="4.2" height="14" rx="1.2"/><rect class="np-fill" x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>
+        </button>
+        <button id="rail-next" class="rail-button" type="button" aria-label="Next song">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="np-fill" d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>
+        </button>
+    </nav>
+    <div id="safe-area-probe" class="safe-area-probe" aria-hidden="true"></div>
 
     <script src="script.js"></script>
 </body>

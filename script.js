@@ -348,6 +348,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const recordSeekControls = document.getElementById("record-seek-controls");
     const recordRewindButton = document.getElementById("record-rewind");
     const recordForwardButton = document.getElementById("record-forward");
+    const recordPrevButton = document.getElementById("record-prev");
+    const recordNextButton = document.getElementById("record-next");
+    const sideRail = document.getElementById("side-rail");
+    const railPrev = document.getElementById("rail-prev");
+    const railPlay = document.getElementById("rail-play");
+    const railNext = document.getElementById("rail-next");
+    const railCover = document.getElementById("rail-cover");
+    const railRingProgress = document.getElementById("rail-ring-progress");
+    const safeAreaProbe = document.getElementById("safe-area-probe");
     const whereBackground = document.getElementById("where-background");
     const nowPlaying = document.getElementById("now-playing");
     const npRecord = document.getElementById("np-record");
@@ -771,6 +780,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         recordForwardButton.addEventListener("click", () => {
             seekCurrentAudioBy(10);
         });
+    }
+
+    if (recordPrevButton) {
+        recordPrevButton.addEventListener("click", () => playPreviousTrack());
+    }
+
+    if (recordNextButton) {
+        recordNextButton.addEventListener("click", () => playNextTrack());
     }
 
     // One shared player for every song, so playback can keep going in the background
@@ -1267,7 +1284,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function playNextTrack() {
+        if (!currentTrackData) {
+            startFirstTrack();
+            return;
+        }
         playNextTrackAfter(getCurrentTrackElement());
+    }
+
+    function togglePlayback() {
+        if (!currentTrackData) {
+            startFirstTrack();
+        } else if (player.paused) {
+            resumeCurrentTrack();
+        } else {
+            pauseCurrentTrack();
+        }
     }
 
     function playPreviousTrack() {
@@ -1423,7 +1454,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateWhereBackgroundFromPlayback() {
         const hasActivePlayback = isPlayerActive();
         setWhereBackgroundTargetOpacity(hasActivePlayback ? 1 : 0);
-        setRecordSeekControlsVisible(hasActivePlayback);
+        setRecordSeekControlsVisible(Boolean(currentTrackData));
         updatePlayingTrackStickyState();
         updateNowPlaying();
     }
@@ -1780,6 +1811,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Landscape deck: big record, song info, scrubber and transport controls
     function updateNowPlaying() {
+        updateSideRailState();
         if (!nowPlaying) return;
 
         const track = currentTrackData;
@@ -1818,6 +1850,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updateNowPlayingProgress() {
+        if (railRingProgress) {
+            const progress = currentTrackData && Number.isFinite(player.duration) && player.duration > 0
+                ? player.currentTime / player.duration
+                : 0;
+            railRingProgress.style.strokeDashoffset = String(RAIL_RING_LENGTH * (1 - Math.min(1, progress)));
+        }
         if (!nowPlaying || !npSeek) return;
 
         const duration = currentTrackData && Number.isFinite(player.duration) ? player.duration : 0;
@@ -1834,18 +1872,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setUpNowPlayingControls() {
         if (!nowPlaying) return;
 
-        npPlay?.addEventListener("click", () => {
-            if (!currentTrackData) {
-                startFirstTrack();
-            } else if (player.paused) {
-                resumeCurrentTrack();
-            } else {
-                pauseCurrentTrack();
-            }
-        });
-        npRecord?.addEventListener("click", () => npPlay?.click());
+        npPlay?.addEventListener("click", togglePlayback);
+        npRecord?.addEventListener("click", togglePlayback);
         npPrev?.addEventListener("click", playPreviousTrack);
-        npNext?.addEventListener("click", () => (currentTrackData ? playNextTrack() : startFirstTrack()));
+        npNext?.addEventListener("click", playNextTrack);
         npContinuous?.addEventListener("click", toggleContinuousPlay);
         npClear?.addEventListener("click", clearCurrentTrack);
         npShuffle?.addEventListener("click", toggleShuffle);
@@ -2428,6 +2458,121 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
+    const RAIL_RING_LENGTH = 2 * Math.PI * 20;
+    const RAIL_MIN_INSET = 50;
+    let railShownTrack;
+    let railFraction = 0.62;
+
+    function readRailFraction() {
+        try {
+            const value = Number(localStorage.getItem("museJukeboxRailPosition"));
+            return value > 0 && value < 1 ? value : 0.62;
+        } catch (error) {
+            return 0.62;
+        }
+    }
+
+    function saveRailFraction(value) {
+        try {
+            localStorage.setItem("museJukeboxRailPosition", value.toFixed(3));
+        } catch (error) {
+            // Storage unavailable; the rail just starts in its default spot
+        }
+    }
+
+    function positionSideRail() {
+        const halfHeight = sideRail.offsetHeight / 2;
+        const viewportHeight = window.innerHeight;
+        const centerY = Math.max(halfHeight + 8, Math.min(viewportHeight - halfHeight - 8, railFraction * viewportHeight));
+        sideRail.style.setProperty("--rail-y", `${Math.round(centerY)}px`);
+    }
+
+    // Only show the rail when the browser reports a wide side safe area to put it in
+    function updateSideRailLayout() {
+        if (!sideRail || !safeAreaProbe) return;
+
+        const probeStyles = window.getComputedStyle(safeAreaProbe);
+        const leftInset = parseFloat(probeStyles.paddingLeft) || 0;
+        const rightInset = parseFloat(probeStyles.paddingRight) || 0;
+        const inset = Math.max(leftInset, rightInset);
+        const isDeckLayout = window.matchMedia("(orientation: landscape) and (pointer: coarse)").matches;
+        const enabled = inset >= RAIL_MIN_INSET && !isDeckLayout;
+
+        document.body.classList.toggle("has-side-rail", enabled);
+        document.body.classList.toggle("side-rail-left", enabled && leftInset > rightInset);
+        document.body.classList.toggle("side-rail-right", enabled && rightInset >= leftInset);
+        if (!enabled) return;
+
+        document.body.style.setProperty("--side-inset", `${inset}px`);
+        positionSideRail();
+        updatePlayingTrackStickyState();
+    }
+
+    function updateSideRailState() {
+        if (!sideRail) return;
+
+        const track = currentTrackData;
+        const isPlaying = isPlayerActive();
+        sideRail.classList.toggle("is-playing", isPlaying);
+        sideRail.classList.toggle("is-empty", !track);
+        railPlay.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+
+        if (track !== railShownTrack) {
+            railShownTrack = track;
+            setSafeImageSource(railCover, track ? getTrackCoverPreview(track) : "images/penguin.gif");
+            railCover.classList.toggle("cover-grayscale", Boolean(track && track.grayscaleCover));
+        }
+    }
+
+    function setUpSideRail() {
+        if (!sideRail) return;
+
+        railFraction = readRailFraction();
+        railPrev.addEventListener("click", playPreviousTrack);
+        railPlay.addEventListener("click", togglePlayback);
+        railNext.addEventListener("click", playNextTrack);
+
+        // Drag the rail up or down the strip (e.g. to dodge the browser's own buttons)
+        let drag = null;
+        let suppressClick = false;
+        sideRail.addEventListener("pointerdown", (event) => {
+            drag = { pointerId: event.pointerId, startY: event.clientY, startFraction: railFraction, moved: false };
+        });
+        sideRail.addEventListener("pointermove", (event) => {
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            const deltaY = event.clientY - drag.startY;
+            if (!drag.moved && Math.abs(deltaY) < 8) return;
+            if (!drag.moved) {
+                drag.moved = true;
+                sideRail.classList.add("is-dragging");
+                sideRail.setPointerCapture(event.pointerId);
+            }
+            railFraction = Math.max(0.05, Math.min(0.95, drag.startFraction + (deltaY / window.innerHeight)));
+            positionSideRail();
+        });
+        const endDrag = (event) => {
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            if (drag.moved) {
+                suppressClick = true;
+                sideRail.classList.remove("is-dragging");
+                saveRailFraction(railFraction);
+            }
+            drag = null;
+        };
+        sideRail.addEventListener("pointerup", endDrag);
+        sideRail.addEventListener("pointercancel", endDrag);
+        sideRail.addEventListener("click", (event) => {
+            if (!suppressClick) return;
+            suppressClick = false;
+            event.preventDefault();
+            event.stopPropagation();
+        }, true);
+
+        updateSideRailLayout();
+        updateSideRailState();
+    }
+
     // ───── Back of the jukebox: flip animation + battery bay bug hunt ─────
     const BUG_TOTAL = 8;
     const BUG_MAX_ON_SCREEN = 3;
@@ -2768,6 +2913,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpMediaSession();
     setUpNowPlayingControls();
     setUpJukeboxBack();
+    setUpSideRail();
 
     // Initial population of filter and track list.
     // Populate tags first so the dropdown has its final option set before skeleton/track content appears.
@@ -2798,6 +2944,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     trackList.addEventListener("wheel", stopTrackListScrollAnimation, { passive: true });
     window.addEventListener("orientationchange", () => {
         setTimeout(scheduleMobileViewportLock, 80);
+        setTimeout(updateSideRailLayout, 120);
     });
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
@@ -2821,6 +2968,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             syncMarquees();
             syncPlayingTrackStickPosition();
             scheduleMobileViewportLock();
+            updateSideRailLayout();
             if (coverModal && coverModal.classList.contains("active")) {
                 updateModalImageFrameFromNaturalSize();
             }

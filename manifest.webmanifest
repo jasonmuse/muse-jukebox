@@ -1,0 +1,22 @@
+{
+    "name": "Muse Jukebox",
+    "short_name": "Jukebox",
+    "description": "Interactive jukebox with original tracks by Jason Muse.",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#1e1a4d",
+    "theme_color": "#1e1a4d",
+    "icons": [
+        {
+            "src": "images/app-icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "images/app-icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
