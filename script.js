@@ -344,8 +344,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tagFilter = document.getElementById("tag-filter");
     const sortFilter = document.getElementById("sort-filter");
     const randomTrackButton = document.getElementById("random-track-button");
-    const continuousPlayButton = document.getElementById("continuous-play-button");
-    const shuffleButton = document.getElementById("shuffle-button");
     const record = document.querySelector(".record");
     const recordSeekControls = document.getElementById("record-seek-controls");
     const recordRewindButton = document.getElementById("record-rewind");
@@ -368,6 +366,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const coverWarmCache = new Set();
     const WHERE_FADE_IN_SECONDS = 30;
     const WHERE_FADE_OUT_SECONDS = 7;
+    const KEEP_PLAYING_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg>`;
+    const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
 
     if (recordSeekControls) {
         recordSeekControls.classList.remove("visible");
@@ -1140,6 +1140,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             triggerTrackPlayingFadeOut(previousTrack);
         }
 
+        showModeButtonsOnTrack(null);
         stopSpinning();
         if (record) {
             record.classList.remove("up");
@@ -1227,15 +1228,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updatePlaybackModeButtons() {
-        if (continuousPlayButton) {
-            continuousPlayButton.classList.toggle("active", continuousPlayEnabled);
-            continuousPlayButton.setAttribute("aria-pressed", String(continuousPlayEnabled));
+        trackList.classList.toggle("continuous-on", continuousPlayEnabled);
+        trackList.classList.toggle("shuffle-on", shuffleEnabled);
+        trackList.querySelectorAll(".mode-button--continuous").forEach((button) => {
+            button.setAttribute("aria-pressed", String(continuousPlayEnabled));
+        });
+        trackList.querySelectorAll(".mode-button--shuffle").forEach((button) => {
+            button.setAttribute("aria-pressed", String(shuffleEnabled));
+        });
+    }
+
+    // Only the current song shows the keep-playing / shuffle buttons
+    function showModeButtonsOnTrack(trackElement) {
+        trackList.querySelectorAll(".track.track-modes-visible").forEach((element) => {
+            if (element !== trackElement) {
+                element.classList.remove("track-modes-visible");
+            }
+        });
+        if (trackElement) {
+            trackElement.classList.add("track-modes-visible");
         }
-        if (shuffleButton) {
-            shuffleButton.hidden = !continuousPlayEnabled;
-            shuffleButton.classList.toggle("active", shuffleEnabled);
-            shuffleButton.setAttribute("aria-pressed", String(shuffleEnabled));
-        }
+    }
+
+    function toggleContinuousPlay() {
+        continuousPlayEnabled = !continuousPlayEnabled;
+        savePlaybackModePreference("museJukeboxContinuousPlay", continuousPlayEnabled);
+        updatePlaybackModeButtons();
+    }
+
+    function toggleShuffle() {
+        shuffleEnabled = !shuffleEnabled;
+        savePlaybackModePreference("museJukeboxShuffle", shuffleEnabled);
+        updatePlaybackModeButtons();
     }
 
     function setWhereBackgroundOpacity(opacityValue) {
@@ -1631,7 +1655,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const wasLoading = timeDisplay.classList.contains("loading");
         const formattedCurrentTime = formatTime(currentTime);
         const formattedDuration = formatTime(audio.duration);
-        timeDisplay.textContent = `${formattedCurrentTime} / ${formattedDuration}`;
+        timeDisplay.innerHTML = `${formattedCurrentTime}<span class="time-total"> / ${formattedDuration}</span>`;
         timeDisplay.classList.remove("loading");
         timeDisplay.classList.add("ready");
         if (wasLoading) {
@@ -1641,7 +1665,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function resetTimeDisplay(timeDisplay) {
         timeDisplay.classList.remove("loading", "ready", "ready-fade");
-        timeDisplay.textContent = "0:00 / --:--";
+        timeDisplay.innerHTML = '0:00<span class="time-total"> / --:--</span>';
     }
 
     function showTrackListSkeleton(count = 8) {
@@ -1832,7 +1856,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             <p class="tags horizontal-scroll"><span class="tags-scroll-content">${tagMarkup}${gameLinkMarkup}</span></p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
-            <span class="time-display">0:00 / --:--</span>
+            <button class="mode-button mode-button--continuous" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">${KEEP_PLAYING_ICON}</button>
+            <button class="mode-button mode-button--shuffle" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs">${SHUFFLE_ICON}</button>
+            <span class="time-display">0:00<span class="time-total"> / --:--</span></span>
             </div>
             <audio data-src="${track.file}" preload="none" style="display: none;"></audio>
             </div>
@@ -1843,6 +1869,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const playButton = trackElement.querySelector(".play-button");
             const timeDisplay = trackElement.querySelector(".time-display");
             const coverImage = trackElement.querySelector("img");
+            trackElement.querySelector(".mode-button--continuous").addEventListener("click", toggleContinuousPlay);
+            trackElement.querySelector(".mode-button--shuffle").addEventListener("click", toggleShuffle);
             coverImage.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
 
             
@@ -1890,6 +1918,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             audio.src = audio.getAttribute("data-src");
                         }
                         currentAudio = audio;
+                        showModeButtonsOnTrack(trackElement);
                         timeDisplay.classList.add("visible");
                         if (audio.readyState < 1 || !Number.isFinite(audio.duration)) {
                             setTimeDisplayLoading(timeDisplay);
@@ -2012,6 +2041,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (continuousPlayEnabled) {
                     playNextTrackAfter(trackElement);
+                } else {
+                    showModeButtonsOnTrack(null);
                 }
             });
 
@@ -2025,6 +2056,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     timeDisplay.textContent = "unavailable";
                     animateTextChange(playButton, "Play");
                     currentAudio = null;
+                    showModeButtonsOnTrack(null);
                     stopSpinning();
                 }
                 updateWhereBackgroundFromPlayback();
@@ -2040,6 +2072,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         });
 
+        updatePlaybackModeButtons();
         initializeHorizontalDragScroll();
         syncMarquees();
 
@@ -2121,23 +2154,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     continuousPlayEnabled = readPlaybackModePreference("museJukeboxContinuousPlay");
     shuffleEnabled = readPlaybackModePreference("museJukeboxShuffle");
-    updatePlaybackModeButtons();
-
-    if (continuousPlayButton) {
-        continuousPlayButton.addEventListener("click", () => {
-            continuousPlayEnabled = !continuousPlayEnabled;
-            savePlaybackModePreference("museJukeboxContinuousPlay", continuousPlayEnabled);
-            updatePlaybackModeButtons();
-        });
-    }
-
-    if (shuffleButton) {
-        shuffleButton.addEventListener("click", () => {
-            shuffleEnabled = !shuffleEnabled;
-            savePlaybackModePreference("museJukeboxShuffle", shuffleEnabled);
-            updatePlaybackModeButtons();
-        });
-    }
 
     // Initial population of filter and track list.
     // Populate tags first so the dropdown has its final option set before skeleton/track content appears.

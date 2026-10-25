@@ -375,36 +375,6 @@ p {
     display: none;
 }
 
-.playback-mode-button {
-    opacity: 0.6;
-}
-
-.playback-mode-button:hover {
-    opacity: 0.85;
-}
-
-.playback-mode-button.active {
-    opacity: 1;
-    background: #5560d6;
-    border-color: #b4c2ff;
-    box-shadow: 0 0 8px rgba(140, 160, 255, 0.55);
-}
-
-.playback-mode-button[hidden] {
-    display: none;
-}
-
-#shuffle-button:not([hidden]) {
-    animation: playback-mode-pop-in 180ms ease-out;
-}
-
-@keyframes playback-mode-pop-in {
-    from {
-        opacity: 0;
-        transform: scale(0.6);
-    }
-}
-
 #tag-filter,
 #sort-filter {
     background: #31367f;
@@ -1091,7 +1061,7 @@ audio {
 .playback-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 0;
     position: relative;
     overflow: visible;
 
@@ -1103,6 +1073,165 @@ audio {
 .play-button {
     position: relative;
     z-index: 1;
+}
+
+/* Keep-playing + shuffle buttons: tucked away until the song is current */
+.mode-button {
+    --mode-size: 34px;
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: 0;
+    min-height: var(--mode-size);
+    margin-left: 0;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background-color: rgba(123, 168, 208, 0.26);
+    box-shadow: inset 0 0 0 1px rgba(162, 196, 228, 0.32);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-10px) scale(0.6);
+    transition:
+        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        margin-left 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 220ms ease-out,
+        transform 380ms cubic-bezier(0.34, 1.4, 0.64, 1),
+        background-color 180ms ease-out,
+        box-shadow 180ms ease-out,
+        visibility 0s linear 340ms;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.mode-button svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.72;
+    transition: opacity 180ms ease-out, transform 380ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+.track-modes-visible .mode-button--continuous,
+#track-list.continuous-on .track-modes-visible .mode-button--shuffle {
+    width: var(--mode-size);
+    margin-left: 8px;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition:
+        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        margin-left 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 260ms ease-out 60ms,
+        transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1),
+        background-color 180ms ease-out,
+        box-shadow 180ms ease-out,
+        visibility 0s linear 0s;
+}
+
+#track-list.continuous-on .mode-button--continuous,
+#track-list.shuffle-on .mode-button--shuffle {
+    background-color: #7BA8D0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 12px rgba(123, 168, 208, 0.45);
+}
+
+#track-list.continuous-on .mode-button--continuous svg,
+#track-list.shuffle-on .mode-button--shuffle svg {
+    opacity: 1;
+    transform: rotate(180deg);
+}
+
+#track-list.shuffle-on .mode-button--shuffle svg {
+    transform: scaleX(-1);
+}
+
+.mode-button:active svg {
+    transform: scale(0.82);
+}
+
+.mode-button:focus-visible,
+.play-button:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .track-modes-visible .mode-button:hover {
+        background-color: rgba(123, 168, 208, 0.45);
+    }
+
+    #track-list.continuous-on .track-modes-visible .mode-button--continuous:hover,
+    #track-list.shuffle-on .track-modes-visible .mode-button--shuffle:hover {
+        background-color: #6B98C0;
+    }
+}
+
+.time-display {
+    margin-left: 12px;
+}
+
+/* Size the controls row to the space each song card actually has */
+.track-info {
+    container-type: inline-size;
+}
+
+@container (max-width: 265px) {
+    .time-total {
+        display: none;
+    }
+
+    .time-display {
+        margin-left: 8px;
+    }
+
+    .mode-button {
+        --mode-size: 32px;
+    }
+
+    .track-modes-visible .mode-button--continuous,
+    #track-list.continuous-on .track-modes-visible .mode-button--shuffle {
+        margin-left: 6px;
+    }
+}
+
+@container (max-width: 175px) {
+    .track-modes-visible .time-display {
+        display: none;
+    }
+}
+
+/* Touch screens: no sticky hover zoom, instant tap feedback instead */
+@media (hover: none) {
+    .play-button:hover {
+        transform: none;
+        background-color: #7BA8D0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .play-button:hover::before {
+        left: -100%;
+    }
+
+    .play-button:active,
+    .mode-button:active {
+        transform: scale(0.94);
+    }
+
+    .play-button {
+        -webkit-tap-highlight-color: transparent;
+    }
 }
 
 .release-date {
@@ -1177,7 +1306,7 @@ audio {
     }
 
     h1 {
-        font-size: 2.2em;
+        font-size: clamp(1.7rem, 8.6vw, 2.2em);
         line-height: 1.05;
         margin: 0 0 6px 0;
     }
@@ -1244,8 +1373,10 @@ audio {
     }
 
     .play-button {
-        font-size: 0.86em;
-        padding: 5px 12px;
+        font-size: 0.9em;
+        padding: 0 14px;
+        min-height: 32px;
+        min-width: 66px;
     }
 
     .time-display {
@@ -1305,6 +1436,61 @@ audio {
         width: 24px;
         height: 24px;
         transform: scale(1.45);
+    }
+}
+
+/* Narrow phones (iPhone SE / mini, folded foldables) */
+@media (max-width: 370px) {
+    .track {
+        --cover-size: 66px;
+        padding: 12px 6px;
+    }
+
+    .title {
+        font-size: 1.05rem;
+    }
+
+    .penguin-badge {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+    }
+
+    .penguin-icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    .title-container {
+        gap: 6px;
+    }
+
+    .play-button {
+        min-width: 58px;
+        padding: 0 10px;
+    }
+}
+
+/* Short phone screens: give the song list more room */
+@media (max-width: 600px) and (max-height: 700px) {
+    .jukebox-description {
+        padding: 8px 18px;
+        font-size: 0.76rem;
+        line-height: 1.25;
+    }
+
+    .sign-bolt {
+        width: 7px;
+        height: 7px;
+    }
+
+    .sign-bolt--tl, .sign-bolt--tr { top: 5px; }
+    .sign-bolt--bl, .sign-bolt--br { bottom: 5px; }
+    .sign-bolt--tl, .sign-bolt--bl { left: 5px; }
+    .sign-bolt--tr, .sign-bolt--br { right: 5px; }
+
+    .frogquest-link {
+        padding-top: 6px;
     }
 }
 
