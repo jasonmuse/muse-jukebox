@@ -93,7 +93,7 @@
   <div id="jukebox-wrapper">
   <div id="jukebox-container">
         <!-- Record Image -->
-        <img src="images/record.png" class="record" alt="Record">
+        <img src="images/record.png" class="record" alt="Record" title="Tap to play or pause, drag to scratch">
         <div id="record-seek-controls" class="record-seek-controls" aria-hidden="true">
             <div class="record-seek-group">
                 <button id="record-prev" class="record-seek-button record-skip-button" type="button" aria-label="Previous song" title="Previous song">
@@ -122,11 +122,12 @@
             <img id="np-backdrop" class="np-backdrop" src="images/penguin.gif" alt="" aria-hidden="true">
             <div class="np-stage">
                 <div class="np-turntable">
-                    <button id="np-record" class="np-record" type="button" aria-label="Play or pause">
+                    <button id="np-record" class="np-record" type="button" aria-label="Play or pause (drag to scratch)" title="Tap to play or pause, drag to scratch">
                         <img class="np-record-vinyl" src="images/record.png" alt="">
                         <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
                     </button>
                     <span class="np-tonearm" aria-hidden="true"><span class="np-tonearm-head"></span></span>
+                    <span class="np-scratch-hint" aria-hidden="true">drag to scratch</span>
                 </div>
             </div>
             <div class="np-meta">
@@ -416,6 +417,7 @@
                         <li>Turn your phone or tablet sideways for the full jukebox deck.</li>
                         <li>On screens with a side strip (like a folded Duo), the music controls live in the strip. Drag them up or down to move them.</li>
                         <li>Tap the record to pause, or use the 10s buttons to skip around.</li>
+                        <li>Grab the record and drag it back and forth to scratch like a DJ.</li>
                         <li>Tap any tag or year on a song to filter the list.</li>
                         <li>The &times; on the playing song stops it and clears it away.</li>
                     </ul>

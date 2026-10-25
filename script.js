@@ -786,6 +786,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     player.preload = "auto";
     let currentTrackData = null;
     let isSwitchingTrack = false;
+    let scratch = null; // the record currently held for DJ scratching
     let isSpinning = false;
     let rotationAngle = 0; // Declare rotationAngle here
     let spinRequest; // Declare spinRequest here
@@ -1111,6 +1112,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function isPlayerActive() {
+        // A song held mid-scratch still counts as playing (it picks up again on release)
+        if (scratch && scratch.wasPlaying) return true;
         return Boolean(currentTrackData) && !player.paused && !player.ended;
     }
 
@@ -1715,7 +1718,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         player.addEventListener("pause", () => {
-            if (player.ended) return;
+            if (player.ended || scratch) return;
             stopSpinning();
             if (!isSwitchingTrack) {
                 setPlayButtonLabel(getCurrentTrackElement()?.querySelector(".play-button"), "Play");
@@ -1923,8 +1926,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     currentSpeed = Math.min(currentSpeed + accelerationRate, targetSpeed);
                 }
                 
-                rotationAngle = (rotationAngle + currentSpeed) % 360;
-                updateRecordTransform();
+                if (!scratch) {
+                    rotationAngle = (rotationAngle + currentSpeed) % 360;
+                    updateRecordTransform();
+                }
                 currentRotationSpeed = currentSpeed; // Update tracked speed
 
                 accelerationRequest = requestAnimationFrame(accelerate);
@@ -2025,8 +2030,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         function decelerate() {
             if (deceleration > 0) {
-                rotationAngle = (rotationAngle + deceleration) % 360;
-                updateRecordTransform();
+                if (!scratch) {
+                    rotationAngle = (rotationAngle + deceleration) % 360;
+                    updateRecordTransform();
+                }
                 deceleration -= 0.015; // More subtle deceleration
                 currentRotationSpeed = deceleration;
 
@@ -2467,6 +2474,558 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ───── DJ scratching: grab a record and drag it back and forth ─────
+    // While held, the song stops (hand on the vinyl) and a short slice of it is
+    // played at the speed and direction the record is moved, like a turntable.
+    const SCRATCH_SECONDS_PER_TURN = 1.8; // 33 1/3 rpm
+    const SCRATCH_START_DISTANCE = 5;
+    const SCRATCH_SNIPPET_SECONDS = 3;
+    const MP3_BITRATES_V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+    const MP3_BITRATES_V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
+    const MP3_SAMPLE_RATES = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+    let scratchAudio = null;
+    let scratchSnippet = null;
+    let scratchSnippetRequest = null;
+    let scratchSleepTimer = null;
+    let pendingScratch = null;
+    let suppressRecordClick = false;
+
+    function getScratchAudio() {
+        if (scratchAudio) return scratchAudio;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+
+        try {
+            // iOS: let scratch sounds play like music (not muted by the silent switch)
+            if (navigator.audioSession) navigator.audioSession.type = "playback";
+        } catch (error) {
+            // Audio Session API not available
+        }
+
+        const context = new AudioContextClass();
+        scratchAudio = { context, fallback: buildScratchFallbackSample(context), fileInfo: new Map() };
+        return scratchAudio;
+    }
+
+    // Called from taps on music controls, so the audio context is started by a user gesture
+    function unlockScratchAudio() {
+        const audio = getScratchAudio();
+        if (!audio) return;
+        const { context } = audio;
+        if (context.state !== "running") {
+            context.resume().catch(() => {});
+        }
+        const silence = context.createBufferSource();
+        silence.buffer = context.createBuffer(1, 1, context.sampleRate);
+        silence.connect(context.destination);
+        silence.start(0);
+        scheduleScratchAudioSleep();
+    }
+
+    // Idle audio contexts keep the audio hardware busy, so suspend between scratches
+    function scheduleScratchAudioSleep() {
+        clearTimeout(scratchSleepTimer);
+        scratchSleepTimer = setTimeout(() => {
+            if (scratchAudio && !scratch && scratchAudio.context.state === "running") {
+                scratchAudio.context.suspend().catch(() => {});
+            }
+        }, 4000);
+    }
+
+    // A classic "ahh" scratch sample, used when the song slice can't be loaded
+    function buildScratchFallbackSample(context) {
+        const sampleRate = context.sampleRate;
+        const length = Math.floor(sampleRate * 2.4);
+        const voice = new Float32Array(length);
+        let phase = 0;
+        for (let index = 0; index < length; index += 1) {
+            const time = index / sampleRate;
+            const pitch = 150 + (6 * Math.sin(2 * Math.PI * 5 * time)) - (20 * time);
+            phase = (phase + (pitch / sampleRate)) % 1;
+            voice[index] = ((phase * 2) - 1) * 0.6 + ((Math.random() * 2) - 1) * 0.06;
+        }
+
+        const data = new Float32Array(length);
+        [[800, 10, 1], [1150, 12, 0.5], [2900, 20, 0.22]].forEach(([frequency, quality, gain]) => {
+            const omega = (2 * Math.PI * frequency) / sampleRate;
+            const alpha = Math.sin(omega) / (2 * quality);
+            const a0 = 1 + alpha;
+            const b0 = alpha / a0;
+            const b2 = -alpha / a0;
+            const a1 = (-2 * Math.cos(omega)) / a0;
+            const a2 = (1 - alpha) / a0;
+            let x1 = 0;
+            let x2 = 0;
+            let y1 = 0;
+            let y2 = 0;
+            for (let index = 0; index < length; index += 1) {
+                const x0 = voice[index];
+                const y0 = (b0 * x0) + (b2 * x2) - (a1 * y1) - (a2 * y2);
+                x2 = x1;
+                x1 = x0;
+                y2 = y1;
+                y1 = y0;
+                data[index] += y0 * gain;
+            }
+        });
+
+        let peak = 0;
+        data.forEach((value) => {
+            peak = Math.max(peak, Math.abs(value));
+        });
+        const fade = Math.floor(sampleRate * 0.03);
+        for (let index = 0; index < length; index += 1) {
+            const edge = Math.min(1, index / fade, (length - 1 - index) / fade);
+            data[index] = (data[index] / (peak || 1)) * 0.8 * edge;
+        }
+        return { data, sampleRate, isFallback: true };
+    }
+
+    // Find the first real MP3 frame so a slice from the middle of the file decodes cleanly
+    function findMp3FrameStart(bytes) {
+        for (let index = 0; index < bytes.length - 4; index += 1) {
+            if (bytes[index] !== 0xFF || (bytes[index + 1] & 0xE0) !== 0xE0) continue;
+            const version = (bytes[index + 1] >> 3) & 3;
+            const layer = (bytes[index + 1] >> 1) & 3;
+            const bitrateIndex = bytes[index + 2] >> 4;
+            const sampleRateIndex = (bytes[index + 2] >> 2) & 3;
+            if (version === 1 || layer !== 1 || bitrateIndex === 0 || bitrateIndex === 15 || sampleRateIndex === 3) continue;
+
+            const bitrate = (version === 3 ? MP3_BITRATES_V1 : MP3_BITRATES_V2)[bitrateIndex] * 1000;
+            const frameSampleRate = MP3_SAMPLE_RATES[version][sampleRateIndex];
+            const padding = (bytes[index + 2] >> 1) & 1;
+            const frameLength = Math.floor(((version === 3 ? 144 : 72) * bitrate) / frameSampleRate) + padding;
+            const next = index + frameLength;
+            if (next + 1 < bytes.length && bytes[next] === 0xFF && (bytes[next + 1] & 0xE0) === 0xE0) {
+                return index;
+            }
+        }
+        return 0;
+    }
+
+    function decodeAudio(context, arrayBuffer) {
+        return new Promise((resolve, reject) => {
+            const result = context.decodeAudioData(arrayBuffer, resolve, reject);
+            if (result && typeof result.then === "function") {
+                result.then(resolve, reject);
+            }
+        });
+    }
+
+    async function fetchScratchFileInfo(audio, file) {
+        if (audio.fileInfo.has(file)) return audio.fileInfo.get(file);
+
+        const response = await fetch(file, { headers: { Range: "bytes=0-9" } });
+        const contentRange = response.headers.get("Content-Range") || "";
+        const total = Number(contentRange.split("/")[1]);
+        if (response.status !== 206 || !Number.isFinite(total)) {
+            if (response.body) response.body.cancel();
+            throw new Error("Range requests not supported");
+        }
+
+        const header = new Uint8Array(await response.arrayBuffer());
+        let audioStart = 0;
+        if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) {
+            // Skip the ID3 tag at the front of the file
+            audioStart = 10 + (((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F));
+        }
+        const info = { total, audioStart };
+        audio.fileInfo.set(file, info);
+        return info;
+    }
+
+    // Fetch and decode ~6 seconds of the song around `centerTime`
+    async function loadScratchSnippet(track, centerTime) {
+        const audio = getScratchAudio();
+        const duration = player.duration;
+        if (!audio || !Number.isFinite(duration) || duration <= 0) throw new Error("Nothing to scratch");
+
+        const info = await fetchScratchFileInfo(audio, track.file);
+        const bytesPerSecond = (info.total - info.audioStart) / duration;
+        const startTime = Math.max(0, centerTime - SCRATCH_SNIPPET_SECONDS);
+        const endTime = Math.min(duration, centerTime + SCRATCH_SNIPPET_SECONDS);
+        const startByte = info.audioStart + Math.floor(startTime * bytesPerSecond);
+        const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil(endTime * bytesPerSecond));
+
+        const response = await fetch(track.file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
+        if (response.status !== 206) {
+            if (response.body) response.body.cancel();
+            throw new Error("Range requests not supported");
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const frameStart = findMp3FrameStart(bytes);
+        const decoded = await decodeAudio(audio.context, bytes.slice(frameStart).buffer);
+
+        const data = new Float32Array(decoded.length);
+        for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+            const channelData = decoded.getChannelData(channel);
+            for (let index = 0; index < decoded.length; index += 1) {
+                data[index] += channelData[index] / decoded.numberOfChannels;
+            }
+        }
+
+        const sliceStart = startTime + (frameStart / bytesPerSecond);
+        return {
+            file: track.file,
+            data,
+            sampleRate: decoded.sampleRate,
+            startTime: sliceStart,
+            endTime: sliceStart + decoded.duration
+        };
+    }
+
+    function requestScratchSnippet(track, centerTime) {
+        const covers = (snippet) => snippet && snippet.file === track.file
+            && centerTime > snippet.startTime + 1.5 && centerTime < snippet.endTime - 1.5;
+        if (covers(scratchSnippet)) return Promise.resolve(scratchSnippet);
+        if (scratchSnippetRequest && scratchSnippetRequest.file === track.file
+            && Math.abs(scratchSnippetRequest.centerTime - centerTime) < 1.5) {
+            return scratchSnippetRequest.promise;
+        }
+
+        const promise = loadScratchSnippet(track, centerTime).then((snippet) => {
+            scratchSnippet = snippet;
+            return snippet;
+        });
+        scratchSnippetRequest = { file: track.file, centerTime, promise };
+        promise.catch(() => {}).finally(() => {
+            if (scratchSnippetRequest && scratchSnippetRequest.promise === promise) scratchSnippetRequest = null;
+        });
+        return promise;
+    }
+
+    function sampleAt(source, position) {
+        const { data } = source;
+        let index = position;
+        if (source.isFallback) {
+            index = ((index % data.length) + data.length) % data.length;
+        } else if (index < 0 || index >= data.length - 1) {
+            return 0;
+        }
+        const whole = Math.floor(index);
+        const next = whole + 1 < data.length ? whole + 1 : 0;
+        const fraction = index - whole;
+        return data[whole] + ((data[next] - data[whole]) * fraction);
+    }
+
+    function getScratchTargetIndex(state, source) {
+        if (source.isFallback) {
+            return (source.data.length / 2) + ((state.targetTime - state.holdStartTime) * source.sampleRate);
+        }
+        return (state.targetTime - source.startTime) * source.sampleRate;
+    }
+
+    function startScratchEngine(audio, state) {
+        const { context } = audio;
+        const processor = context.createScriptProcessor(1024, 1, 1);
+        const highpass = context.createBiquadFilter();
+        highpass.type = "highpass";
+        highpass.frequency.value = 40;
+        const lowpass = context.createBiquadFilter();
+        lowpass.type = "lowpass";
+        lowpass.frequency.value = 6000;
+        const output = context.createGain();
+        output.gain.value = 1;
+        processor.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(output);
+        output.connect(context.destination);
+
+        const engine = { processor, lowpass, output, playhead: null, source: null, gain: 0 };
+        processor.onaudioprocess = (event) => {
+            const out = event.outputBuffer.getChannelData(0);
+            const source = state.source;
+            if (!source) {
+                out.fill(0);
+                return;
+            }
+
+            const target = getScratchTargetIndex(state, source);
+            if (engine.source !== source || engine.playhead === null) {
+                engine.source = source;
+                engine.playhead = target;
+            }
+
+            // Glide to where the record is now over this block; speed 1 = normal playback
+            const velocity = Math.max(-10, Math.min(10, (target - engine.playhead) / out.length));
+            const gainTarget = Math.min(1, Math.abs(velocity) * 1.6);
+            for (let index = 0; index < out.length; index += 1) {
+                engine.playhead += velocity;
+                engine.gain += (gainTarget - engine.gain) * 0.004;
+                out[index] = sampleAt(source, engine.playhead) * engine.gain;
+            }
+            lowpass.frequency.setTargetAtTime(1200 + (9000 * Math.min(1.2, Math.abs(velocity))), context.currentTime, 0.02);
+        };
+        return engine;
+    }
+
+    function stopScratchEngine(engine) {
+        if (!engine) return;
+        const { context } = scratchAudio;
+        engine.output.gain.setTargetAtTime(0, context.currentTime, 0.02);
+        setTimeout(() => {
+            engine.processor.onaudioprocess = null;
+            engine.processor.disconnect();
+            engine.output.disconnect();
+        }, 150);
+    }
+
+    function previewScratchTime(time) {
+        const duration = player.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        const timeDisplay = getCurrentTrackElement()?.querySelector(".time-display");
+        if (timeDisplay) {
+            setTimeDisplayReady(player, timeDisplay, time);
+        }
+        if (npSeek) {
+            npSeek.value = Math.round((time / duration) * 1000);
+            npSeek.style.setProperty("--progress", `${npSeek.value / 10}%`);
+        }
+        if (npElapsed) {
+            npElapsed.textContent = formatTime(time);
+        }
+    }
+
+    function setPreservesPitch(value) {
+        if ("preservesPitch" in player) player.preservesPitch = value;
+        if ("webkitPreservesPitch" in player) player.webkitPreservesPitch = value;
+    }
+
+    // Turntable start-up "wow" as the platter gets back up to speed
+    function spinUpPlayback() {
+        const canBendPitch = "preservesPitch" in player || "webkitPreservesPitch" in player;
+        if (canBendPitch) {
+            setPreservesPitch(false);
+            player.playbackRate = 0.55;
+        }
+        const playPromise = player.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+            playPromise.catch(() => {
+                setPlayButtonLabel(getCurrentTrackElement()?.querySelector(".play-button"), "Play");
+                updateWhereBackgroundFromPlayback();
+            });
+        }
+        if (!canBendPitch) return;
+
+        const startedAt = performance.now();
+        const ramp = () => {
+            const progress = Math.min(1, (performance.now() - startedAt) / 300);
+            if (scratch) return;
+            player.playbackRate = 0.55 + (0.45 * (1 - Math.pow(1 - progress, 2)));
+            if (progress < 1) {
+                requestAnimationFrame(ramp);
+            } else {
+                player.playbackRate = 1;
+                setPreservesPitch(true);
+            }
+        };
+        requestAnimationFrame(ramp);
+    }
+
+    function getRecordCenter(element) {
+        const rect = element.getBoundingClientRect();
+        return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+    }
+
+    function beginScratch(pending, event) {
+        const center = getRecordCenter(pending.element);
+        const state = {
+            element: pending.element,
+            pointerId: pending.pointerId,
+            centerX: center.x,
+            centerY: center.y,
+            lastAngle: Math.atan2(event.clientY - center.y, event.clientX - center.x),
+            turned: 0,
+            startRotation: rotationAngle,
+            holdStartTime: currentTrackData && Number.isFinite(player.currentTime) ? player.currentTime : 0,
+            targetTime: 0,
+            wasPlaying: Boolean(currentTrackData) && !player.paused && !player.ended,
+            source: null,
+            engine: null
+        };
+        state.targetTime = state.holdStartTime;
+        scratch = state;
+
+        if (volumeFadeInterval) {
+            clearInterval(volumeFadeInterval);
+            volumeFadeInterval = null;
+        }
+        if (state.wasPlaying) {
+            player.pause();
+            player.volume = 1;
+        }
+
+        pending.element.setPointerCapture(pending.pointerId);
+        pending.element.classList.add("is-scratching");
+        if (nowPlaying) {
+            nowPlaying.classList.add("has-scratched");
+        }
+        try {
+            localStorage.setItem("museJukeboxScratched", "true");
+        } catch (error) {
+            // Storage unavailable; the hint may show again next visit
+        }
+
+        const audio = getScratchAudio();
+        if (!audio) return;
+        clearTimeout(scratchSleepTimer);
+        if (audio.context.state !== "running") {
+            audio.context.resume().catch(() => {});
+        }
+        state.engine = startScratchEngine(audio, state);
+
+        if (!currentTrackData) {
+            state.source = audio.fallback;
+            return;
+        }
+        const track = currentTrackData;
+        const snippetRequest = pending.snippetRequest || requestScratchSnippet(track, state.holdStartTime);
+        snippetRequest
+            .then((snippet) => {
+                if (scratch === state && currentTrackData === track) state.source = snippet;
+            })
+            .catch(() => {
+                if (scratch === state) state.source = audio.fallback;
+            });
+    }
+
+    function updateScratch(event) {
+        const state = scratch;
+        const offsetX = event.clientX - state.centerX;
+        const offsetY = event.clientY - state.centerY;
+        // Too close to the spindle to read a direction reliably
+        if (Math.hypot(offsetX, offsetY) < 12) return;
+
+        const angle = Math.atan2(offsetY, offsetX);
+        let delta = angle - state.lastAngle;
+        if (delta > Math.PI) delta -= 2 * Math.PI;
+        if (delta < -Math.PI) delta += 2 * Math.PI;
+        state.lastAngle = angle;
+        state.turned += (delta * 180) / Math.PI;
+
+        rotationAngle = state.startRotation + state.turned;
+        updateRecordTransform();
+
+        let targetTime = state.holdStartTime + ((state.turned / 360) * SCRATCH_SECONDS_PER_TURN);
+        if (currentTrackData && Number.isFinite(player.duration)) {
+            targetTime = Math.max(0, Math.min(player.duration, targetTime));
+            previewScratchTime(targetTime);
+        }
+        state.targetTime = targetTime;
+    }
+
+    function endScratch() {
+        const state = scratch;
+        scratch = null;
+        state.element.classList.remove("is-scratching");
+        stopScratchEngine(state.engine);
+        scheduleScratchAudioSleep();
+
+        if (currentTrackData && Number.isFinite(player.duration)) {
+            player.currentTime = Math.max(0, Math.min(player.duration - 0.05, state.targetTime));
+            updateNowPlayingProgress();
+            if (state.wasPlaying) {
+                spinUpPlayback();
+            }
+        }
+        updateWhereBackgroundFromPlayback();
+    }
+
+    function setUpRecordScratching() {
+        [record, npRecord].forEach((element) => {
+            if (!element) return;
+            element.querySelectorAll("img").forEach((image) => {
+                image.draggable = false;
+            });
+            if (element.tagName === "IMG") element.draggable = false;
+
+            element.addEventListener("pointerdown", (event) => {
+                if (scratch || (event.pointerType === "mouse" && event.button !== 0)) return;
+                const pending = {
+                    element,
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    snippetRequest: null,
+                    prefetchTimer: null
+                };
+                // Pressed and held (not just a tap): start fetching the song slice so it's ready for the drag
+                pending.prefetchTimer = setTimeout(() => {
+                    if (pendingScratch === pending && currentTrackData && scratchAudio) {
+                        pending.snippetRequest = requestScratchSnippet(currentTrackData, player.currentTime);
+                        pending.snippetRequest.catch(() => {});
+                    }
+                }, 120);
+                pendingScratch = pending;
+                if (scratchAudio && scratchAudio.context.state !== "running") {
+                    scratchAudio.context.resume().catch(() => {});
+                }
+            });
+
+            element.addEventListener("pointermove", (event) => {
+                if (scratch && event.pointerId === scratch.pointerId) {
+                    event.preventDefault();
+                    updateScratch(event);
+                    return;
+                }
+                if (!pendingScratch || pendingScratch.element !== element || event.pointerId !== pendingScratch.pointerId) return;
+                const distance = Math.hypot(event.clientX - pendingScratch.startX, event.clientY - pendingScratch.startY);
+                if (distance >= SCRATCH_START_DISTANCE) {
+                    clearTimeout(pendingScratch.prefetchTimer);
+                    beginScratch(pendingScratch, event);
+                    pendingScratch = null;
+                    updateScratch(event);
+                }
+            });
+
+            const finish = (event) => {
+                if (pendingScratch && event.pointerId === pendingScratch.pointerId) {
+                    clearTimeout(pendingScratch.prefetchTimer);
+                    pendingScratch = null;
+                }
+                if (scratch && event.pointerId === scratch.pointerId) {
+                    suppressRecordClick = true;
+                    endScratch();
+                    // Clear the flag if no click follows (e.g. the pointer was cancelled)
+                    setTimeout(() => {
+                        suppressRecordClick = false;
+                    }, 400);
+                }
+            };
+            element.addEventListener("pointerup", finish);
+            element.addEventListener("pointercancel", finish);
+
+            // A drag shouldn't also count as a tap (play / pause)
+            element.addEventListener("click", (event) => {
+                if (!suppressRecordClick) return;
+                suppressRecordClick = false;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }, true);
+        });
+
+        // Unlock scratch audio on taps that show the visitor wants music
+        document.addEventListener("click", (event) => {
+            if (event.target.closest(".play-button, .np-button, .rail-button, .record, .np-record, .record-seek-button, #random-track-button")) {
+                unlockScratchAudio();
+            }
+        }, true);
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && scratchAudio && !scratch && scratchAudio.context.state === "running") {
+                scratchAudio.context.suspend().catch(() => {});
+            }
+        });
+
+        try {
+            if (localStorage.getItem("museJukeboxScratched") === "true" && nowPlaying) {
+                nowPlaying.classList.add("has-scratched");
+            }
+        } catch (error) {
+            // Storage unavailable; show the hint
+        }
+    }
+
     // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
     const RAIL_RING_LENGTH = 2 * Math.PI * 20;
     const RAIL_MIN_INSET = 50;
@@ -2672,6 +3231,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpNowPlayingControls();
     setUpJukeboxBack();
     setUpSideRail();
+    setUpRecordScratching();
 
     // Initial population of filter and track list.
     // Populate tags first so the dropdown has its final option set before skeleton/track content appears.
