@@ -288,11 +288,19 @@
                 <svg class="jb-internals" id="jb-internals" aria-hidden="true">
                     <defs>
                         <radialGradient id="jb-glow"><stop offset="0" stop-color="#f4ff9a" stop-opacity="0.95"/><stop offset="1" stop-color="#f4ff9a" stop-opacity="0"/></radialGradient>
+                        <!-- Faint dot grid on the board -->
+                        <pattern id="jb-grid" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="0.9" fill="#ffffff" fill-opacity="0.07"/></pattern>
+                        <!-- Scanlines on Jukebot's screen -->
+                        <pattern id="jb-scanlines" width="6" height="3" patternUnits="userSpaceOnUse"><rect width="6" height="1" fill="#ffffff" fill-opacity="0.05"/></pattern>
+                        <linearGradient id="jb-screen-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16203a"/><stop offset="1" stop-color="#070b16"/></linearGradient>
+                        <!-- Soft glow for LEDs, signals and the face -->
+                        <filter id="jb-led-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                     </defs>
                     <g id="jb-board"></g>
                     <g class="jb-core" id="jb-core"></g>
                     <g id="jb-splats"></g>
                     <g id="jb-bugs"></g>
+                    <g id="jb-zaps"></g>
                 </svg>
 
                 <!-- Rear panel: unscrew the four corner screws to take it off -->
@@ -306,11 +314,6 @@
                             <span class="sign-bolt sign-bolt--br" aria-hidden="true"></span>
                             <span class="jukebox-description-text">Welcome to the semi-complete library of my <i>Muse Tunes</i> - gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag you feel like. &#127754;</span>
                         </p>
-
-                        <!-- A blinkie stuck on the back panel, like a sticker on an amp -->
-                        <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener" title="Play Frog Quest">
-                            <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
-                        </a>
 
                         <div class="jb-sticker" id="jb-sticker">
                             <div class="jb-sticker-top">
@@ -343,9 +346,16 @@
                                 <li>Grab the record and drag it back and forth to scratch like a DJ.</li>
                                 <li>Tap any tag or year on a song to filter the list.</li>
                                 <li>The &times; on the playing song stops it and clears it away.</li>
-                                <li>Fixing me: swat the bugs, but leave the glowing glowbugs alone. They help power me!</li>
+                                <li>Fixing me: hold a corner screw to twist it out (or tap it twice).</li>
+                                <li>Swat the bugs before they chew my core and drain my power. Leave the glowing glowbugs alone: they recharge me!</li>
+                                <li>Every bug you squash charges my zap. When my lights flash, tap my face to zap the bugs around me.</li>
                             </ul>
                         </div>
+
+                        <!-- Footer badge, old-web style -->
+                        <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener" title="Play Frog Quest">
+                            <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
+                        </a>
                     </div>
                     <div class="jb-cover-band jb-cover-band--bottom">&#9888; No user-serviceable parts inside (just bugs)</div>
                     <button class="jb-screw jb-screw--tl" data-screw="0" type="button" aria-label="Unscrew the top left screw"><span class="jb-screw-head"></span></button>
@@ -358,6 +368,7 @@
                 <div class="jb-hud" aria-hidden="true">
                     <span class="jb-hud-item" id="jb-level">Lv 1</span>
                     <span class="jb-hud-item" id="jb-bug-count">Bugs 0</span>
+                    <span class="jb-hud-item jb-hud-power" id="jb-power"><span class="jb-power-bar"><span class="jb-power-fill" id="jb-power-fill"></span></span><span id="jb-power-text">100%</span></span>
                     <span class="jb-hud-item jb-hud-time" id="jb-time">0.0s</span>
                 </div>
                 <p class="jb-toast" id="jb-status" aria-live="polite"></p>
