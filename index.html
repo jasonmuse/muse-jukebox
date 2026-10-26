@@ -264,12 +264,10 @@
         </div>
 
         <!-- Speaker grille: the cones pump with the beat -->
-        <div class="jukebox-speakers">
-            <span class="speaker speaker--left" aria-hidden="true"><span class="speaker-cone"></span></span>
-            <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener">
-                <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
-            </a>
-            <span class="speaker speaker--right" aria-hidden="true"><span class="speaker-cone"></span></span>
+        <div class="jukebox-speakers" aria-hidden="true">
+            <span class="speaker speaker--left"><span class="speaker-cone"></span></span>
+            <span class="speaker-eq"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+            <span class="speaker speaker--right"><span class="speaker-cone"></span></span>
         </div>
 
         <!-- Back of the jukebox: the jukebox is Jukebot, and this is its rear panel -->
@@ -307,6 +305,11 @@
                             <span class="jukebox-description-text">Welcome to the semi-complete library of my <i>Muse Tunes</i> - gathered right in one place. Feel free to scroll through or filter the song list by genre, vibe, or whatever tag you feel like. &#127754;</span>
                         </p>
 
+                        <!-- A blinkie stuck on the back panel, like a sticker on an amp -->
+                        <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener" title="Play Frog Quest">
+                            <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
+                        </a>
+
                         <div class="jb-sticker" id="jb-sticker">
                             <div class="jb-sticker-top">
                                 <svg class="jb-sticker-face" id="jb-sticker-face" viewBox="-30 -22 60 44" aria-hidden="true"></svg>
@@ -332,7 +335,7 @@
                                 <li>Press Play, then the repeat button to keep songs rolling on their own, even with your screen off. Shuffle shows up once it's on.</li>
                                 <li>With keep playing on, each song fades into the next like a DJ mix, and long silent endings get skipped.</li>
                                 <li>Use the skip buttons next to the record to jump to the previous or next song.</li>
-                                <li>Turn your phone or tablet sideways for the full jukebox deck.</li>
+                                <li>Turn your phone or tablet sideways, or open a wide window on a computer, for the full jukebox deck.</li>
                                 <li>On screens with a side strip (like a folded Duo), the music controls live in the strip. Drag them up or down to move them.</li>
                                 <li>Tap the record to pause, or use the 10s buttons to skip around.</li>
                                 <li>Grab the record and drag it back and forth to scratch like a DJ.</li>

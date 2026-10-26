@@ -470,21 +470,40 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
+/* Frog Quest blinkie, stuck on the jukebox's back panel like a sticker */
 .frogquest-link {
-    display: flex;
-    flex: 0 1 auto;
-    min-width: 0;
-    justify-content: center;
-    align-items: center;
-    margin: 0;
-    padding: 0;
+    flex: 0 0 auto;
+    align-self: center;
+    max-width: 86%;
+    margin: 2px 0;
+    padding: 4px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    background: #f4f1ff;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
     line-height: 0;
+    transform: rotate(-2deg);
+    transition: transform 220ms cubic-bezier(0.34, 1.5, 0.64, 1);
 }
 
 .frogquest-gif {
     display: block;
+    width: 300px; /* 2x, kept pixel-sharp */
     max-width: 100%;
     height: auto;
+    border-radius: 2px;
+    image-rendering: pixelated;
+}
+
+.frogquest-link:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 3px;
+}
+
+@media (hover: hover) {
+    .frogquest-link:hover {
+        transform: rotate(0deg) scale(1.04);
+    }
 }
 
 .track {
@@ -2115,9 +2134,9 @@ html {
     }
 }
 
-/* Landscape on touch screens (phones, tablets, unfolded foldables): two-panel jukebox.
-   Keep in sync with APP_LAYOUT_QUERY in script.js */
-@media (orientation: landscape) and (pointer: coarse) {
+/* Two-panel jukebox: touch screens held sideways (phones, tablets, unfolded foldables) and
+   desktop windows with room for both panels. Keep in sync with DECK_LAYOUT_QUERY in script.js */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
     html, body {
         width: 100%;
         height: var(--app-height, 100dvh);
@@ -2219,6 +2238,28 @@ html {
 @media (orientation: landscape) and (pointer: coarse) and (max-width: 720px) {
     #jukebox-container {
         grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    }
+}
+
+/* Desktop windows: keep the two panels well proportioned on big monitors */
+@media (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
+    #jukebox-wrapper {
+        align-items: center;
+    }
+
+    #jukebox-container {
+        max-width: min(1600px, 175vh);
+        max-height: 1100px;
+    }
+
+    /* A tall panel would leave a gap under the record: cap the turntable and centre the deck */
+    .now-playing {
+        justify-content: center;
+        container-type: inline-size;
+    }
+
+    .np-stage {
+        max-height: 92cqw;
     }
 }
 
@@ -4595,6 +4636,30 @@ h1.jukebox-title {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 14px rgba(255, 138, 216, 0.35);
 }
 
+/* Little equaliser between the speakers; its bars bounce with the beat (script.js) */
+.speaker-eq {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+}
+
+.speaker-eq span {
+    width: 4px;
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #ff8ad8, #8be9ff);
+    box-shadow: 0 0 6px rgba(255, 138, 216, 0.35);
+    opacity: 0.35;
+    transform: scaleY(0.18);
+    transition: opacity 400ms ease;
+    will-change: transform;
+}
+
+#jukebox-container.is-music-playing .speaker-eq span {
+    opacity: 0.95;
+}
+
 /* Glow behind the cabinet; its brightness follows the beat */
 .jukebox-glow {
     position: absolute;
@@ -4837,7 +4902,7 @@ html.viewport-short #jukebox-wrapper {
     }
 }
 
-@media (orientation: landscape) and (pointer: coarse) {
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
     h1.jukebox-title {
         margin: 0 0 clamp(4px, 1.4vh, 12px);
         font-size: clamp(1.4rem, min(7.5vh, 4.6vw), 3rem);
@@ -4865,6 +4930,13 @@ html.viewport-short #jukebox-wrapper {
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
     h1.jukebox-title {
         font-size: clamp(1.25rem, 8vh, 1.9rem);
+    }
+}
+
+/* Desktop deck: a bigger sign to go with the bigger panels */
+@media (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
+    h1.jukebox-title {
+        font-size: clamp(2.2rem, min(7vh, 4.4vw), 3.4rem);
     }
 }
 

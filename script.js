@@ -366,6 +366,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const jukeboxGlow = document.getElementById("jukebox-glow");
     const musicNotes = document.getElementById("music-notes");
     const speakerCones = Array.from(document.querySelectorAll(".speaker-cone"));
+    const eqBars = Array.from(document.querySelectorAll(".speaker-eq span"));
     const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
     const npCover = document.getElementById("np-cover");
     const npBackdrop = document.getElementById("np-backdrop");
@@ -839,6 +840,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const TRACK_PLAYING_FADE_OUT_MS = 220;
     // Keep in sync with the full-height layout media queries in styles.css
     const APP_LAYOUT_QUERY = "(max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px), (orientation: landscape) and (pointer: coarse)";
+    // The two-panel deck: touch screens held sideways, and desktop windows with room for both panels
+    // (keep in sync with the deck media queries in styles.css)
+    const DECK_LAYOUT_QUERY = "(orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px)";
 
     function isMobileViewport() {
         return window.matchMedia("(max-width: 600px)").matches;
@@ -3222,6 +3226,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let beatFrame = null;
     let beatLevel = 0;
     let lastBeatIndex = null;
+    let eqShape = [];
+    let eqBeatIndex = null;
 
     function detectTempo(buffer, sliceStart) {
         const sampleRate = buffer.sampleRate;
@@ -3374,6 +3380,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     function applyBeatLevel(level, beatIndex) {
         speakerCones.forEach((cone) => {
             cone.style.transform = `scale(${(1 + (level * 0.13)).toFixed(3)})`;
+        });
+        // Equaliser: a new shape every beat (taller in the middle), scaled by how hard it hits
+        if (beatIndex !== null && beatIndex !== eqBeatIndex) {
+            eqBeatIndex = beatIndex;
+            const middle = (eqBars.length - 1) / 2;
+            eqShape = eqBars.map((bar, index) => (1 - (0.45 * Math.abs(index - middle) / middle)) * (0.55 + (Math.random() * 0.45)));
+        }
+        eqBars.forEach((bar, index) => {
+            bar.style.transform = `scaleY(${(0.18 + (level * 0.82 * (eqShape[index] || 0))).toFixed(3)})`;
         });
         const sway = beatIndex === null ? 0 : (beatIndex % 2 === 0 ? 1 : -1);
         titlePenguins.forEach((penguin, index) => {
@@ -4058,7 +4073,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const leftInset = parseFloat(probeStyles.paddingLeft) || 0;
         const rightInset = parseFloat(probeStyles.paddingRight) || 0;
         const inset = Math.max(leftInset, rightInset);
-        const isDeckLayout = window.matchMedia("(orientation: landscape) and (pointer: coarse)").matches;
+        const isDeckLayout = window.matchMedia(DECK_LAYOUT_QUERY).matches;
         const enabled = inset >= RAIL_MIN_INSET && !isDeckLayout;
 
         document.body.classList.toggle("has-side-rail", enabled);
