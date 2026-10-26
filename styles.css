@@ -13,6 +13,11 @@
 
 :root {
     --app-height: 100vh;
+    /* Follows the backdrop (script.js): purple with the gradient, night sky with the space gif.
+       Browsers paint their toolbars and side strips in this colour too (theme-color). */
+    --backdrop-color: #1e1a4d;
+    --edge-blur: 40px;
+    --edge-spread: 14px;
 }
 
 
@@ -23,7 +28,7 @@ html, body {
     font-family: "Outfit", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
     background: radial-gradient(circle, #91cdfa, #2e2372);
     /* Solid fallback for areas the gradient can't reach (notches, side bars, overscroll) */
-    background-color: #1e1a4d;
+    background-color: var(--backdrop-color);
     min-height: var(--app-height, 100vh);
 }
 /* Main body layout */
@@ -2820,8 +2825,9 @@ body.has-side-rail .track.track-playing.track-playing-stick-bottom {
 }
 
 /* ───── EDGE BLEND ─────
-   Phone browsers paint their toolbars / side strips with the page background colour
-   (#1e1a4d). Fading the page edges into that colour makes them read as one surface. */
+   Phone browsers paint their toolbars / side strips with the page's theme colour
+   (--backdrop-color). Fading the page edges into that colour makes them read as one surface;
+   once the space background matches the strips the fade shrinks so the stars reach the edges. */
 .edge-blend {
     display: none;
 }
@@ -2833,8 +2839,19 @@ body.has-side-rail .track.track-playing.track-playing-stick-bottom {
         inset: 0;
         z-index: 1;
         pointer-events: none;
-        box-shadow: inset 0 0 40px 14px #1e1a4d;
+        box-shadow: inset 0 0 var(--edge-blur) var(--edge-spread) var(--backdrop-color);
     }
+}
+
+/* As a Home Screen app there are no browser strips to blend into: the backdrop fills the screen */
+@media (display-mode: standalone) {
+    .edge-blend {
+        display: none;
+    }
+}
+
+html.is-standalone .edge-blend {
+    display: none;
 }
 
 /* ───── JUKEBOT: the jukebox's rear panel + repair game ───── */

@@ -399,6 +399,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const coverWarmCache = new Set();
     const WHERE_FADE_IN_SECONDS = 30;
     const WHERE_FADE_OUT_SECONDS = 7;
+    // Browsers paint their toolbars and side strips (like Safari's on the Duo) in the page's theme
+    // colour, so it follows the backdrop: purple with the gradient, the space gif's night sky with it
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    const IDLE_BACKDROP_RGB = [30, 26, 77]; // #1e1a4d
+    const SPACE_BACKDROP_RGB = [1, 5, 15]; // the sky in images/where.gif
+    let backdropHex = "";
     const KEEP_PLAYING_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg>`;
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
     const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
@@ -1450,6 +1456,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setWhereBackgroundOpacity(opacityValue) {
         if (!whereBackground) return;
         whereBackground.style.opacity = opacityValue.toFixed(4);
+        updateBackdropColor(opacityValue);
+    }
+
+    // `spaceOpacity` is how far the space background has faded in (0 → 1)
+    function updateBackdropColor(spaceOpacity) {
+        const rgb = IDLE_BACKDROP_RGB.map((idle, index) => Math.round(idle + ((SPACE_BACKDROP_RGB[index] - idle) * spaceOpacity)));
+        const hex = `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+        if (hex === backdropHex) return;
+        backdropHex = hex;
+
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty("--backdrop-color", hex);
+        // Once the strips match the sky there's no seam to hide, so the stars can reach the edges
+        rootStyle.setProperty("--edge-blur", `${Math.round(40 - (26 * spaceOpacity))}px`);
+        rootStyle.setProperty("--edge-spread", `${Math.round(14 - (13 * spaceOpacity))}px`);
+        if (themeColorMeta) {
+            themeColorMeta.setAttribute("content", hex);
+        }
     }
 
     function updateRecordTransform() {
@@ -4269,6 +4293,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (document.fonts?.ready) {
         document.fonts.ready.then(() => requestAnimationFrame(syncMarquees));
+    }
+    if (window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches) {
+        document.documentElement.classList.add("is-standalone");
     }
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
