@@ -26,6 +26,9 @@
     <meta name="twitter:image" content="https://jasonmuse.github.io/muse-jukebox/images/dropoff.png">
 
     <title>Muse Jukebox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Pacifico&display=swap">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/gif" href="images/penguin.gif" />
     <link rel="icon" type="image/png" href="images/peng.png" />
@@ -92,8 +95,17 @@
   <div class="edge-blend" aria-hidden="true"></div>
   <div id="jukebox-wrapper">
   <div id="jukebox-container">
-        <!-- Record Image -->
-        <img src="images/record.png" class="record" alt="Record" title="Tap to play or pause, drag to scratch">
+        <div class="music-notes" id="music-notes" aria-hidden="true"></div>
+        <!-- Soft glow behind the cabinet that pulses with the beat -->
+        <div class="jukebox-glow" id="jukebox-glow" aria-hidden="true"></div>
+        <!-- Record: a thin 3D disc (front, B-side and edge) so it can flip with the jukebox -->
+        <div class="record" role="img" aria-label="Record" title="Tap to play or pause, drag to scratch">
+            <div class="record-disc">
+                <img class="record-face record-face--front" src="images/record.png" alt="">
+                <img class="record-face record-face--back" src="images/record.png" alt="">
+                <span class="record-edge" aria-hidden="true"></span>
+            </div>
+        </div>
         <div id="record-seek-controls" class="record-seek-controls" aria-hidden="true">
             <div class="record-seek-group">
                 <button id="record-prev" class="record-seek-button record-skip-button" type="button" aria-label="Previous song" title="Previous song">
@@ -123,8 +135,17 @@
             <div class="np-stage">
                 <div class="np-turntable">
                     <button id="np-record" class="np-record" type="button" aria-label="Play or pause (drag to scratch)" title="Tap to play or pause, drag to scratch">
-                        <img class="np-record-vinyl" src="images/record.png" alt="">
-                        <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
+                        <span class="np-record-disc">
+                            <span class="np-record-face np-record-face--front">
+                                <img class="np-record-vinyl" src="images/record.png" alt="">
+                                <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
+                            </span>
+                            <span class="np-record-face np-record-face--back">
+                                <img class="np-record-vinyl" src="images/record.png" alt="">
+                                <img class="np-record-label np-record-label--b" src="images/penguin.gif" alt="">
+                            </span>
+                            <span class="record-edge" aria-hidden="true"></span>
+                        </span>
                     </button>
                     <span class="np-tonearm" aria-hidden="true"><span class="np-tonearm-head"></span></span>
                     <span class="np-scratch-hint" aria-hidden="true">drag to scratch</span>
@@ -161,16 +182,17 @@
         </aside>
     <div id="jukebox">
 
+        <!-- Glowing bubble tubes up the sides of the cabinet -->
+        <span class="bubble-tube bubble-tube--left" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span class="bubble-tube bubble-tube--right" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+
         <h1 class="jukebox-title">
-            <div class="title-container">
-                <span class="penguin-badge">
-                    <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
-                </span>
-                <span class="title-text-main">Muse Jukebox</span>
-                <span class="penguin-badge">
-                    <img class="penguin-icon" src="images/penguin.gif" alt="Penguin Icon">
-                </span>
-            </div>
+            <span class="title-penguin title-penguin--left" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
+            <span class="title-wordmark">
+                <span class="title-muse">Muse</span>
+                <span class="title-jukebox">Jukebox</span>
+            </span>
+            <span class="title-penguin title-penguin--right" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
         </h1>
 
         <!-- Slim sign: flips the jukebox (Jukebot) around to its rear panel -->
@@ -241,11 +263,14 @@
             </div>
         </div>
 
-        <!-- additional GIF -->
-        <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank">
-
-        <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Animated Frog">
-        </a>
+        <!-- Speaker grille: the cones pump with the beat -->
+        <div class="jukebox-speakers">
+            <span class="speaker speaker--left" aria-hidden="true"><span class="speaker-cone"></span></span>
+            <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener">
+                <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
+            </a>
+            <span class="speaker speaker--right" aria-hidden="true"><span class="speaker-cone"></span></span>
+        </div>
 
         <!-- Back of the jukebox: the jukebox is Jukebot, and this is its rear panel -->
         <section class="jukebox-back" aria-label="Back of the jukebox">

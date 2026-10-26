@@ -20,7 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
-    font-family: Arial, sans-serif;
+    font-family: "Outfit", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
     background: radial-gradient(circle, #91cdfa, #2e2372);
     /* Solid fallback for areas the gradient can't reach (notches, side bars, overscroll) */
     background-color: #1e1a4d;
@@ -172,96 +172,24 @@ body.modal-open .record-seek-controls {
     line-height: 1;
 }
 
-/* Jukebox container */
+/* Jukebox cabinet: arched top, chrome rim, glassy body */
 #jukebox {
+--jukebox-depth: 42px;
 position: relative;
 text-align: center;
 max-width: 500px;
 width: 90vw;
-padding: 20px 20px 0 20px;
-border-radius: 10px;
-background: #2e2e3d;
-box-shadow: 0 0 0 3px #ffffff;
-border: 3px solid #738fff;
-z-index: 2; /* âœ… above the record */
-}
-
-/* Jukebox Title */
-h1 {
-    font-size: 3.4em;
-    line-height: 1.2;
-    margin-bottom: 15px;
-    margin-top: 5px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: linear-gradient(90deg, #476bfc, #d4c9ff);
-    background-size: 200% 200%;
-    color: transparent;
-    background-clip: text;
-    -webkit-background-clip: text;
-    animation: gradientAnimation 3s ease-in-out infinite;
-    font-weight: bold;
-}
-
-@keyframes gradientAnimation {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-
-/* Title layout */
-.title-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.title-text-main {
-    white-space: nowrap;
-}
-
-.penguin-badge {
-    width: 54px;
-    height: 54px;
-    flex: 0 0 54px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    border: none;
-    background: linear-gradient(180deg, rgba(104, 111, 138, 0.45), rgba(62, 67, 84, 0.5));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 8px rgba(0, 0, 0, 0.24);
-}
-
-.penguin-icon {
-    width: 30px;
-    height: 30px;
-    display: block;
-    transform: scale(1.6);
-    transform-origin: center center;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    transition: transform 180ms ease-out;
-}
-
-.penguin-badge:hover .penguin-icon {
-    animation: penguinBounce 560ms cubic-bezier(0.3, 0.8, 0.35, 1.2);
-}
-
-@keyframes penguinBounce {
-    0% {
-        transform: scale(1.6) translateY(0);
-    }
-    35% {
-        transform: scale(1.62) translateY(-3px);
-    }
-    70% {
-        transform: scale(1.58) translateY(1px);
-    }
-    100% {
-        transform: scale(1.6) translateY(0);
-    }
+padding: 20px 20px 14px 20px;
+border-radius: 40px 40px 16px 16px;
+background:
+    radial-gradient(120% 55% at 50% 0%, rgba(150, 125, 255, 0.24), transparent 62%),
+    linear-gradient(180deg, #31335c 0%, #292b49 45%, #22243a 100%);
+box-shadow:
+    0 0 0 3px #ffffff,
+    0 0 0 7px rgba(139, 155, 255, 0.2),
+    0 24px 50px rgba(8, 6, 30, 0.55);
+border: 3px solid #8b9bff;
+z-index: 2; /* above the record */
 }
 
 p {
@@ -539,16 +467,19 @@ box-shadow: 0 0 0 3px #ffffff;
 
 .frogquest-link {
     display: flex;
-    width: 100%;
+    flex: 0 1 auto;
+    min-width: 0;
     justify-content: center;
     align-items: center;
     margin: 0;
-    padding: 8px 0px 6px 0;
+    padding: 0;
     line-height: 0;
 }
 
 .frogquest-gif {
     display: block;
+    max-width: 100%;
+    height: auto;
 }
 
 .track {
@@ -1301,6 +1232,7 @@ audio {
         height: 98%;
         max-height: 98%;
         padding: 10px 10px 8px 10px;
+        border-radius: 28px 28px 14px 14px;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -1315,15 +1247,16 @@ audio {
         padding: 4px;
     }
 
-    .frogquest-link {
-        padding: 12px 0px 0;
+    .jukebox-speakers {
+        margin-top: 8px;
+        padding: 5px 10px;
     }
 
-    h1 {
-        font-size: clamp(1.7rem, 8.6vw, 2.2em);
-        line-height: 1.05;
-        margin: 0 0 6px 0;
+    .speaker {
+        width: 40px;
+        height: 40px;
     }
+
 
     .flip-sign {
         margin: 2px 0 6px;
@@ -1440,17 +1373,7 @@ audio {
         opacity: 1;
     }
 
-    .penguin-badge {
-        width: 42px;
-        height: 42px;
-        flex-basis: 42px;
-    }
 
-    .penguin-icon {
-        width: 24px;
-        height: 24px;
-        transform: scale(1.45);
-    }
 }
 
 /* Narrow phones (iPhone SE / mini, folded foldables) */
@@ -1464,20 +1387,8 @@ audio {
         font-size: 1.05rem;
     }
 
-    .penguin-badge {
-        width: 34px;
-        height: 34px;
-        flex-basis: 34px;
-    }
 
-    .penguin-icon {
-        width: 20px;
-        height: 20px;
-    }
 
-    .title-container {
-        gap: 6px;
-    }
 
     .play-button {
         min-width: 58px;
@@ -1503,8 +1414,14 @@ audio {
     .sign-bolt--tl, .sign-bolt--bl { left: 5px; }
     .sign-bolt--tr, .sign-bolt--br { right: 5px; }
 
-    .frogquest-link {
-        padding-top: 6px;
+    .jukebox-speakers {
+        margin-top: 6px;
+        padding: 4px 10px;
+    }
+
+    .speaker {
+        width: 34px;
+        height: 34px;
     }
 }
 
@@ -1687,12 +1604,9 @@ html {
     #jukebox {
         width: min(720px, calc(100% - 48px));
         padding: 18px 18px 10px;
+        border-radius: 40px 40px 16px 16px;
     }
 
-    h1 {
-        font-size: clamp(2.4rem, 6.2vw, 3.4em);
-        margin-bottom: 12px;
-    }
 
     .filter-label-extra {
         display: inline;
@@ -1763,17 +1677,7 @@ html {
         font-size: 1rem;
     }
 
-    .penguin-badge {
-        width: 54px;
-        height: 54px;
-        flex-basis: 54px;
-    }
 
-    .penguin-icon {
-        width: 30px;
-        height: 30px;
-        transform: scale(1.6);
-    }
 }
 
 /* ───── NOW PLAYING DECK (landscape on touch screens) ───── */
@@ -1886,20 +1790,6 @@ html {
 .now-playing.is-empty .np-record-label {
     image-rendering: pixelated;
     background: #cfd9ff;
-}
-
-/* Spindle */
-.np-record::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 4%;
-    height: 4%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #ffffff, #9aa3b8 70%);
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
 .np-record:focus-visible {
@@ -2281,25 +2171,15 @@ html {
         display: flex;
         flex-direction: column;
         padding: clamp(8px, 2vh, 18px) clamp(8px, 1.4vw, 16px) 6px;
+        border-radius: 26px 26px 12px 12px;
     }
 
-    h1 {
-        font-size: clamp(1.4rem, 6.5vh, 2.8rem);
-        line-height: 1.05;
-        margin: 0 0 clamp(4px, 1.4vh, 12px);
+    .now-playing {
+        border-radius: 26px 26px 12px 12px;
     }
 
-    .penguin-badge {
-        width: clamp(30px, 8vh, 54px);
-        height: clamp(30px, 8vh, 54px);
-        flex-basis: clamp(30px, 8vh, 54px);
-    }
 
-    .penguin-icon {
-        width: clamp(18px, 4.6vh, 30px);
-        height: clamp(18px, 4.6vh, 30px);
-        transform: scale(1.5);
-    }
+
 
     .flip-sign {
         margin: 0 0 6px;
@@ -2320,8 +2200,14 @@ html {
         padding: 4px;
     }
 
-    .frogquest-link {
-        padding: 6px 0 2px;
+    .jukebox-speakers {
+        margin-top: 6px;
+        padding: 4px 10px;
+    }
+
+    .speaker {
+        width: clamp(30px, 6vh, 44px);
+        height: clamp(30px, 6vh, 44px);
     }
 }
 
@@ -2333,7 +2219,8 @@ html {
 
 /* Phones on their side */
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
-    .frogquest-link,
+    .jukebox-speakers,
+    .bubble-tube,
     .np-eyebrow,
     .flip-sign-extra {
         display: none;
@@ -4352,28 +4239,6 @@ body {
     }
 }
 
-/* ───── LANDSCAPE DECK TITLE: size to the panel so the penguins stay inside ───── */
-@media (orientation: landscape) and (pointer: coarse) {
-    h1 {
-        font-size: clamp(1.15rem, min(6.5vh, 4.6vw), 2.8rem);
-    }
-
-    .title-container {
-        gap: 0.22em;
-    }
-
-    .penguin-badge {
-        width: 1.2em;
-        height: 1.2em;
-        flex-basis: 1.2em;
-    }
-
-    .penguin-icon {
-        width: 0.66em;
-        height: 0.66em;
-    }
-}
-
 /* ───── DJ SCRATCHING ───── */
 .record,
 .np-record {
@@ -4435,5 +4300,566 @@ body {
 
     50% {
         transform: translateX(-44%);
+    }
+}
+
+/* ───── TITLE: neon "Muse" script over chrome "JUKEBOX", penguins dancing on the sides ───── */
+h1.jukebox-title {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 0.26em;
+    margin: 0 0 14px;
+    padding-top: 2px;
+    font-size: 3.3rem;
+    line-height: 1;
+    font-weight: 400;
+    color: #ffffff;
+}
+
+.title-wordmark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+}
+
+.title-muse {
+    display: block;
+    padding: 0 0.14em 0.06em;
+    margin-bottom: -0.16em;
+    font-family: "Pacifico", "Brush Script MT", cursive;
+    font-size: 1em;
+    line-height: 1.12;
+    white-space: nowrap;
+    background: linear-gradient(100deg, #ff8ad8 0%, #ffb36b 34%, #fff1a8 52%, #8ee9ff 76%, #b39bff 100%);
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 0.09em rgba(255, 138, 216, 0.55)) drop-shadow(0 0.05em 0 rgba(18, 10, 58, 0.7));
+    transform: rotate(-3deg);
+    animation: neonShift 9s ease-in-out infinite alternate;
+}
+
+@keyframes neonShift {
+    to {
+        background-position: 100% 0;
+    }
+}
+
+.title-jukebox {
+    display: flex;
+    align-items: center;
+    gap: 0.55em;
+    padding-left: 0.5em;
+    font-family: "Outfit", system-ui, sans-serif;
+    font-size: 0.26em;
+    font-weight: 800;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #e4e9ff;
+    text-shadow: 0 0 8px rgba(142, 233, 255, 0.45), 0 1px 0 rgba(10, 8, 40, 0.8);
+}
+
+.title-jukebox::before,
+.title-jukebox::after {
+    content: "";
+    width: 1.7em;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, #8ea1ff);
+}
+
+.title-jukebox::after {
+    transform: scaleX(-1);
+}
+
+.title-penguin {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1.02em;
+    height: 1.02em;
+    margin-bottom: 0.06em;
+    transform-origin: 50% 100%;
+    will-change: transform;
+}
+
+/* Little shadow under their feet */
+.title-penguin::after {
+    content: "";
+    position: absolute;
+    left: 14%;
+    right: 14%;
+    bottom: -0.05em;
+    height: 0.12em;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.45), transparent);
+    z-index: -1;
+}
+
+.title-penguin .penguin-icon {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    transform-origin: 50% 100%;
+    animation: penguinIdle 3.2s ease-in-out infinite;
+}
+
+.title-penguin--right .penguin-icon {
+    transform: scaleX(-1);
+    animation-delay: -1.6s;
+}
+
+@keyframes penguinIdle {
+    50% {
+        scale: 1 1.04;
+    }
+}
+
+.title-penguin:hover .penguin-icon {
+    animation: penguinHop 520ms cubic-bezier(0.3, 0.8, 0.35, 1.2);
+}
+
+@keyframes penguinHop {
+    40% {
+        translate: 0 -0.2em;
+    }
+}
+
+/* ───── CABINET DETAILS: bubble tubes, speakers, glow, music notes ───── */
+.bubble-tube {
+    position: absolute;
+    top: var(--tube-top, 92px);
+    bottom: var(--tube-bottom, 84px);
+    z-index: 0;
+    width: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    pointer-events: none;
+    background: linear-gradient(180deg, #ff7ad9, #ffb36b 25%, #ffe680 45%, #7ee8ff 70%, #9b8cff 90%, #ff7ad9);
+    background-size: 100% 300%;
+    box-shadow: 0 0 10px rgba(255, 122, 217, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    opacity: 0.72;
+    animation: tubeFlow 9s linear infinite;
+    transition: opacity 600ms ease, box-shadow 600ms ease;
+}
+
+.bubble-tube--left {
+    left: 6px;
+}
+
+.bubble-tube--right {
+    right: 6px;
+}
+
+/* Glass highlight */
+.bubble-tube::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 1px;
+    width: 2px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.bubble-tube span {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    animation: bubbleRise 4.4s linear infinite;
+}
+
+.bubble-tube span:nth-child(2) {
+    width: 3px;
+    height: 3px;
+    animation-delay: -1.1s;
+}
+
+.bubble-tube span:nth-child(3) {
+    animation-delay: -2.3s;
+}
+
+.bubble-tube span:nth-child(4) {
+    width: 2px;
+    height: 2px;
+    animation-delay: -3.4s;
+}
+
+.bubble-tube--right span {
+    animation-delay: -0.6s;
+}
+
+.bubble-tube--right span:nth-child(2) {
+    animation-delay: -2s;
+}
+
+.bubble-tube--right span:nth-child(3) {
+    animation-delay: -2.9s;
+}
+
+.bubble-tube--right span:nth-child(4) {
+    animation-delay: -3.9s;
+}
+
+@keyframes tubeFlow {
+    to {
+        background-position: 0 300%;
+    }
+}
+
+@keyframes bubbleRise {
+    to {
+        top: -6px;
+    }
+}
+
+#jukebox-container.is-music-playing .bubble-tube {
+    opacity: 1;
+    box-shadow: 0 0 14px rgba(255, 122, 217, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    animation-duration: 4s;
+}
+
+#jukebox-container.is-music-playing .bubble-tube span {
+    animation-duration: 2.2s;
+}
+
+/* Speaker grille with two cones */
+.jukebox-speakers {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 12px 0 0;
+    padding: 7px 12px;
+    border-radius: 14px;
+    background:
+        radial-gradient(circle, rgba(0, 0, 0, 0.5) 0.9px, transparent 1.4px) 0 0 / 5px 5px,
+        linear-gradient(180deg, #202236, #181a2a);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 -2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(139, 155, 255, 0.18);
+}
+
+.speaker {
+    position: relative;
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #191a28 0 55%, #4a5078 57% 61%, #22243a 63% 100%);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08), inset 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+.speaker-cone {
+    position: absolute;
+    inset: 15%;
+    border-radius: 50%;
+    background: radial-gradient(circle, #d3d8f5 0 9%, #6d7399 11% 16%, #2c2f49 18% 58%, #3c4062 60% 64%, #1e2033 66%);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+    will-change: transform;
+    transition: box-shadow 400ms ease;
+}
+
+#jukebox-container.is-music-playing .speaker-cone {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 14px rgba(255, 138, 216, 0.35);
+}
+
+/* Glow behind the cabinet; its brightness follows the beat */
+.jukebox-glow {
+    position: absolute;
+    inset: 4% 2% 2%;
+    z-index: 0;
+    border-radius: 48px;
+    background:
+        radial-gradient(55% 45% at 50% 25%, rgba(255, 122, 217, 0.6), transparent 70%),
+        radial-gradient(55% 45% at 50% 80%, rgba(110, 231, 255, 0.5), transparent 70%);
+    filter: blur(30px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms ease;
+}
+
+/* Music notes drifting out of the speakers */
+.music-notes {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.music-note {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    margin: -7.5px 0 0 -7.5px;
+    color: var(--note-color, #ffffff);
+    opacity: 0;
+    filter: drop-shadow(0 0 4px var(--note-color, #ffffff));
+    animation: noteFloat 2.1s ease-out forwards;
+}
+
+.music-note svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+
+@keyframes noteFloat {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.5) rotate(0deg);
+    }
+
+    15% {
+        opacity: 0.8;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(var(--drift-x, 20px), -74px) scale(1) rotate(var(--drift-rotate, 15deg));
+    }
+}
+
+/* ───── 3D RECORD: thin disc with a front, a B-side and an edge ───── */
+.record-disc,
+.np-record-disc {
+    position: absolute;
+    inset: 0;
+    display: block;
+    transform-style: preserve-3d;
+    pointer-events: none;
+}
+
+.record-face,
+.np-record-face {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    pointer-events: none;
+}
+
+.record-face--front,
+.np-record-face--front {
+    transform: translateZ(1.5px);
+}
+
+.record-face--back,
+.np-record-face--back {
+    transform: rotateY(180deg) translateZ(1.5px);
+}
+
+/* The rim, seen when the disc is edge-on */
+.record-edge {
+    position: absolute;
+    left: 50%;
+    top: 2.6%;
+    width: 3px;
+    height: 97%;
+    margin-left: -1.5px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #0a0a0a, #353535 50%, #0a0a0a);
+    transform: rotate(calc(var(--record-spin, 0deg) * -1)) rotateY(90deg);
+    pointer-events: none;
+}
+
+.np-record-face::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 4%;
+    height: 4%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffffff, #9aa3b8 70%);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.np-record-label--b {
+    image-rendering: pixelated;
+    background: #ffd1f4;
+}
+
+/* ───── 3D FLIP: the cabinet has real depth while it turns ───── */
+#jukebox.flip-out,
+#jukebox.flip-in-start,
+#jukebox.flip-in {
+    transform-style: preserve-3d;
+    transform-origin: 50% 50% calc(var(--jukebox-depth) * -0.5);
+}
+
+#jukebox.flip-out::before,
+#jukebox.flip-out::after,
+#jukebox.flip-in-start::before,
+#jukebox.flip-in-start::after,
+#jukebox.flip-in::before,
+#jukebox.flip-in::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    bottom: -6px;
+    width: var(--jukebox-depth);
+    border-radius: 10px;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, #ffffff 0 3px, #8b9bff 3px 6px, transparent 6px calc(100% - 6px), #8b9bff calc(100% - 6px) calc(100% - 3px), #ffffff calc(100% - 3px)),
+        repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 9px),
+        linear-gradient(90deg, #4a55a8, #2c3266 55%, #1f2348);
+}
+
+#jukebox.flip-out::before,
+#jukebox.flip-in-start::before,
+#jukebox.flip-in::before {
+    left: -6px;
+    transform-origin: left center;
+    transform: rotateY(90deg);
+}
+
+#jukebox.flip-out::after,
+#jukebox.flip-in-start::after,
+#jukebox.flip-in::after {
+    right: -6px;
+    transform-origin: right center;
+    transform: rotateY(-90deg);
+}
+
+/* ───── SHORT WINDOWS (keyboard up, split screen): keep the layout, scroll the page ───── */
+html.viewport-short,
+html.viewport-short body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+}
+
+html.viewport-short body {
+    position: static !important;
+}
+
+html.viewport-short #jukebox-wrapper {
+    overflow: visible;
+}
+
+/* ───── RESPONSIVE SIZES FOR THE TITLE + CABINET DETAILS ───── */
+@media (max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px) {
+    h1.jukebox-title {
+        margin: 0 0 8px;
+        font-size: clamp(2.1rem, 10.5vw, 2.75rem);
+    }
+
+    #jukebox {
+        --tube-top: 64px;
+        --tube-bottom: 66px;
+        --jukebox-depth: 34px;
+    }
+
+    .bubble-tube {
+        width: 5px;
+    }
+
+    .bubble-tube--left {
+        left: 2px;
+    }
+
+    .bubble-tube--right {
+        right: 2px;
+    }
+
+    .bubble-tube::after {
+        width: 1.5px;
+    }
+}
+
+@media (max-width: 370px) {
+    h1.jukebox-title {
+        font-size: 2rem;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 1100px) and (orientation: portrait) and (pointer: coarse) {
+    h1.jukebox-title {
+        margin-bottom: 12px;
+        font-size: 3.2rem;
+    }
+
+    #jukebox {
+        --tube-top: 96px;
+        --tube-bottom: 86px;
+        --jukebox-depth: 42px;
+    }
+
+    .bubble-tube {
+        width: 7px;
+    }
+
+    .bubble-tube--left {
+        left: 5px;
+    }
+
+    .bubble-tube--right {
+        right: 5px;
+    }
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+    h1.jukebox-title {
+        margin: 0 0 clamp(4px, 1.4vh, 12px);
+        font-size: clamp(1.4rem, min(7.5vh, 4.6vw), 3rem);
+    }
+
+    #jukebox {
+        --tube-top: clamp(50px, 12vh, 90px);
+        --tube-bottom: clamp(44px, 10vh, 76px);
+        --jukebox-depth: 36px;
+    }
+
+    .bubble-tube {
+        width: 5px;
+    }
+
+    .bubble-tube--left {
+        left: 2px;
+    }
+
+    .bubble-tube--right {
+        right: 2px;
+    }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
+    h1.jukebox-title {
+        font-size: clamp(1.25rem, 8vh, 1.9rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bubble-tube,
+    .bubble-tube span,
+    .title-muse,
+    .title-penguin .penguin-icon {
+        animation: none;
+    }
+
+    .music-notes {
+        display: none;
     }
 }

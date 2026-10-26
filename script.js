@@ -360,6 +360,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const whereBackground = document.getElementById("where-background");
     const nowPlaying = document.getElementById("now-playing");
     const npRecord = document.getElementById("np-record");
+    const recordDisc = record ? record.querySelector(".record-disc") : null;
+    const npRecordDisc = npRecord ? npRecord.querySelector(".np-record-disc") : null;
+    const jukeboxContainer = document.getElementById("jukebox-container");
+    const jukeboxGlow = document.getElementById("jukebox-glow");
+    const musicNotes = document.getElementById("music-notes");
+    const speakerCones = Array.from(document.querySelectorAll(".speaker-cone"));
+    const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
     const npCover = document.getElementById("np-cover");
     const npBackdrop = document.getElementById("np-backdrop");
     const npEyebrow = document.getElementById("np-eyebrow");
@@ -789,6 +796,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let scratch = null; // the record currently held for DJ scratching
     let isSpinning = false;
     let rotationAngle = 0; // Declare rotationAngle here
+    let recordFlipAngle = 0; // 0 = A-side facing out, 180 = B-side (jukebox turned around)
+    let recordFlipFrame = null;
     let spinRequest; // Declare spinRequest here
     let whereCurrentOpacity = 0;
     let whereTargetOpacity = 0;
@@ -822,7 +831,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const visualViewportHeight = window.visualViewport && Number.isFinite(window.visualViewport.height)
             ? window.visualViewport.height
             : window.innerHeight;
-        return Math.max(320, Math.round(visualViewportHeight));
+        // An on-screen keyboard shrinks the visual viewport but not the window, so don't
+        // squash the jukebox for it (the larger of the two is the real window height)
+        return Math.max(320, Math.round(Math.max(visualViewportHeight, window.innerHeight)));
     }
 
     function prefersReducedMotion() {
@@ -854,13 +865,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         trackListScrollAnimationId += 1;
     }
 
+    function getMinimumAppHeight() {
+        if (window.matchMedia("(orientation: landscape) and (pointer: coarse)").matches) return 300;
+        return window.innerWidth > 600 ? 600 : 520;
+    }
+
     function applyMobileViewportLock() {
         if (!isAppLayoutViewport()) {
             document.documentElement.style.removeProperty("--app-height");
+            document.documentElement.classList.remove("viewport-short");
             return;
         }
 
-        document.documentElement.style.setProperty("--app-height", `${getMobileViewportHeight()}px`);
+        // When the window gets short (e.g. a keyboard is up), keep the jukebox full size
+        // and let the page scroll instead of squashing the song list to nothing
+        const viewportHeight = getMobileViewportHeight();
+        const minimumHeight = getMinimumAppHeight();
+        const isShort = viewportHeight < minimumHeight;
+        document.documentElement.classList.toggle("viewport-short", isShort);
+        document.documentElement.style.setProperty("--app-height", `${Math.max(viewportHeight, minimumHeight)}px`);
+        if (isShort) return;
 
         if (window.scrollY !== 0) {
             window.scrollTo(0, 0);
@@ -1251,7 +1275,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
 
         if (options.immediate || document.hidden) {
-            startTrack(track);
+            startTrack(track, options);
             if (!document.hidden) {
                 scrollTrackIntoViewWithinList(targetTrack, scrollOptions);
             }
@@ -1264,7 +1288,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        startTrack(track);
+        startTrack(track, options);
         scheduleMobileViewportLock();
     }
 
@@ -1327,20 +1351,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Off by default; the last choice is remembered (localStorage, with a cookie as a backup)
     function readPlaybackModePreference(key) {
         try {
-            return localStorage.getItem(key) === "true";
+            const stored = localStorage.getItem(key);
+            if (stored !== null) return stored === "true";
         } catch (error) {
-            return false;
+            // Storage blocked; fall back to the cookie
         }
+        const match = document.cookie.match(new RegExp(`(?:^|; )${key}=(true|false)`));
+        return match ? match[1] === "true" : false;
     }
 
     function savePlaybackModePreference(key, value) {
         try {
             localStorage.setItem(key, String(value));
         } catch (error) {
-            // Storage unavailable; the mode still works for this visit
+            // Storage blocked; the cookie below still remembers it
         }
+        document.cookie = `${key}=${value}; max-age=${60 * 60 * 24 * 365}; path=/; SameSite=Lax`;
     }
 
     function updatePlaybackModeButtons() {
@@ -1389,12 +1418,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updateRecordTransform() {
-        if (record) {
-            record.style.transform = `translateX(-50%) rotate(${rotationAngle}deg)`;
-        }
-        if (npRecord) {
-            npRecord.style.transform = `rotate(${rotationAngle}deg)`;
-        }
+        const transform = `perspective(900px) rotateY(${recordFlipAngle.toFixed(2)}deg) rotate(${rotationAngle.toFixed(2)}deg)`;
+        const spin = `${rotationAngle.toFixed(2)}deg`;
+        [recordDisc, npRecordDisc].forEach((disc) => {
+            if (!disc) return;
+            disc.style.transform = transform;
+            // The edge counter-rotates so it always reads as the rim when the disc is edge-on
+            disc.style.setProperty("--record-spin", spin);
+        });
     }
 
     function setRecordSeekControlsVisible(isVisible) {
@@ -1453,6 +1484,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function updateWhereBackgroundFromPlayback() {
         const hasActivePlayback = isPlayerActive();
+        if (jukeboxContainer) {
+            jukeboxContainer.classList.toggle("is-music-playing", hasActivePlayback);
+        }
         setWhereBackgroundTargetOpacity(hasActivePlayback ? 1 : 0);
         setRecordSeekControlsVisible(Boolean(currentTrackData));
         updatePlayingTrackStickyState();
@@ -1590,8 +1624,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Load a song into the shared player and start it from the beginning
-    function startTrack(track) {
+    function startTrack(track, options = {}) {
         const previousTrack = getCurrentTrackElement();
+        // Switching while a song is playing gets the record whirl (like a record changer)
+        const switchingWhilePlaying = options.flourish
+            || (isPlayerActive() && Boolean(currentTrackData) && currentTrackData.file !== track.file);
 
         if (volumeFadeInterval) {
             clearInterval(volumeFadeInterval);
@@ -1628,7 +1665,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             startSpinning();
         } else {
             moveRecordDownAndUp(() => startSpinning());
+            if (switchingWhilePlaying) {
+                spinRecordBy(720, 900);
+            }
         }
+        startBeatVisuals();
 
         // Hold the audio back until the record has dropped into place
         const startFromBeginningAfterRecordEffect = () => {
@@ -1707,12 +1748,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         player.addEventListener("loadedmetadata", () => {
             syncTime();
             updateMediaSessionPosition();
+            requestTrackTempo(currentTrackData);
         });
         player.addEventListener("timeupdate", syncTime);
         player.addEventListener("seeked", updateMediaSessionPosition);
 
         player.addEventListener("play", () => {
             if (!currentTrackData) return;
+            startBeatVisuals();
             setPlayButtonLabel(getCurrentTrackElement()?.querySelector(".play-button"), "Pause");
             if (record && record.classList.contains("up")) {
                 startSpinning();
@@ -2475,8 +2518,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         randomTrackButton.addEventListener("click", (event) => {
             event.preventDefault();
             randomTrackButton.blur();
+            const wasPlaying = isPlayerActive();
             const excludedTrack = stopCurrentPlayback();
-            playRandomVisibleTrack(excludedTrack);
+            playRandomVisibleTrack(excludedTrack, { flourish: wasPlaying });
         });
     }
 
@@ -2489,6 +2533,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const MP3_BITRATES_V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
     const MP3_BITRATES_V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
     const MP3_SAMPLE_RATES = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+    const audioFileInfo = new Map();
     let scratchAudio = null;
     let scratchSnippet = null;
     let scratchSnippetRequest = null;
@@ -2509,7 +2554,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const context = new AudioContextClass();
-        scratchAudio = { context, fallback: buildScratchFallbackSample(context), fileInfo: new Map() };
+        scratchAudio = { context, fallback: buildScratchFallbackSample(context) };
         return scratchAudio;
     }
 
@@ -2618,8 +2663,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    async function fetchScratchFileInfo(audio, file) {
-        if (audio.fileInfo.has(file)) return audio.fileInfo.get(file);
+    // Byte size + where the audio starts (after the ID3 tag), so we can ask for slices of a song
+    async function fetchAudioFileInfo(file) {
+        if (audioFileInfo.has(file)) return audioFileInfo.get(file);
 
         const response = await fetch(file, { headers: { Range: "bytes=0-9" } });
         const contentRange = response.headers.get("Content-Range") || "";
@@ -2636,7 +2682,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             audioStart = 10 + (((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F));
         }
         const info = { total, audioStart };
-        audio.fileInfo.set(file, info);
+        audioFileInfo.set(file, info);
         return info;
     }
 
@@ -2646,7 +2692,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const duration = player.duration;
         if (!audio || !Number.isFinite(duration) || duration <= 0) throw new Error("Nothing to scratch");
 
-        const info = await fetchScratchFileInfo(audio, track.file);
+        const info = await fetchAudioFileInfo(track.file);
         const bytesPerSecond = (info.total - info.audioStart) / duration;
         const startTime = Math.max(0, centerTime - SCRATCH_SNIPPET_SECONDS);
         const endTime = Math.min(duration, centerTime + SCRATCH_SNIPPET_SECONDS);
@@ -3032,6 +3078,212 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // ───── Beat visuals: speakers, penguins, glow and notes move with the music ─────
+    // Phones won't let a page measure the audio it's playing without breaking
+    // background playback, so each song's tempo is worked out from a short slice of it.
+    const DEFAULT_TEMPO = { period: 60 / 112, firstBeat: 0 };
+    const NOTE_COLORS = ["#ffd1f4", "#c7f9ff", "#fff3b0", "#d9dcff", "#ffd8b0"];
+    const NOTE_SHAPES = [
+        `<svg viewBox="0 0 24 24"><ellipse cx="9.5" cy="18" rx="4" ry="3" transform="rotate(-20 9.5 18)"/><path d="M13.2 18V3.5c1.2 3.2 6 3.8 6 9.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+        `<svg viewBox="0 0 24 24"><ellipse cx="6.5" cy="18.5" rx="3.4" ry="2.6" transform="rotate(-20 6.5 18.5)"/><ellipse cx="16.5" cy="16.5" rx="3.4" ry="2.6" transform="rotate(-20 16.5 16.5)"/><path d="M9.4 18.5V6.2l10-2.6v12.9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.4 6.2l10-2.6v3.2l-10 2.6z"/></svg>`
+    ];
+    const tempoCache = new Map();
+    const tempoRequests = new Set();
+    let beatFrame = null;
+    let beatLevel = 0;
+    let lastBeatIndex = null;
+
+    function detectTempo(buffer, sliceStart) {
+        const sampleRate = buffer.sampleRate;
+        const mono = new Float32Array(buffer.length);
+        for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+            const channelData = buffer.getChannelData(channel);
+            for (let index = 0; index < buffer.length; index += 1) {
+                mono[index] += channelData[index] / buffer.numberOfChannels;
+            }
+        }
+
+        // Low-passed energy per ~12ms hop picks out the kick and bass
+        const hop = Math.max(1, Math.round(sampleRate * 0.0116));
+        const hopSeconds = hop / sampleRate;
+        const alpha = 1 - Math.exp((-2 * Math.PI * 160) / sampleRate);
+        const frames = Math.floor(mono.length / hop);
+        const energy = new Float32Array(frames);
+        let low = 0;
+        for (let frame = 0; frame < frames; frame += 1) {
+            let sum = 0;
+            for (let index = frame * hop; index < (frame + 1) * hop; index += 1) {
+                low += alpha * (mono[index] - low);
+                sum += low * low;
+            }
+            energy[frame] = Math.sqrt(sum / hop);
+        }
+        const onset = new Float32Array(frames);
+        for (let frame = 1; frame < frames; frame += 1) {
+            onset[frame] = Math.max(0, energy[frame] - energy[frame - 1]);
+        }
+
+        // Autocorrelate for a tempo between 70 and 180 BPM, leaning towards ~120
+        const minLag = Math.round(60 / 180 / hopSeconds);
+        const maxLag = Math.min(frames - 1, Math.round(60 / 70 / hopSeconds));
+        const scores = [];
+        let bestLag = 0;
+        let bestScore = 0;
+        for (let lag = minLag; lag <= maxLag; lag += 1) {
+            let score = 0;
+            for (let frame = 0; frame + lag < frames; frame += 1) {
+                score += onset[frame] * onset[frame + lag];
+            }
+            score /= (frames - lag);
+            scores[lag] = score;
+            const bpm = 60 / (lag * hopSeconds);
+            const weighted = score * Math.exp(-0.5 * Math.pow(Math.log2(bpm / 120) / 0.7, 2));
+            if (weighted > bestScore) {
+                bestScore = weighted;
+                bestLag = lag;
+            }
+        }
+        if (!bestLag) throw new Error("No beat found");
+
+        let lag = bestLag;
+        const before = scores[bestLag - 1];
+        const after = scores[bestLag + 1];
+        if (before !== undefined && after !== undefined) {
+            const curve = before - (2 * scores[bestLag]) + after;
+            if (curve !== 0) lag += (0.5 * (before - after)) / curve;
+        }
+
+        // Find where the beats land within the slice
+        let bestOffset = 0;
+        let bestSum = -1;
+        for (let offset = 0; offset < Math.ceil(lag); offset += 1) {
+            let sum = 0;
+            for (let position = offset; position < frames; position += lag) {
+                sum += onset[Math.round(position)] || 0;
+            }
+            if (sum > bestSum) {
+                bestSum = sum;
+                bestOffset = offset;
+            }
+        }
+
+        return { period: lag * hopSeconds, firstBeat: sliceStart + (bestOffset * hopSeconds) };
+    }
+
+    async function analyzeTrackTempo(track, duration) {
+        const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!OfflineContext) throw new Error("No offline audio");
+
+        const info = await fetchAudioFileInfo(track.file);
+        const bytesPerSecond = (info.total - info.audioStart) / duration;
+        const sliceLength = Math.min(10, duration);
+        const startTime = Math.max(0, Math.min(duration * 0.3, duration - sliceLength));
+        const startByte = info.audioStart + Math.floor(startTime * bytesPerSecond);
+        const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil((startTime + sliceLength) * bytesPerSecond));
+
+        const response = await fetch(track.file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
+        if (response.status !== 206) {
+            if (response.body) response.body.cancel();
+            throw new Error("Range requests not supported");
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const frameStart = findMp3FrameStart(bytes);
+        const decoded = await decodeAudio(new OfflineContext(1, 1, 22050), bytes.slice(frameStart).buffer);
+        return detectTempo(decoded, startTime + (frameStart / bytesPerSecond));
+    }
+
+    function requestTrackTempo(track) {
+        if (!track || document.hidden || tempoCache.has(track.file) || tempoRequests.has(track.file)) return;
+        const duration = player.duration;
+        if (!Number.isFinite(duration) || duration < 4) return;
+
+        tempoRequests.add(track.file);
+        analyzeTrackTempo(track, duration)
+            .then((tempo) => tempoCache.set(track.file, tempo))
+            .catch(() => tempoCache.set(track.file, null))
+            .finally(() => tempoRequests.delete(track.file));
+    }
+
+    function spawnMusicNote(source, direction) {
+        if (!musicNotes || !jukeboxContainer || !source) return;
+        const rect = source.getBoundingClientRect();
+        if (!rect.width) return;
+
+        const containerRect = jukeboxContainer.getBoundingClientRect();
+        const note = document.createElement("span");
+        note.className = "music-note";
+        note.innerHTML = NOTE_SHAPES[Math.floor(Math.random() * NOTE_SHAPES.length)];
+        note.style.left = `${(rect.left + (rect.width / 2) - containerRect.left).toFixed(1)}px`;
+        note.style.top = `${(rect.top + (rect.height * 0.35) - containerRect.top).toFixed(1)}px`;
+        note.style.setProperty("--note-color", NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]);
+        note.style.setProperty("--drift-x", `${(direction * (14 + (Math.random() * 34))).toFixed(1)}px`);
+        note.style.setProperty("--drift-rotate", `${(direction * (8 + (Math.random() * 22))).toFixed(1)}deg`);
+        musicNotes.appendChild(note);
+        setTimeout(() => note.remove(), 2200);
+    }
+
+    function onBeat(beatIndex) {
+        if (document.hidden) return;
+        if (beatIndex % 2 === 0 && Math.random() < 0.75) {
+            const fromLeft = Math.random() < 0.5;
+            spawnMusicNote(speakerCones[fromLeft ? 0 : 1], fromLeft ? -1 : 1);
+        }
+        if (beatIndex % 8 === 4 && record && record.classList.contains("up") && Math.random() < 0.6) {
+            spawnMusicNote(record, Math.random() < 0.5 ? -1 : 1);
+        }
+    }
+
+    function applyBeatLevel(level, beatIndex) {
+        speakerCones.forEach((cone) => {
+            cone.style.transform = `scale(${(1 + (level * 0.13)).toFixed(3)})`;
+        });
+        const sway = beatIndex === null ? 0 : (beatIndex % 2 === 0 ? 1 : -1);
+        titlePenguins.forEach((penguin, index) => {
+            const facing = index === 0 ? 1 : -1;
+            penguin.style.transform = `translateY(${(-level * 5).toFixed(2)}px) rotate(${(sway * facing * level * 7).toFixed(2)}deg)`;
+        });
+        if (jukeboxGlow) {
+            jukeboxGlow.style.opacity = isPlayerActive() ? (0.22 + (level * 0.45)).toFixed(3) : "0";
+        }
+    }
+
+    function stepBeatVisuals() {
+        const playing = isPlayerActive() && Boolean(currentTrackData) && !document.hidden;
+        let level = 0;
+        let beatIndex = null;
+
+        if (playing) {
+            const tempo = tempoCache.get(currentTrackData.file) || DEFAULT_TEMPO;
+            const time = scratch ? scratch.targetTime : player.currentTime;
+            const beats = (time - tempo.firstBeat) / tempo.period;
+            beatIndex = Math.floor(beats);
+            const phase = beats - beatIndex;
+            const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
+            level = Math.exp(-(phase * tempo.period) / 0.12) * accent;
+            if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
+                onBeat(beatIndex);
+            }
+            lastBeatIndex = beatIndex;
+        } else {
+            lastBeatIndex = null;
+        }
+
+        beatLevel = playing ? level : beatLevel * 0.82;
+        applyBeatLevel(beatLevel, beatIndex);
+
+        if (playing || beatLevel > 0.01) {
+            beatFrame = requestAnimationFrame(stepBeatVisuals);
+        } else {
+            applyBeatLevel(0, null);
+            beatFrame = null;
+        }
+    }
+
+    function startBeatVisuals() {
+        if (beatFrame !== null || prefersReducedMotion()) return;
+        beatFrame = requestAnimationFrame(stepBeatVisuals);
+    }
+
     // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
     const RAIL_RING_LENGTH = 2 * Math.PI * 20;
     const RAIL_MIN_INSET = 50;
@@ -3183,12 +3435,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (prefersReducedMotion()) {
             setJukeboxSide(showBack);
+            recordFlipAngle = showBack ? 180 : 0;
+            updateRecordTransform();
             focusOtherSide();
             return;
         }
 
-        // The record whirls along with the flip, in the direction the jukebox turns
-        showOffRecordSpin(showBack ? 720 : -720, 900);
+        // The record flips over along with the jukebox (its B-side shows while the back is out)
+        flipRecords(showBack);
 
         isJukeboxFlipping = true;
         jukeboxPanel.classList.add("flip-out");
@@ -3205,6 +3459,53 @@ document.addEventListener("DOMContentLoaded", async () => {
                 focusOtherSide();
             }, 340);
         }, 210);
+    }
+
+    function flipRecords(showBack) {
+        const wasUp = record ? record.classList.contains("up") : true;
+        if (!wasUp) {
+            record.classList.add("up");
+        }
+
+        const startAngle = recordFlipAngle;
+        // Always turn the same way the jukebox does
+        const targetAngle = showBack ? 180 : (startAngle > 90 ? 360 : 0);
+        const halfTurn = (targetAngle - startAngle) / 2;
+        // Same timing as the cabinet: speed up to edge-on, then settle with a little overshoot
+        const turnInMs = 210;
+        const turnOutMs = 340;
+        let startTime = null;
+        cancelAnimationFrame(recordFlipFrame);
+
+        const step = (timestamp) => {
+            if (startTime === null) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            if (elapsed < turnInMs) {
+                const progress = elapsed / turnInMs;
+                recordFlipAngle = startAngle + (halfTurn * progress * progress * progress);
+            } else {
+                const progress = Math.min(1, (elapsed - turnInMs) / turnOutMs) - 1;
+                const settle = 1 + (2.2 * progress * progress * progress) + (1.2 * progress * progress);
+                recordFlipAngle = startAngle + halfTurn + (halfTurn * settle);
+            }
+            updateRecordTransform();
+            if (elapsed < turnInMs + turnOutMs) {
+                recordFlipFrame = requestAnimationFrame(step);
+            } else {
+                recordFlipAngle = targetAngle % 360;
+                updateRecordTransform();
+                recordFlipFrame = null;
+            }
+        };
+        recordFlipFrame = requestAnimationFrame(step);
+
+        if (!wasUp) {
+            setTimeout(() => {
+                if (!currentTrackData) {
+                    record.classList.remove("up");
+                }
+            }, turnInMs + turnOutMs + 500);
+        }
     }
 
     function setUpJukeboxBack() {
@@ -3275,6 +3576,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             scheduleMobileViewportLock();
             // Songs may have advanced while the screen was off
             updateWhereBackgroundFromPlayback();
+            requestTrackTempo(currentTrackData);
+            startBeatVisuals();
             const currentTrack = getCurrentTrackElement();
             if (currentTrack) {
                 scrollTrackIntoViewWithinList(currentTrack, { behavior: "auto", margin: 8 });
