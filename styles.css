@@ -4373,7 +4373,7 @@ h1.jukebox-title {
 .title-muse {
     display: block;
     padding: 0 0.14em 0.06em;
-    margin-bottom: -0.16em;
+    margin-bottom: -0.07em;
     font-family: "Pacifico", "Brush Script MT", cursive;
     font-size: 1em;
     line-height: 1.12;
@@ -4473,6 +4473,51 @@ h1.jukebox-title {
 @keyframes penguinHop {
     40% {
         translate: 0 -0.2em;
+    }
+}
+
+/* Marquee lights from the penguins out to the cabinet's edges: a glint sweeps in towards the
+   title, and they flash with the beat (script.js sets --lights-level) */
+.title-lights {
+    --bulbs: radial-gradient(circle, #fffbe8 0 0.035em, #ffd56b 0.055em, rgba(255, 213, 107, 0.45) 0.075em, transparent 0.13em);
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 3.6em;
+    height: 0.3em;
+    align-self: flex-end;
+    margin-bottom: 0.02em;
+    background: radial-gradient(circle, rgba(255, 226, 160, 0.3) 0 0.045em, transparent 0.065em) center / 0.3em 100% space no-repeat;
+}
+
+.title-lights::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--bulbs) center / 0.3em 100% space no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 38%, #000 62%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 38%, #000 62%, transparent 100%);
+    -webkit-mask-size: 260% 100%;
+    mask-size: 260% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: var(--lights-level, 0.6);
+    animation: marqueeSweep 2.6s linear infinite;
+}
+
+.title-lights--right::after {
+    animation-direction: reverse;
+}
+
+@keyframes marqueeSweep {
+    from {
+        -webkit-mask-position: 100% 0;
+        mask-position: 100% 0;
+    }
+
+    to {
+        -webkit-mask-position: 0% 0;
+        mask-position: 0% 0;
     }
 }
 
@@ -4930,7 +4975,8 @@ html.viewport-short #jukebox-wrapper {
     .bubble-tube,
     .bubble-tube span,
     .title-muse,
-    .title-penguin .penguin-icon {
+    .title-penguin .penguin-icon,
+    .title-lights::after {
         animation: none;
     }
 

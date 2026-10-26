@@ -368,6 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const speakerCones = Array.from(document.querySelectorAll(".speaker-cone"));
     const eqBars = Array.from(document.querySelectorAll(".speaker-eq span"));
     const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
+    const titleLights = Array.from(document.querySelectorAll(".title-lights"));
     const npCover = document.getElementById("np-cover");
     const npBackdrop = document.getElementById("np-backdrop");
     const npEyebrow = document.getElementById("np-eyebrow");
@@ -3398,6 +3399,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (jukeboxGlow) {
             jukeboxGlow.style.opacity = isPlayerActive() ? (0.22 + (level * 0.45)).toFixed(3) : "0";
         }
+        titleLights.forEach((lights) => {
+            lights.style.setProperty("--lights-level", (0.6 + (level * 0.4)).toFixed(3));
+        });
     }
 
     function stepBeatVisuals() {
