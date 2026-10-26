@@ -470,40 +470,26 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
-/* Frog Quest blinkie, stuck on the jukebox's back panel like a sticker */
+/* Frog Quest blinkie on the jukebox's back panel, small and plain at its own size */
 .frogquest-link {
     flex: 0 0 auto;
     align-self: center;
-    max-width: 86%;
-    margin: 2px 0;
-    padding: 4px;
-    box-sizing: border-box;
-    border-radius: 6px;
-    background: #f4f1ff;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
     line-height: 0;
-    transform: rotate(-2deg);
-    transition: transform 220ms cubic-bezier(0.34, 1.5, 0.64, 1);
 }
 
 .frogquest-gif {
     display: block;
-    width: 300px; /* 2x, kept pixel-sharp */
     max-width: 100%;
     height: auto;
-    border-radius: 2px;
     image-rendering: pixelated;
 }
 
 .frogquest-link:focus-visible {
     outline: 2px solid #d6e6ff;
     outline-offset: 3px;
-}
-
-@media (hover: hover) {
-    .frogquest-link:hover {
-        transform: rotate(0deg) scale(1.04);
-    }
 }
 
 .track {
