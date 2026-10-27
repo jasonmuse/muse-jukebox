@@ -241,6 +241,8 @@
         let pointerPoint = null;
         let lookOverride = null;
         let lastLook = { x: 0, y: 0 };
+        let boardDirty = false;
+        let boardDrawTimer = null;
 
         // The tools live above everything else on the page, so the panel's edges never cut them off
         document.body.appendChild(tool);
@@ -703,6 +705,14 @@
             drawCore();
         }
 
+        function drawBoardIfDirty() {
+            clearTimeout(boardDrawTimer);
+            boardDrawTimer = null;
+            if (!boardDirty) return;
+            boardDirty = false;
+            drawBoard();
+        }
+
         function handleResize() {
             const width = Math.round(root.clientWidth);
             const height = Math.round(root.clientHeight);
@@ -712,7 +722,14 @@
             internals.setAttribute("viewBox", `0 0 ${width} ${height}`);
             internals.setAttribute("width", width);
             internals.setAttribute("height", height);
-            drawBoard();
+            // While the back is out of sight the board waits for a quiet moment, so it's ready
+            // before the jukebox turns around instead of being drawn in the middle of the turn
+            boardDirty = true;
+            if (window.getComputedStyle(root).visibility !== "hidden") {
+                drawBoardIfDirty();
+            } else if (boardDrawTimer === null) {
+                boardDrawTimer = setTimeout(drawBoardIfDirty, 700);
+            }
 
             if (game) {
                 const bounds = getBounds();
@@ -1709,7 +1726,7 @@
         reset();
         handleResize();
         scheduleBlink();
-        window.jukebot = { reset };
+        window.jukebot = { reset, prepare: drawBoardIfDirty };
     }
 
     if (document.readyState === "loading") {

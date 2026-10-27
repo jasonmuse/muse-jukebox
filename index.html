@@ -98,12 +98,15 @@
         <div class="music-notes" id="music-notes" aria-hidden="true"></div>
         <!-- Soft glow behind the cabinet that pulses with the beat -->
         <div class="jukebox-glow" id="jukebox-glow" aria-hidden="true"></div>
-        <!-- Record: a thin 3D disc (front, B-side and edge) so it can flip with the jukebox -->
+        <!-- Record: a thin 3D disc (front, B-side and edge) so it can flip with the jukebox.
+             The outer layer turns it over, the disc inside spins. -->
         <div class="record" role="img" aria-label="Record" title="Tap to play or pause, drag to scratch">
-            <div class="record-disc">
-                <img class="record-face record-face--front" src="images/record.png" alt="">
-                <img class="record-face record-face--back" src="images/record.png" alt="">
-                <span class="record-edge" aria-hidden="true"></span>
+            <div class="record-turn">
+                <div class="record-disc">
+                    <img class="record-face record-face--front" src="images/record.png" alt="">
+                    <img class="record-face record-face--back" src="images/record.png" alt="">
+                    <span class="record-edge" aria-hidden="true"></span>
+                </div>
             </div>
         </div>
         <div id="record-seek-controls" class="record-seek-controls" aria-hidden="true">
@@ -135,16 +138,18 @@
             <div class="np-stage">
                 <div class="np-turntable">
                     <button id="np-record" class="np-record" type="button" aria-label="Play or pause (drag to scratch)" title="Tap to play or pause, drag to scratch">
-                        <span class="np-record-disc">
-                            <span class="np-record-face np-record-face--front">
-                                <img class="np-record-vinyl" src="images/record.png" alt="">
-                                <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
+                        <span class="record-turn">
+                            <span class="np-record-disc">
+                                <span class="np-record-face np-record-face--front">
+                                    <img class="np-record-vinyl" src="images/record.png" alt="">
+                                    <img id="np-cover" class="np-record-label" src="images/penguin.gif" alt="">
+                                </span>
+                                <span class="np-record-face np-record-face--back">
+                                    <img class="np-record-vinyl" src="images/record.png" alt="">
+                                    <img class="np-record-label np-record-label--b" src="images/penguin.gif" alt="">
+                                </span>
+                                <span class="record-edge" aria-hidden="true"></span>
                             </span>
-                            <span class="np-record-face np-record-face--back">
-                                <img class="np-record-vinyl" src="images/record.png" alt="">
-                                <img class="np-record-label np-record-label--b" src="images/penguin.gif" alt="">
-                            </span>
-                            <span class="record-edge" aria-hidden="true"></span>
                         </span>
                     </button>
                     <span class="np-tonearm" aria-hidden="true"><span class="np-tonearm-head"></span></span>

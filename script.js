@@ -362,6 +362,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const npRecord = document.getElementById("np-record");
     const recordDisc = record ? record.querySelector(".record-disc") : null;
     const npRecordDisc = npRecord ? npRecord.querySelector(".np-record-disc") : null;
+    const recordTurns = Array.from(document.querySelectorAll(".record-turn"));
     const jukeboxContainer = document.getElementById("jukebox-container");
     const jukeboxGlow = document.getElementById("jukebox-glow");
     const musicNotes = document.getElementById("music-notes");
@@ -404,6 +405,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Browsers paint their toolbars and side strips (like Safari's on the Duo) in the page's theme
     // colour, so it follows the backdrop: purple with the gradient, the space gif's night sky with it
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    const edgeBlend = document.querySelector(".edge-blend");
     const IDLE_BACKDROP_RGB = [30, 26, 77]; // #1e1a4d
     const SPACE_BACKDROP_RGB = [1, 5, 15]; // the sky in images/where.gif
     let backdropHex = "";
@@ -820,7 +822,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     let isSpinning = false;
     let rotationAngle = 0; // Declare rotationAngle here
     let recordFlipAngle = 0; // 0 = A-side facing out, 180 = B-side (jukebox turned around)
-    let recordFlipFrame = null;
     let spinRequest; // Declare spinRequest here
     let whereCurrentOpacity = 0;
     let whereTargetOpacity = 0;
@@ -1118,6 +1119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function syncPlayingTrackStickPosition() {
+        if (deferWhileFrontHidden()) return;
         trackList.querySelectorAll(".track-playing-stick-top, .track-playing-stick-bottom").forEach((trackElement) => {
             trackElement.classList.remove("track-playing-stick-top", "track-playing-stick-bottom");
         });
@@ -1471,24 +1473,51 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (hex === backdropHex) return;
         backdropHex = hex;
 
-        const rootStyle = document.documentElement.style;
-        rootStyle.setProperty("--backdrop-color", hex);
-        // Once the strips match the sky there's no seam to hide, so the stars can reach the edges
-        rootStyle.setProperty("--edge-blur", `${Math.round(40 - (26 * spaceOpacity))}px`);
-        rootStyle.setProperty("--edge-spread", `${Math.round(14 - (13 * spaceOpacity))}px`);
+        // Set straight on the few things that use it: a variable on the root would restyle the
+        // whole page at every step of the fade
+        document.documentElement.style.backgroundColor = hex;
+        document.body.style.backgroundColor = hex;
+        if (edgeBlend) {
+            // Once the strips match the sky there's no seam to hide, so the stars can reach the edges
+            const blur = Math.round(40 - (26 * spaceOpacity));
+            const spread = Math.round(14 - (13 * spaceOpacity));
+            edgeBlend.style.boxShadow = `inset 0 0 ${blur}px ${spread}px ${hex}`;
+        }
         if (themeColorMeta) {
             themeColorMeta.setAttribute("content", hex);
         }
     }
 
     function updateRecordTransform() {
-        const transform = `perspective(900px) rotateY(${recordFlipAngle.toFixed(2)}deg) rotate(${rotationAngle.toFixed(2)}deg)`;
         const spin = `${rotationAngle.toFixed(2)}deg`;
         [recordDisc, npRecordDisc].forEach((disc) => {
             if (!disc) return;
-            disc.style.transform = transform;
+            disc.style.transform = `rotate(${spin})`;
             // The edge counter-rotates so it always reads as the rim when the disc is edge-on
             disc.style.setProperty("--record-spin", spin);
+        });
+    }
+
+    function getRecordTurnTransform(angle) {
+        return `perspective(900px) rotateY(${angle}deg)`;
+    }
+
+    // Turns the records over (the spin carries on inside). Animated on the compositor so a busy
+    // main thread can't make the turn stutter.
+    function turnRecords(toAngle, durationMs, easing) {
+        const fromAngle = recordFlipAngle;
+        recordFlipAngle = toAngle % 360;
+        recordTurns.forEach((turn) => {
+            if (turn.getAnimations) {
+                turn.getAnimations().forEach((animation) => animation.cancel());
+            }
+            turn.style.transform = getRecordTurnTransform(recordFlipAngle);
+            if (durationMs > 0 && typeof turn.animate === "function") {
+                turn.animate([
+                    { transform: getRecordTurnTransform(fromAngle) },
+                    { transform: getRecordTurnTransform(toAngle) }
+                ], { duration: durationMs, easing });
+            }
         });
     }
 
@@ -1923,6 +1952,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (timeDisplay) {
                 timeDisplay.classList.remove("loading");
                 timeDisplay.classList.add("ready", "visible");
+                shownTimes.delete(timeDisplay);
                 timeDisplay.textContent = "unavailable";
             }
             setPlayButtonLabel(trackElement?.querySelector(".play-button"), "Play");
@@ -2039,11 +2069,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!npSeekDragging) {
             const position = currentTrackData ? player.currentTime : 0;
             npSeek.value = duration ? Math.round((position / duration) * 1000) : 0;
-            if (npElapsed) npElapsed.textContent = formatTime(position);
+            if (npElapsed) setTextIfChanged(npElapsed, formatTime(position));
         }
         npSeek.style.setProperty("--progress", `${npSeek.value / 10}%`);
         npSeek.disabled = !duration;
-        if (npDuration) npDuration.textContent = duration ? formatTime(duration) : "--:--";
+        if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration) : "--:--");
     }
 
     function setUpNowPlayingControls() {
@@ -2077,6 +2107,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let accelerationRequest; // New variable to track acceleration frame
 
+    // Spin speeds are degrees per 60th of a second. Each frame moves the record by the time that
+    // actually passed, so it turns at the same pace on 120 Hz screens and when frames get dropped
+    // (a busy moment, like the jukebox turning around, used to make it slow down)
+    function getSpinSteps(timestamp, lastTimestamp) {
+        if (lastTimestamp === null) return 1;
+        return Math.min(6, Math.max(0, (timestamp - lastTimestamp) / (1000 / 60)));
+    }
+
     // Modify startSpinning to implement smooth acceleration (like a record starting)
     function startSpinning() {
         if (isSpinning) return;
@@ -2084,16 +2122,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         let currentSpeed = currentRotationSpeed || 0; // Start from current speed (might be decelerating)
         const targetSpeed = 0.5;
         const accelerationRate = 0.008; // More subtle acceleration
+        let lastTimestamp = null;
 
-        function accelerate() {
+        function accelerate(timestamp = performance.now()) {
             if (isSpinning) {
+                const steps = getSpinSteps(timestamp, lastTimestamp);
+                lastTimestamp = timestamp;
                 // Gradually accelerate to target speed
                 if (currentSpeed < targetSpeed) {
-                    currentSpeed = Math.min(currentSpeed + accelerationRate, targetSpeed);
+                    currentSpeed = Math.min(currentSpeed + (accelerationRate * steps), targetSpeed);
                 }
                 
                 if (!scratch) {
-                    rotationAngle = (rotationAngle + currentSpeed) % 360;
+                    rotationAngle = (rotationAngle + (currentSpeed * steps)) % 360;
                     updateRecordTransform();
                 }
                 currentRotationSpeed = currentSpeed; // Update tracked speed
@@ -2193,14 +2234,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     function stopSpinning() {
         isSpinning = false;
         let deceleration = currentRotationSpeed || 0.5; // Start from current speed
+        let lastTimestamp = null;
 
-        function decelerate() {
+        function decelerate(timestamp = performance.now()) {
             if (deceleration > 0) {
+                const steps = getSpinSteps(timestamp, lastTimestamp);
+                lastTimestamp = timestamp;
                 if (!scratch) {
-                    rotationAngle = (rotationAngle + deceleration) % 360;
+                    rotationAngle = (rotationAngle + (deceleration * steps)) % 360;
                     updateRecordTransform();
                 }
-                deceleration -= 0.015; // More subtle deceleration
+                deceleration -= 0.015 * steps; // More subtle deceleration
                 currentRotationSpeed = deceleration;
 
                 // Continue decelerating until the speed reaches zero
@@ -2287,7 +2331,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 250);
     }
 
+    // What each time display last showed, so the 4-times-a-second updates only touch the page
+    // when the shown time actually changes
+    const shownTimes = new WeakMap();
+
+    function setTextIfChanged(element, text) {
+        if (element.textContent !== text) element.textContent = text;
+    }
+
     function setTimeDisplayLoading(timeDisplay) {
+        shownTimes.delete(timeDisplay);
         timeDisplay.classList.remove("ready", "ready-fade");
         timeDisplay.classList.add("loading");
         timeDisplay.textContent = "loading";
@@ -2304,7 +2357,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const wasLoading = timeDisplay.classList.contains("loading");
         const formattedCurrentTime = formatTime(currentTime);
         const formattedDuration = formatTime(audio.duration);
-        timeDisplay.innerHTML = `${formattedCurrentTime}<span class="time-total"> / ${formattedDuration}</span>`;
+        const html = `${formattedCurrentTime}<span class="time-total"> / ${formattedDuration}</span>`;
+        if (shownTimes.get(timeDisplay) !== html) {
+            timeDisplay.innerHTML = html;
+            shownTimes.set(timeDisplay, html);
+        }
         timeDisplay.classList.remove("loading");
         timeDisplay.classList.add("ready");
         if (wasLoading) {
@@ -2313,6 +2370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function resetTimeDisplay(timeDisplay) {
+        shownTimes.delete(timeDisplay);
         timeDisplay.classList.remove("loading", "ready", "ready-fade");
         timeDisplay.innerHTML = '0:00<span class="time-total"> / --:--</span>';
     }
@@ -2356,6 +2414,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function syncTitleMarquees() {
+        if (deferWhileFrontHidden()) return;
         trackList.querySelectorAll(".title").forEach((titleElement) => {
             const titleContent = titleElement.querySelector(".title-scroll-content");
             if (!titleContent) return;
@@ -2376,6 +2435,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function syncTagMarquees() {
+        if (deferWhileFrontHidden()) return;
         trackList.querySelectorAll(".tags").forEach((tagsElement) => {
             const tagsContent = tagsElement.querySelector(".tags-scroll-content");
             if (!tagsContent) return;
@@ -4155,29 +4215,56 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── Back of the jukebox: flip animation (the Jukebot game lives in jukebot.js) ─────
+    // Both sides stay laid out (the back lies over the front), so turning around only changes which
+    // one shows. The turn itself is a CSS animation: speed up to edge-on, swap sides, settle.
+    const FLIP_OUT_MS = 210;
+    const FLIP_IN_MS = 340;
+    const FLIP_OUT_EASING = "cubic-bezier(0.55, 0, 0.8, 0.3)";
+    const FLIP_IN_EASING = "cubic-bezier(0.2, 0.9, 0.3, 1.12)";
     let isJukeboxFlipping = false;
+    let frontSyncPending = false;
+
+    // While the back is out the song list isn't rendered, so anything that measures it waits
+    function isFrontHidden() {
+        return jukeboxPanel.classList.contains("is-flipped") && !jukeboxPanel.classList.contains("is-turning");
+    }
+
+    function deferWhileFrontHidden() {
+        if (!jukeboxPanel || !isFrontHidden()) return false;
+        frontSyncPending = true;
+        return true;
+    }
+
+    function syncFrontAfterFlip() {
+        if (!frontSyncPending) return;
+        frontSyncPending = false;
+        syncAllTrackCoverHeights();
+        syncMarquees();
+        syncPlayingTrackStickPosition();
+    }
 
     function setJukeboxSide(showBack) {
-        if (showBack) {
-            // The desktop layout sizes to its content, so keep the back as tall as the front
-            if (!isAppLayoutViewport()) {
-                jukeboxPanel.style.height = window.getComputedStyle(jukeboxPanel).height;
-            }
-        } else {
-            jukeboxPanel.style.height = "";
+        jukeboxPanel.classList.toggle("is-flipped", showBack);
+        if (!showBack) {
             if (window.jukebot) {
                 window.jukebot.reset();
             }
+            syncFrontAfterFlip();
         }
+    }
 
-        jukeboxPanel.classList.toggle("is-flipped", showBack);
-
-        if (!showBack) {
-            requestAnimationFrame(() => {
-                syncMarquees();
-                syncPlayingTrackStickPosition();
-            });
-        }
+    // Calls back when the panel's turn animation ends (or a good while after it should have, in
+    // case the browser skips animation events, e.g. in a background tab)
+    function whenJukeboxTurnEnds(animationName, durationMs, callback) {
+        let fallback = null;
+        const finish = (event) => {
+            if (event && (event.target !== jukeboxPanel || event.animationName !== animationName)) return;
+            jukeboxPanel.removeEventListener("animationend", finish);
+            clearTimeout(fallback);
+            callback();
+        };
+        jukeboxPanel.addEventListener("animationend", finish);
+        fallback = setTimeout(finish, durationMs + 1000);
     }
 
     function flipJukebox(showBack) {
@@ -4188,79 +4275,58 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (target) target.focus({ preventScroll: true });
         };
 
+        // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
+        if (showBack && window.jukebot) {
+            window.jukebot.prepare();
+        }
+
         if (prefersReducedMotion()) {
             setJukeboxSide(showBack);
-            recordFlipAngle = showBack ? 180 : 0;
-            updateRecordTransform();
+            turnRecords(showBack ? 180 : 0, 0);
             focusOtherSide();
             return;
         }
 
         // The record flips over along with the jukebox (its B-side shows while the back is out)
-        flipRecords(showBack);
+        const dropRecordAfterFlip = liftRecordForFlip();
+        const recordTarget = showBack ? 180 : (recordFlipAngle > 90 ? 360 : 0);
+        turnRecords((recordFlipAngle + recordTarget) / 2, FLIP_OUT_MS, FLIP_OUT_EASING);
 
         isJukeboxFlipping = true;
-        jukeboxPanel.classList.add("flip-out");
-        setTimeout(() => {
-            setJukeboxSide(showBack);
-            jukeboxPanel.classList.remove("flip-out");
-            jukeboxPanel.classList.add("flip-in-start");
-            void jukeboxPanel.offsetWidth;
-            jukeboxPanel.classList.remove("flip-in-start");
-            jukeboxPanel.classList.add("flip-in");
-            setTimeout(() => {
-                jukeboxPanel.classList.remove("flip-in");
+        jukeboxPanel.classList.remove("powered-up");
+        jukeboxPanel.classList.add("is-flipping", "flip-out");
+        // A frame into the turn (so it starts straight away), draw the side that's coming round,
+        // still hidden, so it's ready by the time the jukebox is edge-on
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (isJukeboxFlipping) jukeboxPanel.classList.add("is-turning");
+        }));
+        whenJukeboxTurnEnds("jukeboxTurnAway", FLIP_OUT_MS, () => {
+            // Edge-on: swap sides, then the cabinet and the record turn the rest of the way together
+            jukeboxPanel.classList.add("is-turning");
+            jukeboxPanel.classList.toggle("is-flipped", showBack);
+            jukeboxPanel.classList.replace("flip-out", "flip-in");
+            turnRecords(recordTarget, FLIP_IN_MS, FLIP_IN_EASING);
+            whenJukeboxTurnEnds("jukeboxTurnBack", FLIP_IN_MS, () => {
+                jukeboxPanel.classList.remove("is-flipping", "flip-in", "is-turning");
+                setJukeboxSide(showBack);
                 isJukeboxFlipping = false;
+                dropRecordAfterFlip();
                 focusOtherSide();
-            }, 340);
-        }, 210);
+            });
+        });
     }
 
-    function flipRecords(showBack) {
-        const wasUp = record ? record.classList.contains("up") : true;
-        if (!wasUp) {
-            record.classList.add("up");
-        }
-
-        const startAngle = recordFlipAngle;
-        // Always turn the same way the jukebox does
-        const targetAngle = showBack ? 180 : (startAngle > 90 ? 360 : 0);
-        const halfTurn = (targetAngle - startAngle) / 2;
-        // Same timing as the cabinet: speed up to edge-on, then settle with a little overshoot
-        const turnInMs = 210;
-        const turnOutMs = 340;
-        let startTime = null;
-        cancelAnimationFrame(recordFlipFrame);
-
-        const step = (timestamp) => {
-            if (startTime === null) startTime = timestamp;
-            const elapsed = timestamp - startTime;
-            if (elapsed < turnInMs) {
-                const progress = elapsed / turnInMs;
-                recordFlipAngle = startAngle + (halfTurn * progress * progress * progress);
-            } else {
-                const progress = Math.min(1, (elapsed - turnInMs) / turnOutMs) - 1;
-                const settle = 1 + (2.2 * progress * progress * progress) + (1.2 * progress * progress);
-                recordFlipAngle = startAngle + halfTurn + (halfTurn * settle);
-            }
-            updateRecordTransform();
-            if (elapsed < turnInMs + turnOutMs) {
-                recordFlipFrame = requestAnimationFrame(step);
-            } else {
-                recordFlipAngle = targetAngle % 360;
-                updateRecordTransform();
-                recordFlipFrame = null;
-            }
-        };
-        recordFlipFrame = requestAnimationFrame(step);
-
-        if (!wasUp) {
+    // A record that's down pops up so you can see it flip, and drops again afterwards
+    function liftRecordForFlip() {
+        if (!record || record.classList.contains("up")) return () => {};
+        record.classList.add("up");
+        return () => {
             setTimeout(() => {
                 if (!currentTrackData) {
                     record.classList.remove("up");
                 }
-            }, turnInMs + turnOutMs + 500);
-        }
+            }, 500);
+        };
     }
 
     function setUpJukeboxBack() {

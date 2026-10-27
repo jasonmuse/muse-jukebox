@@ -2410,20 +2410,34 @@ html {
     }
 }
 
-/* ───── FLIP ANIMATION ───── */
+/* ───── FLIP ANIMATION ─────
+   Keyframe animations run on the compositor, so the turn stays smooth while the page swaps sides */
 #jukebox.flip-out {
-    transform: perspective(1400px) rotateY(90deg);
-    transition: transform 210ms cubic-bezier(0.55, 0, 0.8, 0.3);
-}
-
-#jukebox.flip-in-start {
-    transform: perspective(1400px) rotateY(-90deg);
-    transition: none;
+    animation: jukeboxTurnAway 210ms cubic-bezier(0.55, 0, 0.8, 0.3) forwards;
 }
 
 #jukebox.flip-in {
-    transform: perspective(1400px) rotateY(0deg);
-    transition: transform 340ms cubic-bezier(0.2, 0.9, 0.3, 1.12);
+    animation: jukeboxTurnBack 340ms cubic-bezier(0.2, 0.9, 0.3, 1.12);
+}
+
+@keyframes jukeboxTurnAway {
+    from {
+        transform: perspective(1400px) rotateY(0deg);
+    }
+
+    to {
+        transform: perspective(1400px) rotateY(90deg);
+    }
+}
+
+@keyframes jukeboxTurnBack {
+    from {
+        transform: perspective(1400px) rotateY(-90deg);
+    }
+
+    to {
+        transform: perspective(1400px) rotateY(0deg);
+    }
 }
 
 #jukebox.powered-up {
@@ -2436,27 +2450,75 @@ html {
     }
 }
 
-/* ───── BACK OF THE JUKEBOX ───── */
+/* ───── BACK OF THE JUKEBOX ─────
+   The back lies over the front and both stay laid out, so turning around only changes which side
+   shows: the song list never has to be rebuilt mid-turn. The back has the cabinet's own face, so
+   it hides the front completely. */
 .jukebox-back {
-    display: none;
-}
-
-#jukebox.is-flipped {
+    position: absolute;
+    inset: 0;
+    z-index: 9; /* over everything on the front, the playing song's card included */
     display: flex;
     flex-direction: column;
+    padding: inherit;
+    border-radius: inherit;
+    background: inherit;
+    text-align: left;
+    visibility: hidden;
 }
 
-#jukebox.is-flipped > :not(.jukebox-back) {
-    display: none !important;
+/* A little room under the board */
+.jukebox-back::after {
+    content: "";
+    flex: 0 0 10px;
 }
 
 #jukebox.is-flipped > .jukebox-back {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    padding-bottom: 10px;
-    text-align: left;
+    visibility: visible;
+}
+
+/* While the back is out the front's parts hide (named one by one: a :not() here would restyle
+   every song), and the song list skips rendering but keeps its size and scroll spot */
+#jukebox.is-flipped:not(.is-turning) > .bubble-tube,
+#jukebox.is-flipped:not(.is-turning) > .jukebox-title,
+#jukebox.is-flipped:not(.is-turning) > .flip-sign,
+#jukebox.is-flipped:not(.is-turning) > #filters,
+#jukebox.is-flipped:not(.is-turning) > .cover-modal,
+#jukebox.is-flipped:not(.is-turning) > .jukebox-speakers {
+    visibility: hidden !important;
+}
+
+#track-list {
+    contain-intrinsic-size: auto 300px auto 300px;
+}
+
+#jukebox.is-flipped:not(.is-turning) > #track-list {
+    opacity: 0;
+    content-visibility: hidden;
+}
+
+/* Mid-turn both sides are drawn and the back is a layer of its own, so swapping sides at the edge
+   is just the back switching on or off */
+#jukebox.is-turning > .jukebox-back {
+    visibility: visible;
+    will-change: opacity;
+}
+
+#jukebox.is-turning:not(.is-flipped) > .jukebox-back {
+    opacity: 0;
+}
+
+/* What keeps moving on the back rests while it's out of sight, and the front's lights rest while
+   the back is out (named one by one for the same reason as above) */
+#jukebox:not(.is-flipped) .jb-face--sticker,
+#jukebox:not(.is-flipped) .jb-eye--open,
+#jukebox:not(.is-flipped) .jb-fan-blades,
+#jukebox:not(.is-flipped) .jb-antenna-led,
+#jukebox.is-flipped .title-muse,
+#jukebox.is-flipped .penguin-icon,
+#jukebox.is-flipped .title-lights::after,
+#jukebox.is-flipped .bubble-tube {
+    animation-play-state: paused !important;
 }
 
 .back-header {
@@ -5055,6 +5117,8 @@ h1.jukebox-title {
     opacity: 0.72;
     animation: tubeFlow 9s linear infinite;
     transition: opacity 600ms ease, box-shadow 600ms ease;
+    /* The bubbles measure their climb against the tube (cqh) */
+    container-type: size;
 }
 
 .bubble-tube--left {
@@ -5087,6 +5151,8 @@ h1.jukebox-title {
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.85);
     animation: bubbleRise 4.4s linear infinite;
+    /* Rest along with the tube */
+    animation-play-state: inherit;
 }
 
 .bubble-tube span:nth-child(2) {
@@ -5127,9 +5193,10 @@ h1.jukebox-title {
     }
 }
 
+/* From just under the tube to just over it (a transform, so it never re-lays out the page) */
 @keyframes bubbleRise {
     to {
-        top: -6px;
+        transform: translateY(calc(-100cqh - 6px));
     }
 }
 
@@ -5267,7 +5334,10 @@ h1.jukebox-title {
     }
 }
 
-/* ───── 3D RECORD: thin disc with a front, a B-side and an edge ───── */
+/* ───── 3D RECORD: thin disc with a front, a B-side and an edge ─────
+   .record-turn turns it over (an animation, so it stays smooth while the page is busy);
+   the disc inside spins */
+.record-turn,
 .record-disc,
 .np-record-disc {
     position: absolute;
@@ -5275,6 +5345,10 @@ h1.jukebox-title {
     display: block;
     transform-style: preserve-3d;
     pointer-events: none;
+}
+
+.record-turn {
+    transform: perspective(900px) rotateY(0deg);
 }
 
 .record-face,
@@ -5332,19 +5406,13 @@ h1.jukebox-title {
 }
 
 /* ───── 3D FLIP: the cabinet has real depth while it turns ───── */
-#jukebox.flip-out,
-#jukebox.flip-in-start,
-#jukebox.flip-in {
+#jukebox.is-flipping {
     transform-style: preserve-3d;
     transform-origin: 50% 50% calc(var(--jukebox-depth) * -0.5);
 }
 
-#jukebox.flip-out::before,
-#jukebox.flip-out::after,
-#jukebox.flip-in-start::before,
-#jukebox.flip-in-start::after,
-#jukebox.flip-in::before,
-#jukebox.flip-in::after {
+#jukebox.is-flipping::before,
+#jukebox.is-flipping::after {
     content: "";
     position: absolute;
     top: 6px;
@@ -5358,17 +5426,13 @@ h1.jukebox-title {
         linear-gradient(90deg, #4a55a8, #2c3266 55%, #1f2348);
 }
 
-#jukebox.flip-out::before,
-#jukebox.flip-in-start::before,
-#jukebox.flip-in::before {
+#jukebox.is-flipping::before {
     left: -6px;
     transform-origin: left center;
     transform: rotateY(90deg);
 }
 
-#jukebox.flip-out::after,
-#jukebox.flip-in-start::after,
-#jukebox.flip-in::after {
+#jukebox.is-flipping::after {
     right: -6px;
     transform-origin: right center;
     transform: rotateY(-90deg);
