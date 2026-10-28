@@ -370,7 +370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const eqBars = Array.from(document.querySelectorAll(".speaker-eq span"));
     const cabinetLightShades = Array.from(document.querySelectorAll(".cabinet-lights-shade"));
     const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
-    const titleLights = Array.from(document.querySelectorAll(".title-lights"));
+    const titleWaves = Array.from(document.querySelectorAll(".title-waves"), (side) => Array.from(side.querySelectorAll("svg")));
     const npCover = document.getElementById("np-cover");
     const npBackdrop = document.getElementById("np-backdrop");
     const npEyebrow = document.getElementById("np-eyebrow");
@@ -3591,6 +3591,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     let lastBeatIndex = null;
     let eqShape = [];
     let eqBeatIndex = null;
+    // How hard the beat has hit lately, so it can roll out through the penguins' sound waves
+    const WAVE_RIPPLE_SECONDS = 0.07; // from one wave to the next one out
+    const punchTimes = new Float64Array(64);
+    const punchValues = new Float32Array(64);
+    let punchSlot = 0;
 
     function detectTempo(buffer, sliceStart) {
         const sampleRate = buffer.sampleRate;
@@ -3776,9 +3781,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (jukeboxGlow) {
             jukeboxGlow.style.opacity = playing ? (0.18 + (loudness * 0.22) + (punch * 0.3)).toFixed(3) : "0";
         }
-        titleLights.forEach((lights) => {
-            lights.style.setProperty("--lights-level", (0.6 + (punch * 0.4)).toFixed(3));
+        // The penguins' sound waves: each beat rolls out through them, the nearest first, and they
+        // glow with how loud their side is
+        const now = performance.now() / 1000;
+        punchSlot = (punchSlot + 1) % punchTimes.length;
+        punchTimes[punchSlot] = now;
+        punchValues[punchSlot] = punch;
+        titleWaves.forEach((waves, side) => {
+            const sideLevel = levels[SPECTRUM_BANDS + side];
+            waves.forEach((wave, index) => {
+                const hit = playing ? punchAgo(now, index * WAVE_RIPPLE_SECONDS) : 0;
+                wave.style.opacity = playing ? Math.min(1, 0.4 + (sideLevel * 0.2) + (hit * 0.45)).toFixed(2) : "";
+                wave.style.transform = hit > 0.003 ? `scale(${(1 + (hit * 0.1)).toFixed(3)})` : "";
+            });
         });
+    }
+
+    // How hard the beat was hitting a moment ago
+    function punchAgo(now, seconds) {
+        for (let back = 0; back < punchTimes.length; back += 1) {
+            const slot = (punchSlot - back + punchTimes.length) % punchTimes.length;
+            if (now - punchTimes[slot] >= seconds) return punchValues[slot];
+        }
+        return 0;
     }
 
     function stepBeatVisuals(timestamp) {
@@ -4874,38 +4899,106 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
-    // The tips on the back, one at a time: tap for the next, and they move on by themselves while
-    // the back is out (unless a pointer or focus is on them)
-    const TIP_SECONDS = 7;
+    // The tips on the back: as many as there's room for under Jukebot's sticker. When they don't
+    // all fit they come a page at a time: tap for the next page, and they move on by themselves
+    // while the back is out (unless a pointer or focus is on them)
+    const TIP_PAGE_SECONDS = 8;
+    const MIN_TIPS_PER_PAGE = 3;
+    const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
     let syncBackTips = () => {};
 
     function setUpBackTips() {
         const tipsBox = document.querySelector(".back-tips");
         const list = tipsBox?.querySelector(".back-tips-list");
         const tips = list ? Array.from(list.querySelectorAll(".back-tip")) : [];
-        if (!tips.length) return;
+        const scroller = tipsBox?.parentElement;
+        if (!tips.length || !scroller) return;
         const count = tipsBox.querySelector(".back-tips-count");
-        let current = Math.max(0, tips.findIndex((tip) => tip.classList.contains("is-current")));
+        const below = tipsBox.nextElementSibling; // the Frog Quest badge, down at the bottom
+        let perPage = tips.length;
+        let page = 0;
         let timer = null;
         let held = false;
 
-        const showTip = (index, direction) => {
-            const next = (index + tips.length) % tips.length;
-            if (next === current) return;
+        const pageCount = () => Math.ceil(tips.length / perPage);
+        const showPage = (index, direction) => {
+            page = (index + pageCount()) % pageCount();
             list.dataset.direction = direction < 0 ? "back" : "forward";
-            tips[current].classList.remove("is-current");
-            tips[next].classList.add("is-current");
-            current = next;
-            if (count) count.textContent = `${current + 1} / ${tips.length}`;
+            tips.forEach((tip, tipIndex) => {
+                const order = tipIndex - (page * perPage);
+                const shown = order >= 0 && order < perPage;
+                tip.classList.toggle("is-shown", shown);
+                tip.classList.toggle("is-entering", shown && direction !== 0);
+                tip.style.setProperty("--tip-order", shown ? order : 0);
+            });
+            if (count) count.textContent = `${page + 1} / ${pageCount()}`;
         };
+
+        // The tallest page if the tips go so many to a page, in so many columns
+        const tallestPage = (heights, pageSize, columns, rowGap) => {
+            let tallest = 0;
+            for (let first = 0; first < heights.length; first += pageSize) {
+                const last = Math.min(first + pageSize, heights.length);
+                let height = -rowGap;
+                for (let row = first; row < last; row += columns) {
+                    height += rowGap + Math.max(...heights.slice(row, Math.min(row + columns, last)));
+                }
+                tallest = Math.max(tallest, height);
+            }
+            return tallest;
+        };
+
+        // How many tips fit: the list gets the room it has now plus the space left over below the
+        // card (less anything already overflowing). They go in one column, or two on a wide panel
+        // if that needs fewer pages, and the card takes the tallest page's height so it keeps its
+        // size as they turn.
+        const fitTips = () => {
+            if (!scroller.clientHeight) return;
+            const gap = parseFloat(getComputedStyle(scroller).rowGap) || 0;
+            const spare = below ? below.offsetTop - (tipsBox.offsetTop + tipsBox.offsetHeight) - gap : 0;
+            const overflow = scroller.scrollHeight - scroller.clientHeight;
+            const room = list.offsetHeight + Math.max(0, spare) - Math.max(0, overflow);
+
+            tipsBox.classList.remove("is-paged");
+            list.style.minHeight = "";
+            const listStyle = getComputedStyle(list);
+            const rowGap = parseFloat(listStyle.rowGap) || 0;
+            const maxColumns = list.clientWidth >= (2 * TIP_COLUMN_MIN_WIDTH) + (parseFloat(listStyle.columnGap) || 0) ? 2 : 1;
+            let best = null;
+            for (let columns = 1; columns <= maxColumns; columns += 1) {
+                list.style.gridTemplateColumns = columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : "";
+                const heights = tips.map((tip) => tip.offsetHeight);
+                for (let pages = 1; pages <= tips.length; pages += 1) {
+                    // Pages as even as they can be (not a last page with one tip on it)
+                    const pageSize = Math.ceil(tips.length / pages);
+                    if (Math.ceil(tips.length / pageSize) !== pages) continue;
+                    const height = tallestPage(heights, pageSize, columns, rowGap);
+                    if (height <= room + 1 || pageSize <= MIN_TIPS_PER_PAGE) {
+                        if (!best || pages < best.pages) best = { columns, pages, pageSize, height };
+                        break;
+                    }
+                }
+            }
+            list.style.gridTemplateColumns = best.columns > 1 ? `repeat(${best.columns}, minmax(0, 1fr))` : "";
+            list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height)}px` : "";
+            tipsBox.classList.toggle("is-paged", best.pages > 1);
+            if (best.pageSize !== perPage) {
+                const firstShown = page * perPage;
+                perPage = best.pageSize;
+                showPage(Math.floor(firstShown / perPage), 0);
+                syncBackTips();
+            }
+        };
+
         syncBackTips = () => {
             clearInterval(timer);
             timer = null;
-            if (held || document.hidden || prefersReducedMotion() || !jukeboxPanel.classList.contains("is-flipped")) return;
-            timer = setInterval(() => showTip(current + 1, 1), TIP_SECONDS * 1000);
+            if (held || pageCount() < 2 || document.hidden || prefersReducedMotion() || !jukeboxPanel.classList.contains("is-flipped")) return;
+            timer = setInterval(() => showPage(page + 1, 1), TIP_PAGE_SECONDS * 1000);
         };
         const step = (direction) => {
-            showTip(current + direction, direction);
+            if (pageCount() < 2) return;
+            showPage(page + direction, direction);
             syncBackTips();
         };
 
@@ -4922,6 +5015,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         tipsBox.addEventListener("focusin", () => hold(true));
         tipsBox.addEventListener("focusout", (event) => hold(tipsBox.contains(event.relatedTarget)));
         document.addEventListener("visibilitychange", () => syncBackTips());
+
+        // Fit again whenever the room changes: the panel's size, or anything else in it (Jukebot's
+        // sticker grows during a repair job, and the text and badge settle once they've loaded)
+        if (typeof ResizeObserver === "function") {
+            const observer = new ResizeObserver(fitTips);
+            observer.observe(scroller);
+            Array.from(scroller.children).forEach((child) => {
+                if (child !== tipsBox) observer.observe(child);
+            });
+        } else {
+            fitTips();
+            window.addEventListener("resize", fitTips);
+        }
+        // The tips' own text settles once its font has loaded
+        if (document.fonts) {
+            document.fonts.addEventListener("loadingdone", fitTips);
+            document.fonts.ready.then(fitTips);
+        }
     }
 
     function setUpJukeboxBack() {

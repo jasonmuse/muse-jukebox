@@ -195,15 +195,26 @@
         <span class="cabinet-lights cabinet-lights--left" aria-hidden="true"><span class="cabinet-lights-shade"></span><span class="cabinet-lights-glint"></span></span>
         <span class="cabinet-lights cabinet-lights--right" aria-hidden="true"><span class="cabinet-lights-shade"></span><span class="cabinet-lights-glint"></span></span>
 
+        <!-- The penguins sing: sound waves roll out from them with the beat -->
         <h1 class="jukebox-title">
-            <span class="title-lights title-lights--left" aria-hidden="true"></span>
+            <span class="title-waves title-waves--left" aria-hidden="true">
+                <svg viewBox="0 0 12.6 34"><path d="M9.3 3.25A18.6 18.6 0 0 0 9.3 30.75"/></svg>
+                <svg viewBox="0 0 16.1 50"><path d="M12.8 3.25A29.5 29.5 0 0 0 12.8 46.75"/></svg>
+                <svg viewBox="0 0 19.6 66"><path d="M16.3 3.25A40.4 40.4 0 0 0 16.3 62.75"/></svg>
+                <svg viewBox="0 0 23.1 82"><path d="M19.9 3.25A51.2 51.2 0 0 0 19.9 78.75"/></svg>
+            </span>
             <span class="title-penguin title-penguin--left" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
             <span class="title-wordmark">
                 <span class="title-muse">Muse</span>
                 <span class="title-jukebox">Jukebox</span>
             </span>
             <span class="title-penguin title-penguin--right" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
-            <span class="title-lights title-lights--right" aria-hidden="true"></span>
+            <span class="title-waves title-waves--right" aria-hidden="true">
+                <svg viewBox="0 0 12.6 34"><path d="M9.3 3.25A18.6 18.6 0 0 0 9.3 30.75"/></svg>
+                <svg viewBox="0 0 16.1 50"><path d="M12.8 3.25A29.5 29.5 0 0 0 12.8 46.75"/></svg>
+                <svg viewBox="0 0 19.6 66"><path d="M16.3 3.25A40.4 40.4 0 0 0 16.3 62.75"/></svg>
+                <svg viewBox="0 0 23.1 82"><path d="M19.9 3.25A51.2 51.2 0 0 0 19.9 78.75"/></svg>
+            </span>
         </h1>
 
         <!-- Slim sign: flips the jukebox (Jukebot) around to its rear panel -->
@@ -342,16 +353,16 @@
                             <span class="jb-stamp" aria-hidden="true">SERVICED</span>
                         </div>
 
-                        <!-- Tips: one at a time (tap for the next one) -->
+                        <!-- Tips: as many as there's room for (a page at a time when they don't all fit) -->
                         <section class="back-tips" aria-label="Tips">
                             <div class="back-tips-head">
                                 <h3>Tips</h3>
-                                <span class="back-tips-count" aria-hidden="true">1 / 9</span>
-                                <button class="back-tips-step" type="button" data-tip-step="-1" aria-label="Previous tip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
-                                <button class="back-tips-step" type="button" data-tip-step="1" aria-label="Next tip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+                                <span class="back-tips-count" aria-hidden="true"></span>
+                                <button class="back-tips-step" type="button" data-tip-step="-1" aria-label="Previous tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
+                                <button class="back-tips-step" type="button" data-tip-step="1" aria-label="More tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
                             </div>
                             <ul class="back-tips-list">
-                                <li class="back-tip is-current"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg><span>Tap the loop button once to keep songs playing, twice to repeat one song.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg><span>Tap the loop button once to keep songs playing, twice to repeat one song.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6a6 6 0 0 1 6 6"/></svg><span>Drag the record back and forth to scratch like a DJ.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5v3M7.5 7.5v9M11 4.5v15M14.5 8v8M18 6.5v11M21 10.5v3"/></svg><span>Tap any song's wave to play it from there. Drag the playing one to skip around.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1 1 0 0 1 0 1.4l-7.2 7.2a1 1 0 0 1-1.4 0z"/><circle cx="8.2" cy="8.2" r="1.3"/></svg><span>Tap a tag or a year on a song to filter the list.</span></li>
