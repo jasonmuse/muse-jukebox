@@ -477,7 +477,8 @@ box-shadow: 0 0 0 3px #ffffff;
     flex: 0 0 auto;
     align-self: center;
     max-width: 100%;
-    margin: 0;
+    /* Down at the bottom of the back panel, however much is above it */
+    margin: auto 0 0;
     padding: 0;
     line-height: 0;
 }
@@ -1187,20 +1188,30 @@ audio {
     clip-path: inset(0 calc(100% - (var(--wave-progress) * 100%)) 0 0);
 }
 
+/* The playhead: script.js slides it along (by transform); the dot inside grows while dragging */
 .song-wave-thumb {
     position: absolute;
     top: 50%;
-    left: calc(var(--wave-progress) * 100%);
+    left: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.song-wave-thumb::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: -5px;
     width: 10px;
     height: 10px;
-    margin: -5px 0 0 -5px;
     border-radius: 50%;
     background: #ffffff;
     box-shadow: 0 0 0 3px rgba(123, 168, 208, 0.45), 0 1px 5px rgba(0, 0, 0, 0.5);
     opacity: 0;
     transform: scale(0.4);
     transition: opacity 200ms ease-out, transform 200ms cubic-bezier(0.34, 1.5, 0.64, 1);
-    pointer-events: none;
 }
 
 .track-modes-visible .song-wave,
@@ -1208,13 +1219,13 @@ audio {
     color: rgba(214, 220, 255, 0.3);
 }
 
-.track-modes-visible .song-wave-thumb,
-.np-wave .song-wave-thumb {
+.track-modes-visible .song-wave-thumb::before,
+.np-wave .song-wave-thumb::before {
     opacity: 1;
     transform: none;
 }
 
-.song-wave.is-scrubbing .song-wave-thumb {
+.song-wave.is-scrubbing .song-wave-thumb::before {
     transform: scale(1.35);
 }
 
@@ -2168,7 +2179,7 @@ html {
     cursor: default;
 }
 
-.np-wave[aria-disabled="true"] .song-wave-thumb {
+.np-wave[aria-disabled="true"] .song-wave-thumb::before {
     opacity: 0;
 }
 
@@ -2767,14 +2778,20 @@ html {
 
 .back-tips {
     flex: 0 0 auto;
-    padding: 12px 14px;
+    padding: 10px 10px 12px 14px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.04);
 }
 
+.back-tips-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .back-tips h3 {
-    margin: 0;
+    margin: 0 auto 0 0;
     font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.14em;
@@ -2782,14 +2799,114 @@ html {
     color: #aebcff;
 }
 
-.back-tips ul {
-    margin: 8px 0 0;
-    padding-left: 18px;
+.back-tips-count {
+    margin-right: 4px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.back-tips-step {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+    color: #dfe4ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 160ms ease-out, transform 140ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.back-tips-step svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.back-tips-step:active {
+    transform: scale(0.9);
+}
+
+.back-tips-step:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .back-tips-step:hover {
+        background: rgba(174, 188, 255, 0.22);
+    }
+}
+
+/* All the tips share one spot (so the card keeps its size); the current one slides in and the
+   last one slides out (script.js sets the direction) */
+.back-tips-list {
     display: grid;
-    gap: 6px;
-    font-size: 0.9rem;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.85);
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.back-tip {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.92rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.88);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(16px);
+    transition: opacity 220ms ease-out, transform 360ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 360ms;
+}
+
+.back-tips-list[data-direction="back"] .back-tip {
+    transform: translateX(-16px);
+}
+
+.back-tip.is-current,
+.back-tips-list[data-direction="back"] .back-tip.is-current {
+    opacity: 1;
+    /* Not "visible": that would show it through the back panel while it's hidden */
+    visibility: inherit;
+    transform: none;
+    transition: opacity 260ms ease-out 90ms, transform 420ms cubic-bezier(0.22, 1, 0.36, 1) 40ms, visibility 0s linear 0s;
+}
+
+.back-tip-icon {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    box-sizing: border-box;
+    border-radius: 11px;
+    background: rgba(174, 188, 255, 0.14);
+    color: #ccd5ff;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.back-tip-dot {
+    fill: currentColor;
+    stroke: none;
 }
 
 @media (max-width: 600px) {
@@ -2797,8 +2914,16 @@ html {
         font-size: 1.3rem;
     }
 
-    .back-tips ul {
-        font-size: 0.84rem;
+    .back-tip {
+        font-size: 0.86rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .back-tip,
+    .back-tip.is-current {
+        transform: none;
+        transition: opacity 160ms ease-out, visibility 0s linear 160ms;
     }
 }
 
@@ -3468,20 +3593,6 @@ html.is-standalone .edge-blend {
     border-top: 1px dashed rgba(59, 48, 22, 0.35);
 }
 
-.jb-sticker .jb-level-label {
-    color: #3b3016;
-}
-
-.jb-sticker .jb-level-best {
-    color: rgba(59, 48, 22, 0.8);
-    font-weight: 700;
-}
-
-.jb-sticker .jb-icon-button {
-    border-color: rgba(59, 48, 22, 0.35);
-    background: rgba(255, 255, 255, 0.45);
-    color: #3b3016;
-}
 
 .jb-stamp {
     position: absolute;
@@ -4650,6 +4761,13 @@ html.is-standalone .edge-blend {
     top: -21px;
 }
 
+.jb-tool--iron {
+    width: 72px;
+    height: 72px;
+    left: -36px;
+    top: -60px;
+}
+
 .jb-tool.is-visible {
     opacity: 1;
 }
@@ -4661,8 +4779,48 @@ html.is-standalone .edge-blend {
 
 .jb-tool[data-tool="screwdriver"] .jb-tool--screwdriver,
 .jb-tool[data-tool="swatter"] .jb-tool--swatter,
-.jb-tool[data-tool="sponge"] .jb-tool--sponge {
+.jb-tool[data-tool="sponge"] .jb-tool--sponge,
+.jb-tool[data-tool="iron"] .jb-tool--iron {
     display: block;
+}
+
+.jb-tool-iron-tip {
+    fill: #c3c9d9;
+    stroke: #7d859c;
+    stroke-width: 0.8;
+}
+
+.jb-tool-iron-collar {
+    fill: #6d7489;
+}
+
+.jb-tool-iron-handle {
+    fill: #ff7aa8;
+    stroke: #c4436f;
+    stroke-width: 1.2;
+}
+
+.jb-tool-iron-grip {
+    stroke: #c4436f;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+}
+
+.jb-tool-iron-glow {
+    fill: #ffb347;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.jb-tool.is-soldering .jb-tool-iron-glow {
+    opacity: 0.9;
+    animation: jbIronGlow 260ms ease-in-out infinite alternate;
+}
+
+@keyframes jbIronGlow {
+    to {
+        opacity: 0.45;
+    }
 }
 
 .jb-tool-metal {
@@ -4730,6 +4888,16 @@ html.is-standalone .edge-blend {
 
 .jb-tool[data-tool="sponge"].is-using .jb-tool-motion {
     animation: jbWipe 260ms ease-in-out;
+}
+
+.jb-tool[data-tool="iron"].is-using .jb-tool-motion {
+    animation: jbPress 220ms ease-out;
+}
+
+@keyframes jbPress {
+    40% {
+        transform: translate(2px, 3px);
+    }
 }
 
 @keyframes jbTwist {
@@ -4891,49 +5059,6 @@ html.is-standalone .edge-blend {
     color: rgba(255, 255, 255, 0.78);
 }
 
-.jb-level-picker {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.jb-level-label {
-    min-width: 5.5em;
-    font-weight: 800;
-    color: #aebcff;
-}
-
-.jb-icon-button {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.jb-icon-button svg {
-    width: 16px;
-    height: 16px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.jb-icon-button:disabled {
-    opacity: 0.3;
-    cursor: default;
-}
-
-.jb-level-best,
 .jb-results-stats {
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
@@ -4956,8 +5081,7 @@ html.is-standalone .edge-blend {
     -webkit-tap-highlight-color: transparent;
 }
 
-.jb-button:active,
-.jb-icon-button:active {
+.jb-button:active {
     transform: scale(0.94);
 }
 
@@ -4966,8 +5090,7 @@ html.is-standalone .edge-blend {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
-.jb-button:focus-visible,
-.jb-icon-button:focus-visible {
+.jb-button:focus-visible {
     outline: 2px solid #d6e6ff;
     outline-offset: 2px;
 }
@@ -4976,37 +5099,6 @@ html.is-standalone .edge-blend {
     display: flex;
     gap: 10px;
     margin-top: 2px;
-}
-
-.jb-stars {
-    font-size: 1.7rem;
-    letter-spacing: 4px;
-    line-height: 1;
-}
-
-.jb-star {
-    color: rgba(255, 255, 255, 0.2);
-    display: inline-block;
-}
-
-.jb-star.is-earned {
-    color: #ffd23f;
-    text-shadow: 0 0 10px rgba(255, 210, 63, 0.6);
-    animation: jbStarIn 500ms cubic-bezier(0.34, 1.6, 0.64, 1) both;
-}
-
-.jb-star.is-earned:nth-child(2) {
-    animation-delay: 150ms;
-}
-
-.jb-star.is-earned:nth-child(3) {
-    animation-delay: 300ms;
-}
-
-@keyframes jbStarIn {
-    from {
-        transform: scale(0) rotate(-90deg);
-    }
 }
 
 @media (max-width: 600px) {
@@ -5031,18 +5123,475 @@ html.is-standalone .edge-blend {
     border-radius: 12px;
 }
 
-.jb-results-close {
-    margin-top: 2px;
-    padding: 4px 10px;
-    border: 0;
-    background: none;
-    color: rgba(255, 255, 255, 0.7);
+.jb-results-badge {
+    padding: 2px 9px;
+    border: 2px solid #2f9e5b;
+    border-radius: 6px;
+    background: #ffe58a;
+    color: #2f9e5b;
+    font: 900 0.68rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.12em;
+    transform: rotate(-4deg);
+    animation: jbStampIn 420ms cubic-bezier(0.34, 1.6, 0.64, 1) both 150ms;
+}
+
+@keyframes jbStampIn {
+    from {
+        opacity: 0;
+        transform: rotate(-4deg) scale(1.8);
+    }
+}
+
+/* ───── THE REPAIR JOB ───── */
+/* The job's steps in a row: ticked off, the next one lit, the rest to come */
+.jb-steps {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.jb-step {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 7px;
+    border-radius: 50%;
+    background: rgba(59, 48, 22, 0.12);
+    color: rgba(59, 48, 22, 0.42);
+}
+
+.jb-step:first-child {
+    margin-left: 0;
+}
+
+/* The line joining each step to the one before */
+.jb-step + .jb-step::before {
+    content: "";
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    width: 7px;
+    height: 2px;
+    margin-top: -1px;
+    background: rgba(59, 48, 22, 0.18);
+}
+
+.jb-step svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.jb-step.is-done {
+    background: #2f9e5b;
+    color: #ffffff;
+}
+
+.jb-step.is-done + .jb-step::before {
+    background: #2f9e5b;
+}
+
+.jb-step.is-current {
+    background: #3b3016;
+    color: #ffe58a;
+    animation: jbStepPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes jbStepPulse {
+    50% {
+        box-shadow: 0 0 0 4px rgba(59, 48, 22, 0.16);
+    }
+}
+
+/* On the dark mission card */
+.jb-steps--big .jb-step {
+    width: 30px;
+    height: 30px;
+    margin-left: 9px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.jb-steps--big .jb-step:first-child {
+    margin-left: 0;
+}
+
+.jb-steps--big .jb-step + .jb-step::before {
+    width: 9px;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.jb-steps--big .jb-step svg {
+    width: 17px;
+    height: 17px;
+}
+
+.jb-steps--big .jb-step.is-done {
+    background: #2f9e5b;
+    color: #ffffff;
+}
+
+.jb-steps--big .jb-step.is-current {
+    background: #ffd23f;
+    color: #3b3016;
+    animation: jbStepGlow 1.8s ease-in-out infinite;
+}
+
+@keyframes jbStepGlow {
+    50% {
+        box-shadow: 0 0 0 5px rgba(255, 210, 63, 0.22);
+    }
+}
+
+.jb-sticker-note {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: rgba(59, 48, 22, 0.78);
+}
+
+.jb-sticker-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.jb-sticker-actions[hidden] {
+    display: none;
+}
+
+.jb-sticker-button {
+    min-height: 32px;
+    padding: 0 14px;
+    border: 1.5px solid rgba(59, 48, 22, 0.42);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.45);
+    color: #3b3016;
     font: inherit;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-decoration: underline;
+    font-size: 0.86rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 140ms ease-out, background-color 160ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.jb-sticker-button.is-main {
+    border-color: #3b3016;
+    background: #3b3016;
+    color: #ffe58a;
+}
+
+.jb-sticker-button:active {
+    transform: scale(0.95);
+}
+
+.jb-sticker-button:focus-visible,
+.jb-sticker-boop:focus-visible {
+    outline: 2px solid #3b3016;
+    outline-offset: 2px;
+}
+
+/* Jukebot's face on the sticker can be booped */
+.jb-sticker-boop {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.jb-sticker-boop .jb-sticker-face {
+    display: block;
+}
+
+.jb-sticker-boop.is-booped {
+    animation: jbBoop 380ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+@keyframes jbBoop {
+    30% {
+        transform: scale(0.86) rotate(-5deg);
+    }
+
+    65% {
+        transform: scale(1.06) rotate(2deg);
+    }
+}
+
+/* The card for the next step */
+.jb-mission {
+    z-index: 9;
+    gap: 6px;
+}
+
+.jb-mission .jb-steps {
+    margin-bottom: 6px;
+}
+
+.jb-mission-kicker {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffd23f;
+}
+
+.jb-mission .jb-overlay-hint {
+    max-width: 22em;
+    font-size: 0.88rem;
+}
+
+.jb-mission .jb-button {
+    min-width: 128px;
+    margin-top: 6px;
+}
+
+/* Fix my wiring: sparking breaks in the traces, and the solder that mends them */
+.jb-break-glow {
+    fill: rgba(255, 96, 64, 0.34);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbBreakGlow 650ms ease-in-out infinite alternate;
+}
+
+.jb-break-core {
+    fill: #ffc067;
+    filter: url(#jb-led-glow);
+    animation: jbBreakCore 180ms steps(2) infinite;
+}
+
+.jb-break.is-fixed .jb-break-core {
+    display: none;
+}
+
+@keyframes jbBreakCore {
+    50% {
+        fill: #fff6c9;
+    }
+}
+
+.jb-break-gap {
+    fill: #241a4d;
+}
+
+.jb-break-ends {
+    fill: none;
+    stroke: #8a5a34;
+    stroke-width: 3.4;
+    stroke-linecap: round;
+}
+
+.jb-break-sparks {
+    fill: none;
+    stroke: #fff0a0;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbSparks 300ms steps(2) infinite;
+}
+
+.jb-break-sparks--late {
+    stroke: #ffb35c;
+    animation-delay: -150ms;
+}
+
+.jb-break-ring {
+    fill: none;
+    stroke: #7fe6ff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.jb-break.is-soldering .jb-break-ring {
+    opacity: 1;
+}
+
+.jb-solder,
+.jb-solder-shine {
+    opacity: 0;
+}
+
+.jb-break.is-fixed .jb-solder {
+    opacity: 1;
+    fill: #cdd4e6;
+    stroke: #8e97b0;
+    stroke-width: 1;
+}
+
+.jb-break.is-fixed .jb-solder-shine {
+    opacity: 0.9;
+    fill: #ffffff;
+}
+
+.jb-break.is-fixed .jb-break-sparks,
+.jb-break.is-fixed .jb-break-ring,
+.jb-break.is-fixed .jb-break-ends {
+    display: none;
+}
+
+.jb-break.is-fixed .jb-break-glow {
+    fill: rgba(92, 207, 138, 0.55);
+    animation: jbFixedGlow 900ms ease-out forwards;
+}
+
+@keyframes jbBreakGlow {
+    to {
+        opacity: 0.45;
+        transform: scale(0.8);
+    }
+}
+
+@keyframes jbSparks {
+    50% {
+        opacity: 0.2;
+        transform: rotate(40deg) scale(0.65);
+    }
+}
+
+@keyframes jbFixedGlow {
+    from {
+        transform: scale(0.6);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.7);
+    }
+}
+
+.jb-solder-smoke {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    border-radius: 50%;
+    background: rgba(226, 230, 244, 0.55);
+    pointer-events: none;
+    animation: jbSolderSmoke 900ms ease-out forwards;
+}
+
+@keyframes jbSolderSmoke {
+    to {
+        opacity: 0;
+        transform: translate(5px, -26px) scale(2.4);
+    }
+}
+
+/* Reboot my memory: four lights to remember */
+.jb-memory-pad {
+    transition: opacity 400ms ease;
+}
+
+.jb-memory-key {
+    fill: var(--pad-color);
+    fill-opacity: 0.2;
+    stroke: var(--pad-color);
+    stroke-opacity: 0.7;
+    stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: fill-opacity 140ms ease, stroke-opacity 140ms ease, transform 140ms ease;
+}
+
+.jb-memory-note {
+    fill: var(--pad-color);
+    fill-opacity: 0.85;
+    font-family: system-ui, -apple-system, "Segoe UI Symbol", sans-serif;
+    font-weight: 900;
+    pointer-events: none;
+    transition: fill 140ms ease;
+}
+
+.jb-memory-pad.is-lit .jb-memory-key {
+    fill-opacity: 1;
+    stroke-opacity: 1;
+    transform: scale(1.08);
+    filter: url(#jb-led-glow);
+}
+
+.jb-memory-pad.is-lit .jb-memory-note {
+    fill: #241a4d;
+    fill-opacity: 1;
+}
+
+.jb-memory-pad.is-pressed .jb-memory-key {
+    fill-opacity: 0.4;
+    transform: scale(0.94);
+}
+
+.jb-memory-pad.is-wrong .jb-memory-key {
+    fill: #ff5a6e;
+    fill-opacity: 0.85;
+    stroke: #ff5a6e;
+}
+
+.jb-memory-pad.is-done {
+    opacity: 0;
+}
+
+/* No tool to hold for the memory lights: just tap them */
+.jb-back.is-playing.no-tool {
     cursor: pointer;
 }
+
+/* Mid-job the panel's only leaned back on: a little crooked, with its screws out. The sticker
+   (with its Keep fixing button) moves to the top so it's in view on short screens. */
+.jb-back.is-loose .jb-cover {
+    transform: translate(3px, 4px) rotate(-0.8deg);
+}
+
+.jb-back.is-loose .jb-sticker {
+    order: -1;
+}
+
+.jb-back.is-loose .jb-cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    pointer-events: none;
+    --hole: #11131d 0 5px, rgba(255, 255, 255, 0.14) 5.5px 6.5px, transparent 7px;
+    background:
+        radial-gradient(circle at 20px 20px, var(--hole)),
+        radial-gradient(circle at calc(100% - 20px) 20px, var(--hole)),
+        radial-gradient(circle at 20px calc(100% - 20px), var(--hole)),
+        radial-gradient(circle at calc(100% - 20px) calc(100% - 20px), var(--hole));
+}
+
+/* Last step: the screws are back, sticking out, waiting to be tightened */
+.jb-back.is-screwing .jb-screw:not(.is-in) {
+    animation: jbScrewHint 2s ease-in-out infinite;
+}
+
+/* The secret: a gold record (and gold lights up the cabinet's sides) */
+.gold-record .record-face,
+.gold-record .np-record-vinyl {
+    filter: sepia(1) saturate(3) brightness(1.55) contrast(1.15);
+}
+
+.gold-record .cabinet-lights {
+    background: linear-gradient(0deg, #ffb703, #ffd166 50%, #fff1b8);
+}
+
 
 /* ───── NO DOUBLE-TAP ZOOM ─────
    Fast taps (play buttons, swatting bugs) shouldn't zoom the page on phones */
@@ -5699,6 +6248,10 @@ html.viewport-short #jukebox-wrapper {
 
 @media (prefers-reduced-motion: reduce) {
     .cabinet-lights-glint,
+    .jb-break-glow,
+    .jb-break-sparks,
+    .jb-break-core,
+    .jb-step.is-current,
     .title-muse,
     .title-penguin .penguin-icon,
     .title-lights::after,

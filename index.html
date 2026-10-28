@@ -308,6 +308,8 @@
                     <g id="jb-board"></g>
                     <g class="jb-core" id="jb-core"></g>
                     <g id="jb-splats"></g>
+                    <!-- Repairs: broken wires and the memory lights -->
+                    <g id="jb-repairs"></g>
                     <g id="jb-bugs"></g>
                     <g id="jb-zaps"></g>
                 </svg>
@@ -326,41 +328,40 @@
 
                         <div class="jb-sticker" id="jb-sticker">
                             <div class="jb-sticker-top">
-                                <svg class="jb-sticker-face" id="jb-sticker-face" viewBox="-30 -22 60 44" aria-hidden="true"></svg>
+                                <button class="jb-sticker-boop" id="jb-sticker-boop" type="button" aria-label="Boop Jukebot"><svg class="jb-sticker-face" id="jb-sticker-face" viewBox="-30 -22 60 44" aria-hidden="true"></svg></button>
                                 <div class="jb-sticker-copy">
                                     <strong id="jb-sticker-title">Help! I'm glitching!</strong>
-                                    <span id="jb-sticker-text">Bugs got into my wiring. Unscrew my 4 corner screws to open me up and fix me.</span>
+                                    <span id="jb-sticker-text">Bugs got into my wiring. Hold my 4 corner screws to open me up and fix me.</span>
                                 </div>
                             </div>
                             <div class="jb-sticker-bottom">
-                                <div class="jb-level-picker">
-                                    <button class="jb-icon-button" id="jb-level-prev" type="button" aria-label="Previous level"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
-                                    <span class="jb-level-label" id="jb-level-label">Level 1</span>
-                                    <button class="jb-icon-button" id="jb-level-next" type="button" aria-label="Next level"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
-                                </div>
-                                <span class="jb-level-best" id="jb-level-best">Not fixed yet</span>
+                                <ol class="jb-steps" id="jb-sticker-steps" aria-label="Repair job"></ol>
+                                <span class="jb-sticker-note" id="jb-sticker-note">6 steps to fix</span>
                             </div>
+                            <div class="jb-sticker-actions" id="jb-sticker-actions" hidden></div>
                             <span class="jb-stamp" aria-hidden="true">SERVICED</span>
                         </div>
 
-                        <div class="back-tips">
-                            <h3>Tips</h3>
-                            <ul>
-                                <li>Press Play, then the repeat button to keep songs rolling on their own, even with your screen off. Shuffle shows up once it's on.</li>
-                                <li>Tap the repeat button again to play just that song over and over (it shows a 1), and once more to turn it off.</li>
-                                <li>With keep playing on, every song plays right to its end and the next one follows straight on. Long silent endings get skipped.</li>
-                                <li>Use the skip buttons next to the record to jump to the previous or next song.</li>
-                                <li>Turn your phone or tablet sideways, or open a wide window on a computer, for the full jukebox deck.</li>
-                                <li>On screens with a side strip (like a folded Duo), the music controls live in the strip. Drag them up or down to move them.</li>
-                                <li>Tap the record to pause, or use the 10s buttons to skip around.</li>
-                                <li>Grab the record and drag it back and forth to scratch like a DJ.</li>
-                                <li>Tap any tag or year on a song to filter the list.</li>
-                                <li>The &times; on the playing song stops it and clears it away.</li>
-                                <li>Fixing me: hold a corner screw to twist it out (or tap it twice).</li>
-                                <li>Swat the bugs before they chew my core and drain my power. Leave the glowing glowbugs alone: they recharge me!</li>
-                                <li>Every bug you squash charges my zap. When my lights flash, tap my face to zap the bugs around me.</li>
+                        <!-- Tips: one at a time (tap for the next one) -->
+                        <section class="back-tips" aria-label="Tips">
+                            <div class="back-tips-head">
+                                <h3>Tips</h3>
+                                <span class="back-tips-count" aria-hidden="true">1 / 9</span>
+                                <button class="back-tips-step" type="button" data-tip-step="-1" aria-label="Previous tip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
+                                <button class="back-tips-step" type="button" data-tip-step="1" aria-label="Next tip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+                            </div>
+                            <ul class="back-tips-list">
+                                <li class="back-tip is-current"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg><span>Tap the loop button once to keep songs playing, twice to repeat one song.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6a6 6 0 0 1 6 6"/></svg><span>Drag the record back and forth to scratch like a DJ.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5v3M7.5 7.5v9M11 4.5v15M14.5 8v8M18 6.5v11M21 10.5v3"/></svg><span>Tap any song's wave to play it from there. Drag the playing one to skip around.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l8 8a1 1 0 0 1 0 1.4l-7.2 7.2a1 1 0 0 1-1.4 0z"/><circle cx="8.2" cy="8.2" r="1.3"/></svg><span>Tap a tag or a year on a song to filter the list.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle class="back-tip-dot" cx="9" cy="9" r="1.1"/><circle class="back-tip-dot" cx="15" cy="15" r="1.1"/><circle class="back-tip-dot" cx="12" cy="12" r="1.1"/></svg><span>Can't pick? The dice plays a random song.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8 8 0 1 1 9.4 4.5a6.4 6.4 0 0 0 10.1 10.1z"/></svg><span>Keep playing carries on with your screen off.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="8" width="19" height="10" rx="2.2"/><path d="M6.5 4.5h6a4 4 0 0 1 4 4"/><path d="m14.6 6.6 1.9 1.9 1.9-1.9"/></svg><span>Turn your phone sideways for the big turntable.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M14.5 2.5v19"/><path d="M16.75 10v4"/></svg><span>Folded Duo? The controls live in the side strip. Drag them to move them.</span></li>
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg><span>The &times; on the playing song stops it and clears it away.</span></li>
                             </ul>
-                        </div>
+                        </section>
 
                         <!-- Footer badge, old-web style -->
                         <a class="frogquest-link" href="https://amused.itch.io/frog-quest" target="_blank" rel="noopener" title="Play Frog Quest">
@@ -397,6 +398,13 @@
                         <rect class="jb-tool-mesh" x="-14" y="-14" width="28" height="28" rx="6"/>
                         <path class="jb-tool-mesh-grid" d="M-14-4.7h28M-14 4.7h28M-4.7-14v28M4.7-14v28"/>
                     </g></g></svg>
+                    <svg class="jb-tool-art jb-tool--iron" viewBox="-30 -50 60 60"><g class="jb-tool-motion"><g transform="rotate(32)">
+                        <circle class="jb-tool-iron-glow" cx="0" cy="-1" r="5"/>
+                        <path class="jb-tool-iron-tip" d="M-1.4-16h2.8V-5L0 0l-1.4-5z"/>
+                        <rect class="jb-tool-iron-collar" x="-3" y="-21" width="6" height="6" rx="1.2"/>
+                        <rect class="jb-tool-iron-handle" x="-5" y="-46" width="10" height="26" rx="4.5"/>
+                        <path class="jb-tool-iron-grip" d="M-5-38h10M-5-33h10M-5-28h10"/>
+                    </g></g></svg>
                     <svg class="jb-tool-art jb-tool--sponge" viewBox="-20 -16 40 32"><g class="jb-tool-motion">
                         <rect class="jb-tool-sponge" x="-14" y="-10" width="28" height="20" rx="6"/>
                         <rect class="jb-tool-sponge-top" x="-14" y="-10" width="28" height="6" rx="3"/>
@@ -405,16 +413,24 @@
                 </div>
                 <span class="jb-speech" id="jb-speech" aria-hidden="true">Super duper!</span>
 
+                <!-- The next step of the repair job -->
+                <div class="jb-overlay jb-mission" id="jb-mission" hidden>
+                    <ol class="jb-steps jb-steps--big" id="jb-mission-steps" aria-label="Repair job"></ol>
+                    <p class="jb-mission-kicker" id="jb-mission-kicker">Step 2 of 6</p>
+                    <p class="jb-overlay-title" id="jb-mission-title">Bug sweep</p>
+                    <p class="jb-overlay-hint" id="jb-mission-goal"></p>
+                    <button class="jb-button" id="jb-mission-start" type="button">Let's go</button>
+                </div>
+
                 <div class="jb-overlay jb-results" id="jb-results" hidden>
-                    <p class="jb-overlay-title" id="jb-results-title">Level 1 fixed!</p>
-                    <p class="jb-stars" id="jb-stars" aria-label="Stars"><span class="jb-star">&#9733;</span><span class="jb-star">&#9733;</span><span class="jb-star">&#9733;</span></p>
+                    <p class="jb-results-badge" id="jb-results-badge" aria-hidden="true"></p>
+                    <p class="jb-overlay-title" id="jb-results-title">Jukebot is fixed!</p>
                     <p class="jb-results-stats" id="jb-results-stats"></p>
                     <p class="jb-results-note" id="jb-results-note"></p>
                     <div class="jb-overlay-actions">
-                        <button class="jb-button jb-button--ghost" id="jb-replay" type="button">Replay</button>
-                        <button class="jb-button" id="jb-next" type="button">Next level</button>
+                        <button class="jb-button jb-button--ghost" id="jb-results-secondary" type="button">Done</button>
+                        <button class="jb-button" id="jb-results-primary" type="button">Bug blitz</button>
                     </div>
-                    <button class="jb-results-close" id="jb-results-close" type="button">Done</button>
                 </div>
             </div>
         </section>

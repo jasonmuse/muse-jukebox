@@ -2358,6 +2358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const songWaves = new Map(); // file -> { duration, levels }
     const learnedWaves = readLearnedWaves();
     const drawnWaves = new WeakMap();
+    const waveWidths = new WeakMap();
     const shownWaveProgress = new WeakMap();
     const waveObserver = typeof ResizeObserver === "function"
         ? new ResizeObserver((entries) => entries.forEach((entry) => drawSongWave(entry.target)))
@@ -2504,8 +2505,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             : wave.closest(".track")?.dataset.file;
         const levels = file && songWaves.has(file) ? songWaves.get(file).levels : null;
         const key = `${file}|${width}|${height}|${levels ? "shape" : "plain"}`;
+        waveWidths.set(wave, width);
         if (drawnWaves.get(wave) === key) return;
         drawnWaves.set(wave, key);
+        shownWaveProgress.delete(wave);
 
         const path = width > 0 && height > 0 && file ? buildWavePath(levels, width, height) : "";
         wave.querySelectorAll("svg").forEach((svg) => {
@@ -2513,6 +2516,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             svg.firstElementChild.setAttribute("d", path);
         });
         wave.classList.toggle("has-shape", Boolean(levels));
+        // A new size moves the playhead too (even while the song's paused)
+        if (isPlayingWave(wave)) updateNowPlayingProgress();
     }
 
     function setWaveProgress(wave, fraction, position, duration) {
@@ -2521,6 +2526,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const progress = fraction.toFixed(4);
         if (shown.progress !== progress) {
             wave.style.setProperty("--wave-progress", progress);
+            // The playhead moves by transform, so following the song never re-lays out the page
+            const thumb = wave.querySelector(".song-wave-thumb");
+            if (thumb) thumb.style.transform = `translateX(${(fraction * (waveWidths.get(wave) || 0)).toFixed(1)}px)`;
             shown.progress = progress;
         }
         const seconds = Math.round(position);
@@ -2554,6 +2562,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             wave.setAttribute("title", "Play from here");
             wave.classList.remove("is-scrubbing");
             wave.style.removeProperty("--wave-progress");
+            wave.querySelector(".song-wave-thumb")?.style.removeProperty("transform");
             shownWaveProgress.delete(wave);
         }
     }
@@ -4780,6 +4789,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setJukeboxSide(showBack) {
         jukeboxPanel.classList.toggle("is-flipped", showBack);
+        syncBackTips();
         if (!showBack) {
             if (window.jukebot) {
                 window.jukebot.reset();
@@ -4864,8 +4874,59 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
+    // The tips on the back, one at a time: tap for the next, and they move on by themselves while
+    // the back is out (unless a pointer or focus is on them)
+    const TIP_SECONDS = 7;
+    let syncBackTips = () => {};
+
+    function setUpBackTips() {
+        const tipsBox = document.querySelector(".back-tips");
+        const list = tipsBox?.querySelector(".back-tips-list");
+        const tips = list ? Array.from(list.querySelectorAll(".back-tip")) : [];
+        if (!tips.length) return;
+        const count = tipsBox.querySelector(".back-tips-count");
+        let current = Math.max(0, tips.findIndex((tip) => tip.classList.contains("is-current")));
+        let timer = null;
+        let held = false;
+
+        const showTip = (index, direction) => {
+            const next = (index + tips.length) % tips.length;
+            if (next === current) return;
+            list.dataset.direction = direction < 0 ? "back" : "forward";
+            tips[current].classList.remove("is-current");
+            tips[next].classList.add("is-current");
+            current = next;
+            if (count) count.textContent = `${current + 1} / ${tips.length}`;
+        };
+        syncBackTips = () => {
+            clearInterval(timer);
+            timer = null;
+            if (held || document.hidden || prefersReducedMotion() || !jukeboxPanel.classList.contains("is-flipped")) return;
+            timer = setInterval(() => showTip(current + 1, 1), TIP_SECONDS * 1000);
+        };
+        const step = (direction) => {
+            showTip(current + direction, direction);
+            syncBackTips();
+        };
+
+        tipsBox.querySelectorAll("[data-tip-step]").forEach((button) => {
+            button.addEventListener("click", () => step(Number(button.dataset.tipStep)));
+        });
+        list.addEventListener("click", () => step(1));
+        const hold = (isHeld) => {
+            held = isHeld;
+            syncBackTips();
+        };
+        tipsBox.addEventListener("pointerenter", () => hold(true));
+        tipsBox.addEventListener("pointerleave", () => hold(tipsBox.contains(document.activeElement)));
+        tipsBox.addEventListener("focusin", () => hold(true));
+        tipsBox.addEventListener("focusout", (event) => hold(tipsBox.contains(event.relatedTarget)));
+        document.addEventListener("visibilitychange", () => syncBackTips());
+    }
+
     function setUpJukeboxBack() {
         if (!jukeboxPanel) return;
+        setUpBackTips();
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
             button.addEventListener("click", () => flipJukebox(button.dataset.flipJukebox === "back"));
@@ -4884,6 +4945,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             jukeboxPanel.classList.add("powered-up");
             setTimeout(() => jukeboxPanel.classList.remove("powered-up"), 1300);
             showOffRecordSpin(1080, 1400);
+        });
+
+        // Jukebot's secret turns the record gold: turn around to show it off
+        document.addEventListener("jukebot:secret", (event) => {
+            if (!event.detail || !event.detail.gold) return;
+            setTimeout(() => {
+                if (!jukeboxPanel.classList.contains("is-flipped")) return;
+                flipJukebox(false);
+                setTimeout(() => showOffRecordSpin(1080, 1400), FLIP_OUT_MS + FLIP_IN_MS + 100);
+            }, 2200);
         });
     }
 

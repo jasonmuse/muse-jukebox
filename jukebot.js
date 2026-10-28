@@ -1,20 +1,91 @@
-// Fix Jukebot: the jukebox is Jukebot. Unscrew its rear panel, swat the bugs before they chew
-// through its core (leave the glowbugs alone, they recharge it), zap the swarm once it's charged,
-// wipe up the goo, and close it back up.
+// Fix Jukebot: the jukebox is Jukebot, and it's on the fritz. Fixing it is one repair job in six
+// steps: open the rear panel, sweep out the bugs, solder the broken wires, reboot its memory, beat
+// the bug queen, then clean up and screw the panel back on. The panel stays off from the first
+// step to the last (leave mid-job and it's just leaned back on). Once Jukebot's fixed there's Bug
+// blitz, endless bugs for fun, and a secret.
 (() => {
     const SVG_NS = "http://www.w3.org/2000/svg";
     const EDGE = 4;
-    const SCREW_HOLD_SECONDS = 0.7; // holding a screw turns it all the way out in this long
+    const SCREW_HOLD_SECONDS = 0.7; // holding a screw turns it all the way out (or in) in this long
     const SCREW_TAP_TURN = 0.5; // a quick tap turns it halfway
     const ZAP_CHARGE_NEEDED = 6;
     const ZAP_RADIUS = 140;
     const GLOW_CHARGE_RANGE = 80;
+    const SOLDER_SECONDS = 0.9; // holding the iron on a broken wire mends it in this long
+    const BREAK_DRAIN = 0.4; // power (%) each broken wire leaks away a second
+    const MEMORY_ROUNDS = [3, 4, 5, 6]; // lights to remember in each round of the memory step
+    const MEMORY_COLORS = ["#ff86d6", "#7fe6ff", "#b79bff", "#ffe680"];
+    const MEMORY_NOTES = ["\u266A", "\u266B", "\u266C", "\u2669"];
+    const SECRET_BOOPS = 5; // boops in a row on the fixed Jukebot's sticker
+    const MAX_SPLATS = 20;
     const STORAGE_KEY = "museJukeboxJukebot";
     const HAPPY_LINES = ["Super duper!", "Good as new!", "Beep boop, thank you!", "Back in the groove!"];
     const SQUASH_LINES = ["Splat!", "Got one!", "Squashed!", "Nice swing!", "Bzzt... gone."];
+    const SIZZLE_LINES = ["Sizzle!", "Zapped!", "Tssss!"];
     const CHEW_LINES = ["Ow! It's chewing me!", "Hey! That's my core!", "Get it off me!"];
     const BOOP_LINES = ["Boop!", "Hehe, that tickles!", "Beep?"];
+    const MEMORY_LINES = ["Got it!", "Yes! It's coming back!", "Beep! More!"];
     const MOODS = ["broken", "worried", "scared", "ouch", "happy", "excited"];
+    // The repair job, step by step
+    const JOB_STEPS = [
+        {
+            id: "open",
+            title: "Open me up",
+            goal: "Hold each of my 4 corner screws to twist it out.",
+            done: "I'm open! Eek, look at this mess..."
+        },
+        {
+            id: "sweep",
+            title: "Bug sweep",
+            goal: "Swat every bug before it chews my chip. Leave the glowbugs alone: they recharge me!",
+            done: "All swept out!",
+            bugs: { fly: 6, beetle: 3 },
+            glowbugs: 2,
+            maxOnBoard: 4
+        },
+        {
+            id: "wiring",
+            title: "Fix my wiring",
+            goal: "Hold the soldering iron on each sparking wire to mend it. Tap the fleas to zap them!",
+            done: "Wires all fixed!",
+            bugs: { hopper: 4 },
+            glowbugs: 1,
+            maxOnBoard: 2
+        },
+        {
+            id: "memory",
+            title: "Reboot my memory",
+            goal: "Watch my memory lights, then tap them back in the same order.",
+            done: "Memory restored!"
+        },
+        {
+            id: "queen",
+            title: "The bug queen",
+            goal: "The Queen Moth is nesting in me! Bonk her, swat her swarm, and zap them when I'm charged.",
+            done: "The queen is gone!",
+            bugs: { fly: 5, beetle: 2, hopper: 2 },
+            queen: true,
+            queenHp: 10,
+            glowbugs: 3,
+            maxOnBoard: 5,
+            speedScale: 1.12,
+            drainScale: 1.1
+        },
+        {
+            id: "close",
+            title: "Close me up",
+            goal: "Scrub off all the goo, then screw my panel back on.",
+            done: ""
+        }
+    ];
+    const STEP_ICONS = {
+        open: '<circle cx="12" cy="12" r="7.5"/><path d="M9 9l6 6M15 9l-6 6"/>',
+        sweep: '<ellipse cx="12" cy="13.5" rx="4.4" ry="5.8"/><path d="M12 7.7V4.5M9.4 5.2l1.4 2.2M14.6 5.2l-1.4 2.2M7.6 12H4.5M7.8 16.2l-2.8 2M16.4 12h3.1M16.2 16.2l2.8 2"/>',
+        wiring: '<path d="M13 2.8 6 13.2h5.3l-1 8 7.7-11.2h-5.4z"/>',
+        memory: '<path d="M9 17.5V6l10-2v11.5"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.6" r="2.4"/>',
+        queen: '<path d="M4.5 17 3.5 7.5l4.7 3.8L12 5l3.8 6.3 4.7-3.8-1 9.5z"/><path d="M5.5 20h13"/>',
+        close: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.2" cy="8.2" r="1.3"/><circle cx="15.8" cy="8.2" r="1.3"/><circle cx="8.2" cy="15.8" r="1.3"/><circle cx="15.8" cy="15.8" r="1.3"/>'
+    };
     const BUG_TYPES = {
         fly: { radius: 13, hp: 1, speed: [95, 140], goo: "#c8e64a", scale: 1.2, bite: 5, seek: 0.3, flier: true },
         beetle: { radius: 14, hp: 2, speed: [36, 52], goo: "#6fd36f", scale: 1.2, bite: 8, seek: 0.85 },
@@ -58,36 +129,57 @@
         };
     }
 
-    function getLevelConfig(level) {
-        const flies = 3 + level;
-        const beetles = 1 + Math.floor(level / 2);
-        const hoppers = level >= 2 ? Math.floor(level / 2) : 0;
-        const queen = level % 3 === 0;
-        const hostileCount = flies + beetles + hoppers + (queen ? 1 : 0);
+    // The bugs for a step of the job (or a wave of Bug blitz)
+    function getBugConfig(step) {
+        const bugs = step.bugs || {};
         return {
-            level,
-            flies,
-            beetles,
-            hoppers,
-            queen,
-            glowbugs: Math.min(4, level),
-            speedScale: 1 + Math.min(0.9, (level - 1) * 0.1),
-            seekBoost: Math.min(0.3, (level - 1) * 0.05),
-            drainScale: 1 + Math.min(1, (level - 1) * 0.12),
-            maxOnBoard: Math.min(7, 3 + Math.floor(level / 2)),
-            par: 10 + (hostileCount * 2.4) + (queen ? 6 : 0)
+            flies: bugs.fly || 0,
+            beetles: bugs.beetle || 0,
+            hoppers: bugs.hopper || 0,
+            queen: Boolean(step.queen),
+            queenHp: step.queenHp || BUG_TYPES.queen.hp,
+            glowbugs: step.glowbugs || 0,
+            speedScale: step.speedScale || 1,
+            seekBoost: step.seekBoost || 0,
+            drainScale: step.drainScale || 1,
+            maxOnBoard: step.maxOnBoard || 4
         };
     }
 
+    // Bug blitz: every wave brings more bugs, faster and hungrier
+    function getBlitzConfig(wave) {
+        return getBugConfig({
+            bugs: { fly: 3 + wave, beetle: Math.floor(wave / 2), hopper: Math.floor((wave - 1) / 2) },
+            queen: wave % 4 === 0,
+            queenHp: 6 + wave,
+            glowbugs: 1 + Math.floor(wave / 3),
+            speedScale: 1 + Math.min(0.9, (wave - 1) * 0.08),
+            seekBoost: Math.min(0.3, (wave - 1) * 0.04),
+            drainScale: 1 + Math.min(1.2, (wave - 1) * 0.12),
+            maxOnBoard: Math.min(8, 3 + Math.floor(wave / 2))
+        });
+    }
+
+    // How far the job's got (the step to do next; past the last step means fixed), plus Bug blitz's
+    // best and the secret
     function readProgress() {
+        const fresh = { version: 2, step: 0, jobSeconds: 0, bestJob: 0, squashed: 0, blitzBest: 0, gold: false, secretFound: false };
         try {
-            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") || {};
+            if (saved.version !== 2) return fresh;
+            const step = Math.round(Number(saved.step) || 0);
             return {
-                unlocked: Math.max(1, Number(saved.unlocked) || 1),
-                best: saved.best && typeof saved.best === "object" ? saved.best : {}
+                version: 2,
+                step: Math.max(0, Math.min(JOB_STEPS.length, step)),
+                jobSeconds: Number(saved.jobSeconds) || 0,
+                bestJob: Number(saved.bestJob) || 0,
+                squashed: Number(saved.squashed) || 0,
+                blitzBest: Number(saved.blitzBest) || 0,
+                gold: saved.gold === true,
+                secretFound: saved.secretFound === true
             };
         } catch (error) {
-            return { unlocked: 1, best: {} };
+            return fresh;
         }
     }
 
@@ -195,6 +287,7 @@
         const core = document.getElementById("jb-core");
         const bugLayer = document.getElementById("jb-bugs");
         const splatLayer = document.getElementById("jb-splats");
+        const repairLayer = document.getElementById("jb-repairs");
         const zapLayer = document.getElementById("jb-zaps");
         const fxLayer = document.getElementById("jb-fx");
         const tool = document.getElementById("jb-tool");
@@ -210,24 +303,31 @@
         const comboBadge = document.getElementById("jb-combo");
         const speech = document.getElementById("jb-speech");
         const stickerFace = document.getElementById("jb-sticker-face");
+        const stickerBoop = document.getElementById("jb-sticker-boop");
         const stickerTitle = document.getElementById("jb-sticker-title");
         const stickerText = document.getElementById("jb-sticker-text");
-        const levelLabel = document.getElementById("jb-level-label");
-        const levelBest = document.getElementById("jb-level-best");
-        const levelPrev = document.getElementById("jb-level-prev");
-        const levelNext = document.getElementById("jb-level-next");
+        const stickerSteps = document.getElementById("jb-sticker-steps");
+        const stickerNote = document.getElementById("jb-sticker-note");
+        const stickerActions = document.getElementById("jb-sticker-actions");
+        const mission = document.getElementById("jb-mission");
+        const missionSteps = document.getElementById("jb-mission-steps");
+        const missionKicker = document.getElementById("jb-mission-kicker");
+        const missionTitle = document.getElementById("jb-mission-title");
+        const missionGoal = document.getElementById("jb-mission-goal");
+        const missionStart = document.getElementById("jb-mission-start");
         const resultsOverlay = document.getElementById("jb-results");
+        const resultsBadge = document.getElementById("jb-results-badge");
         const resultsTitle = document.getElementById("jb-results-title");
-        const resultsStars = Array.from(document.querySelectorAll("#jb-stars .jb-star"));
         const resultsStats = document.getElementById("jb-results-stats");
         const resultsNote = document.getElementById("jb-results-note");
-        const replayButton = document.getElementById("jb-replay");
-        const nextButton = document.getElementById("jb-next");
-        const closeResultsButton = document.getElementById("jb-results-close");
+        const resultsPrimary = document.getElementById("jb-results-primary");
+        const resultsSecondary = document.getElementById("jb-results-secondary");
 
         let progress = readProgress();
-        let selectedLevel = progress.unlocked;
         let game = null;
+        let boardSplats = []; // goo left on the board by the job so far (it's cleaned up at the end)
+        let resultsActions = { primary: null, secondary: null };
+        let boops = [];
         let size = { width: 0, height: 0 };
         let coreLayout = { x: 0, y: 0, halfWidth: 66, halfHeight: 46, scale: 1 };
         let coreFace = null;
@@ -270,8 +370,9 @@
         // Jukebot's resting expression for what's going on right now
         function getBaseMood() {
             if (!game) return root.classList.contains("is-fixed") ? "happy" : "broken";
-            if (["clean", "closing", "done"].includes(game.stage)) return "happy";
-            if (game.stage === "swat") {
+            if (["between", "clean", "screwin", "done"].includes(game.stage)) return "happy";
+            if (game.stage === "memory") return "worried";
+            if (game.stage === "swat" || game.stage === "wiring") {
                 const chewed = game.bugs.some((bug) => bug.state === "alive" && bug.mode === "chew");
                 return chewed || game.power < 25 ? "scared" : "worried";
             }
@@ -403,10 +504,35 @@
             return game.queue.length + alive;
         }
 
+        // What's left to do in this step, for the HUD
+        function getStepCounter() {
+            if (!game) return "";
+            if (game.blitz) return `Score ${game.blitz.score}`;
+            switch (game.stage) {
+                case "unscrew":
+                    return `Screws ${screws.filter((screw) => !screw.classList.contains("is-out")).length}`;
+                case "wiring":
+                    return `Wires ${game.breaks.filter((brk) => !brk.fixed).length}`;
+                case "memory":
+                    return `Round ${Math.max(1, game.memory.round)}/${MEMORY_ROUNDS.length}`;
+                case "clean":
+                    return `Goo ${boardSplats.filter((splat) => splat.dirt > 0).length}`;
+                case "screwin":
+                    return `Screws ${screws.filter((screw) => !screw.classList.contains("is-in")).length}`;
+                default:
+                    return `Bugs ${getHostileRemaining()}`;
+            }
+        }
+
         function updateHud() {
             const power = game ? game.power : 100;
-            hudLevel.textContent = `Lv ${game ? game.level : selectedLevel}`;
-            hudBugs.textContent = `Bugs ${game ? getHostileRemaining() : 0}`;
+            if (game && game.blitz) {
+                hudLevel.textContent = `Wave ${game.blitz.wave}`;
+            } else {
+                const index = game ? game.stepIndex : progress.step;
+                hudLevel.textContent = `Step ${Math.min(index, JOB_STEPS.length - 1) + 1}/${JOB_STEPS.length}`;
+            }
+            hudBugs.textContent = getStepCounter();
             hudTime.textContent = `${getElapsedSeconds().toFixed(1)}s`;
             hudPowerText.textContent = `${Math.round(power)}%`;
             hudPowerFill.style.width = `calc((100% - 6px) * ${(power / 100).toFixed(3)})`;
@@ -424,17 +550,57 @@
             if (game.power > 45) game.lowPowerWarned = false;
         }
 
-        function formatBest(level) {
-            const best = progress.best[level];
-            if (!best) return "Not fixed yet";
-            return `Best: ${"★".repeat(best.stars)}${"☆".repeat(3 - best.stars)} · ${best.time.toFixed(1)}s`;
+        function formatClock(seconds) {
+            const whole = Math.max(0, Math.round(seconds));
+            return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
         }
 
-        function updateLevelPicker() {
-            levelLabel.textContent = `Level ${selectedLevel}`;
-            levelBest.textContent = formatBest(selectedLevel);
-            levelPrev.disabled = selectedLevel <= 1;
-            levelNext.disabled = selectedLevel >= progress.unlocked;
+        // A row of the job's steps: done ones ticked off, the next one lit up
+        function renderSteps(list, current) {
+            list.textContent = "";
+            JOB_STEPS.forEach((step, index) => {
+                const item = document.createElement("li");
+                item.className = `jb-step${index < current ? " is-done" : ""}${index === current ? " is-current" : ""}`;
+                item.title = step.title;
+                item.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${STEP_ICONS[step.id]}</svg>`;
+                list.appendChild(item);
+            });
+            list.setAttribute("aria-label", current >= JOB_STEPS.length
+                ? "Repair job: all done"
+                : `Repair job: step ${current + 1} of ${JOB_STEPS.length}, ${JOB_STEPS[current].title}`);
+        }
+
+        function addStickerButton(label, action, isMain) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = `jb-sticker-button${isMain ? " is-main" : ""}`;
+            button.textContent = label;
+            button.addEventListener("click", action);
+            stickerActions.appendChild(button);
+        }
+
+        // The sticker on the panel says how the job's going and what's next
+        function updateSticker() {
+            const index = progress.step;
+            renderSteps(stickerSteps, index);
+            stickerActions.textContent = "";
+            if (index >= JOB_STEPS.length) {
+                stickerTitle.textContent = "Good as new!";
+                stickerText.textContent = "Thanks for fixing me! (Psst... I'm ticklish.)";
+                stickerNote.textContent = progress.blitzBest ? `Blitz best: ${progress.blitzBest}` : "All fixed";
+                addStickerButton("Bug blitz", startBlitz, true);
+                addStickerButton("Fix me again", restartJob);
+            } else if (index > 0) {
+                stickerTitle.textContent = "Repair in progress";
+                stickerText.textContent = `Next up: ${JOB_STEPS[index].title}. My panel's just leaned on.`;
+                stickerNote.textContent = `Step ${index + 1} of ${JOB_STEPS.length}`;
+                addStickerButton("Keep fixing", continueJob, true);
+            } else {
+                stickerTitle.textContent = "Help! I'm glitching!";
+                stickerText.textContent = "Bugs got into my wiring. Hold my 4 corner screws to open me up and fix me.";
+                stickerNote.textContent = `${JOB_STEPS.length} steps to fix`;
+            }
+            stickerActions.hidden = !stickerActions.childElementCount;
         }
 
         // ───── The core chip: Jukebot's brain, with its screen face on top ─────
@@ -703,6 +869,7 @@
 
             addText(width - 34, height - 15, "JKB-01 REV.B ♪", "end");
             drawCore();
+            placeRepairs();
         }
 
         function drawBoardIfDirty() {
@@ -741,10 +908,10 @@
             }
         }
 
-        // ───── Reset / start ─────
+        // ───── Between repairs ─────
         function resetScrews() {
             screws.forEach((screw) => {
-                screw.classList.remove("is-out", "is-screwing-in");
+                screw.classList.remove("is-out", "is-in", "is-screwing-in");
                 screw.disabled = false;
                 screw.style.setProperty("--turn", "0deg");
                 screw.style.setProperty("--lift", "0");
@@ -759,47 +926,51 @@
             game = null;
         }
 
-        function reset() {
-            stopGame();
+        function clearBoard() {
             bugLayer.textContent = "";
             splatLayer.textContent = "";
+            repairLayer.textContent = "";
             zapLayer.textContent = "";
             fxLayer.textContent = "";
+            boardSplats = [];
+        }
+
+        // No step running: the panel's on (only leaned on, mid-job), and the sticker says what's next
+        function rest() {
+            const wasOpen = root.classList.contains("cover-off");
+            stopGame();
+            clearBoard();
             resetScrews();
-            root.classList.remove("is-fixed", "cover-off", "is-playing", "is-running", "zap-ready", "power-low", "is-shorting", "is-zapping");
-            root.classList.add("is-broken");
+            const fixed = progress.step >= JOB_STEPS.length;
+            const midJob = progress.step > 0 && !fixed;
+            root.classList.remove("cover-off", "is-playing", "is-running", "is-blitz", "is-screwing", "no-tool", "zap-ready", "power-low", "is-shorting", "is-zapping", "is-fixed", "is-broken", "is-loose");
+            root.classList.add(fixed ? "is-fixed" : "is-broken");
+            root.classList.toggle("is-loose", midJob);
+            screws.forEach((screw) => {
+                if (midJob) screw.classList.add("is-out");
+                // Coming back from Bug blitz the screws go back in with a twist
+                if (fixed && wasOpen) screw.classList.add("is-screwing-in");
+                screw.disabled = midJob || fixed;
+            });
             root.style.setProperty("--power-level", "1");
-            lightUp(0);
+            lightUp(fixed ? 3 : 0);
             moodHoldUntil = 0;
-            setMoodClass("broken");
+            setMoodClass(fixed ? "happy" : "broken");
             setTool(null);
             hideSpeech();
             comboBadge.classList.remove("is-visible");
+            mission.hidden = true;
             resultsOverlay.hidden = true;
-            stickerTitle.textContent = "Help! I'm glitching!";
-            stickerText.textContent = "Bugs got into my wiring. Hold my 4 corner screws to open me up and fix me.";
             setStatus("");
+            updateSticker();
             updateChargeLeds();
-            updateLevelPicker();
             updateHud();
         }
 
-        function start(level) {
-            reset();
-            const config = getLevelConfig(level);
-            const hostile = shuffle([
-                ...Array(config.flies).fill("fly"),
-                ...Array(config.beetles).fill("beetle"),
-                ...Array(config.hoppers).fill("hopper")
-            ]);
-            if (config.queen) {
-                hostile.splice(Math.floor(hostile.length * 0.55), 0, "queen");
-            }
-
-            game = {
-                level,
-                config,
-                stage: "unscrew",
+        function newGame(stepIndex) {
+            return {
+                stepIndex,
+                stage: "between",
                 startTime: performance.now(),
                 endTime: null,
                 penaltyMs: 0,
@@ -807,10 +978,10 @@
                 lastFrame: null,
                 screwProgress: [0, 0, 0, 0],
                 hold: null,
-                queue: hostile,
-                glowLeft: config.glowbugs,
+                config: getBugConfig({}),
+                queue: [],
+                glowLeft: 0,
                 bugs: [],
-                splats: [],
                 nextSpawnAt: 0,
                 nextGlowAt: 0,
                 queenSpawns: 0,
@@ -819,6 +990,7 @@
                 combo: 0,
                 bestCombo: 0,
                 glowHits: 0,
+                squashed: 0,
                 power: 100,
                 lowPowerWarned: false,
                 shorts: 0,
@@ -829,27 +1001,141 @@
                 lastChewLine: -Infinity,
                 scrubbing: false,
                 lastScrub: null,
+                breaks: [],
+                solder: null,
+                memory: null,
+                blitz: null,
                 timers: []
             };
-
-            root.classList.add("is-running");
-            setTool("screwdriver");
-            stickerTitle.textContent = "That's it, keep going!";
-            stickerText.textContent = "Hold each corner screw to twist it out (or tap it twice).";
-            updateHud();
-            game.frame = requestAnimationFrame(step);
         }
 
-        // ───── Stage 1: unscrew the rear panel (hold to keep turning, or tap) ─────
+        function buildQueue(config) {
+            const hostile = shuffle([
+                ...Array(config.flies).fill("fly"),
+                ...Array(config.beetles).fill("beetle"),
+                ...Array(config.hoppers).fill("hopper")
+            ]);
+            if (config.queen) {
+                hostile.splice(Math.floor(hostile.length * 0.4), 0, "queen");
+            }
+            return hostile;
+        }
+
+        // Start a step of the job (the board keeps whatever the earlier steps left on it)
+        function startStep(index) {
+            const step = JOB_STEPS[index];
+            stopGame();
+            game = newGame(index);
+            mission.hidden = true;
+            resultsOverlay.hidden = true;
+            root.classList.add("is-running");
+            root.classList.remove("no-tool");
+            root.style.setProperty("--power-level", "1");
+            root.classList.remove("power-low");
+            hideSpeech();
+
+            if (step.id === "open") {
+                game.stage = "unscrew";
+                setTool("screwdriver");
+                stickerTitle.textContent = "That's it, keep going!";
+                stickerText.textContent = "Hold each corner screw to twist it out (or tap it twice).";
+            } else if (step.id === "sweep" || step.id === "queen") {
+                startSwat(getBugConfig(step), step.id === "queen" ? "It's the Queen Moth! Bonk her!" : "Bugs! Get them off me!");
+            } else if (step.id === "wiring") {
+                startWiring(step);
+            } else if (step.id === "memory") {
+                startMemory();
+            } else {
+                startClosing();
+            }
+            updateHud();
+            game.frame = requestAnimationFrame(tick);
+        }
+
+        // A step's done: tick it off, and on to the next one
+        function completeStep() {
+            if (!game || game.stage === "between") return;
+            const index = game.stepIndex;
+            game.endTime = performance.now();
+            game.stage = "between";
+            game.solder = null;
+            game.zapReady = false;
+            progress.step = Math.max(progress.step, index + 1);
+            progress.jobSeconds += getElapsedSeconds();
+            progress.squashed += game.squashed;
+            saveProgress(progress);
+
+            root.classList.remove("zap-ready", "power-low", "no-tool", "is-running");
+            game.bugs.forEach((bug) => {
+                if (bug.state === "alive") flee(bug);
+            });
+            setTool(null);
+            setStatus("");
+            lightUp(Math.min(3, Math.ceil((progress.step / JOB_STEPS.length) * 3)));
+            react("excited", 1300);
+            say(JOB_STEPS[index].done || pick(HAPPY_LINES), 1700, true);
+            for (let count = 0; count < 6; count += 1) {
+                later(() => sparkle({ x: coreLayout.x + randomBetween(-90, 90), y: coreLayout.y + randomBetween(-60, 60) }), count * 90);
+            }
+            later(() => showMission(progress.step), 1500);
+        }
+
+        // The card for the next step: what to do, and a button to start
+        function showMission(index) {
+            if (!game || index >= JOB_STEPS.length) return;
+            const step = JOB_STEPS[index];
+            renderSteps(missionSteps, index);
+            missionKicker.textContent = `Step ${index + 1} of ${JOB_STEPS.length}`;
+            missionTitle.textContent = step.title;
+            missionGoal.textContent = step.goal;
+            resultsOverlay.hidden = true;
+            mission.hidden = false;
+            mission.dataset.step = String(index);
+            if (root.contains(document.activeElement) || document.activeElement === document.body) {
+                missionStart.focus({ preventScroll: true });
+            }
+        }
+
+        // "Keep fixing" on the sticker: lift the leaned-on panel off again
+        function continueJob() {
+            if (progress.step <= 0 || progress.step >= JOB_STEPS.length) return;
+            stopGame();
+            game = newGame(progress.step);
+            root.classList.remove("is-loose");
+            root.classList.add("cover-off", "is-playing");
+            lightUp(Math.min(3, Math.ceil((progress.step / JOB_STEPS.length) * 3)));
+            game.frame = requestAnimationFrame(tick);
+            later(() => showMission(progress.step), 520);
+        }
+
+        function restartJob() {
+            progress.step = 0;
+            progress.jobSeconds = 0;
+            progress.squashed = 0;
+            saveProgress(progress);
+            rest();
+            say("Uh oh... glitching again!", 1600, true);
+        }
+
+        // ───── Step 1: unscrew the rear panel (hold to keep turning, or tap) ─────
+        // At the very end the same screws go back in: then holding turns them the other way
         function turnScrew(index, amount) {
-            if (!game || game.stage !== "unscrew") return;
+            if (!game) return;
             const screw = screws[index];
-            if (screw.classList.contains("is-out")) return;
-            game.screwProgress[index] = Math.min(1, game.screwProgress[index] + Math.max(0, amount));
+            if (game.stage === "unscrew") {
+                if (screw.classList.contains("is-out")) return;
+                game.screwProgress[index] = Math.min(1, game.screwProgress[index] + Math.max(0, amount));
+            } else if (game.stage === "screwin") {
+                if (screw.classList.contains("is-in")) return;
+                game.screwProgress[index] = Math.max(0, game.screwProgress[index] - Math.max(0, amount));
+            } else {
+                return;
+            }
             const turned = game.screwProgress[index];
             screw.style.setProperty("--turn", `${(turned * -720).toFixed(1)}deg`);
             screw.style.setProperty("--lift", turned.toFixed(3));
-            if (turned >= 1) popScrew(index);
+            if (game.stage === "unscrew" && turned >= 1) popScrew(index);
+            if (game.stage === "screwin" && turned <= 0) seatScrew(index);
         }
 
         function popScrew(index) {
@@ -868,11 +1154,31 @@
             later(checkCoverOff, 160);
         }
 
-        function beginScrewHold(screw, event) {
-            if (!game || game.stage === "done") {
-                start(selectedLevel);
+        function seatScrew(index) {
+            const screw = screws[index];
+            if (screw.classList.contains("is-in")) return;
+            if (game.hold && game.hold.index === index) endHoldEffects();
+            screw.classList.add("is-in");
+            screw.disabled = true;
+            const center = getElementCenter(screw);
+            sparkle(center);
+            popText({ x: center.x, y: center.y + 22 }, "click!");
+            if (typeof navigator.vibrate === "function") navigator.vibrate(14);
+            const left = screws.filter((item) => !item.classList.contains("is-in")).length;
+            if (left) {
+                stickerText.textContent = `${left} more to tighten...`;
+            } else {
+                later(finishJob, 260);
             }
-            if (game.stage !== "unscrew" || screw.classList.contains("is-out")) return;
+        }
+
+        function beginScrewHold(screw, event) {
+            // The first screw starts the job
+            if (!game && progress.step === 0) {
+                startStep(0);
+            }
+            if (!game || !["unscrew", "screwin"].includes(game.stage)) return;
+            if (screw.classList.contains(game.stage === "unscrew" ? "is-out" : "is-in")) return;
 
             const index = Number(screw.dataset.screw);
             game.hold = { index, pointerId: event.pointerId, startedAt: performance.now(), startProgress: game.screwProgress[index] };
@@ -898,8 +1204,8 @@
             endHoldEffects();
             // A quick tap still turns the screw halfway
             if (performance.now() - hold.startedAt < 260) {
-                const target = Math.min(1, hold.startProgress + SCREW_TAP_TURN);
-                turnScrew(hold.index, target - game.screwProgress[hold.index]);
+                const turned = Math.abs(game.screwProgress[hold.index] - hold.startProgress);
+                turnScrew(hold.index, Math.max(0, SCREW_TAP_TURN - turned));
             }
             if (event.pointerType !== "mouse") {
                 clearTimeout(toolHideTimer);
@@ -914,20 +1220,25 @@
             if (!screws.every((screw) => screw.classList.contains("is-out"))) return;
 
             game.stage = "opening";
+            root.classList.remove("is-loose");
             root.classList.add("cover-off", "is-playing");
-            lightUp(1);
-            later(() => {
-                game.stage = "swat";
-                setTool("swatter");
-                setStatus("Swat bugs before they chew my core! Spare the glowbugs.");
-                say("Bugs! Get them off me!", 1600, true);
-                const now = performance.now();
-                game.nextSpawnAt = now + 250;
-                game.nextGlowAt = now + 2600;
-            }, 520);
+            later(completeStep, 520);
         }
 
-        // ───── Stage 2: swat ─────
+        // ───── Bug sweep, the bug queen (and Bug blitz): swat ─────
+        function startSwat(config, line) {
+            game.stage = "swat";
+            game.config = config;
+            game.queue = buildQueue(config);
+            game.glowLeft = config.glowbugs;
+            setTool("swatter");
+            setStatus(config.queen ? "Bonk the Queen Moth and swat her swarm!" : "Swat bugs before they chew my core! Spare the glowbugs.");
+            say(line, 1600, true);
+            const now = performance.now();
+            game.nextSpawnAt = now + 350;
+            game.nextGlowAt = now + 2600;
+        }
+
         function spawnBug(type, x, y) {
             const spec = BUG_TYPES[type];
             const bounds = getBounds();
@@ -964,7 +1275,8 @@
                 angle: Math.random() * Math.PI * 2,
                 turn: 0,
                 speed: randomBetween(spec.speed[0], spec.speed[1]) * game.config.speedScale,
-                hp: spec.hp,
+                hp: type === "queen" ? game.config.queenHp : spec.hp,
+                maxHp: type === "queen" ? game.config.queenHp : spec.hp,
                 entered: x !== undefined,
                 state: "alive",
                 mode: "wander",
@@ -1210,7 +1522,11 @@
                 const distance = randomBetween(7, 12);
                 svgEl("circle", { cx: (Math.cos(angle) * distance).toFixed(1), cy: (Math.sin(angle) * distance).toFixed(1), r: randomBetween(1.4, 3.4).toFixed(1) }, group);
             }
-            game.splats.push({ element: group, x, y, radius: 13 * scale, dirt: 1 });
+            boardSplats.push({ element: group, x, y, radius: 13 * scale, dirt: 1 });
+            // Old goo dries up, so there's never a huge mess to clean at the end
+            if (boardSplats.length > MAX_SPLATS) {
+                boardSplats.shift().element.remove();
+            }
         }
 
         function squash(bug, quietly) {
@@ -1219,7 +1535,11 @@
             bug.element.classList.add("is-squashed");
             setTimeout(() => bug.element.remove(), 380);
             addSplat(bug.x, bug.y, bug.spec.goo, bug.type === "queen" ? 2.2 : 1.3);
-            if (!quietly) popText({ x: bug.x, y: bug.y - 18 }, pick(SQUASH_LINES));
+            if (!bug.spec.friendly) {
+                game.squashed += 1;
+                if (game.blitz) game.blitz.score += bug.type === "queen" ? 5 : 1;
+            }
+            if (!quietly) popText({ x: bug.x, y: bug.y - 18 }, pick(game.stage === "wiring" ? SIZZLE_LINES : SQUASH_LINES));
             if (typeof navigator.vibrate === "function") navigator.vibrate(12);
         }
 
@@ -1270,7 +1590,7 @@
                 drawBolt(coreLayout, bug);
                 if (bug.type === "queen") {
                     bug.hp = Math.max(0, bug.hp - 2);
-                    bug.hpBar.setAttribute("width", String(36 * (bug.hp / bug.spec.hp)));
+                    bug.hpBar.setAttribute("width", String(36 * (bug.hp / bug.maxHp)));
                     if (bug.hp > 0) {
                         popText({ x: bug.x, y: bug.y - 40 }, "zzzt!");
                         return;
@@ -1370,9 +1690,9 @@
                     if (target.mode === "chew") knockBack(target, seconds);
                 }
                 if (target.type === "queen") {
-                    target.hpBar.setAttribute("width", String(36 * (target.hp / target.spec.hp)));
+                    target.hpBar.setAttribute("width", String(36 * (target.hp / target.maxHp)));
                     popText({ x: target.x, y: target.y - 40 }, "bonk!");
-                    if (game.queenSpawns < 3) {
+                    if (game.queenSpawns < 4) {
                         game.queenSpawns += 1;
                         spawnBug("fly", target.x, target.y);
                     }
@@ -1388,24 +1708,17 @@
 
         function checkBugsCleared() {
             if (game.stage !== "swat" || getHostileRemaining() > 0) return;
-
-            game.stage = "clean";
-            game.endPower = game.power;
-            game.zapReady = false;
-            root.classList.remove("zap-ready", "power-low");
-            game.bugs.forEach((bug) => {
-                if (bug.state === "alive" && bug.spec.friendly) flee(bug);
-            });
-            lightUp(2);
-            setTool("sponge");
-            react("excited", 900);
-            say("Phew! Now the goo...", 1500, true);
-            setStatus("Bugs gone! Now scrub off all the goo.");
+            if (game.blitz) {
+                waveCleared();
+            } else {
+                completeStep();
+            }
         }
 
-        // Chewing drains Jukebot's power; glowbugs hanging around the core top it back up
+        // Chewing drains Jukebot's power (and so do broken wires); glowbugs hanging around the core
+        // top it back up
         function updatePower(deltaSeconds, seconds) {
-            let drain = 0;
+            let drain = game.stage === "wiring" ? game.breaks.filter((brk) => !brk.fixed).length * BREAK_DRAIN : 0;
             let recharge = 0;
             game.bugs.forEach((bug) => {
                 if (bug.state !== "alive") return;
@@ -1426,8 +1739,12 @@
             if (game.power <= 0) shortCircuit(seconds);
         }
 
-        // Out of power: Jukebot reboots (costs time) and shakes the bugs off
+        // Out of power: Jukebot reboots (costs time) and shakes the bugs off. In Bug blitz it's game over.
         function shortCircuit(seconds) {
+            if (game.blitz) {
+                endBlitz();
+                return;
+            }
             game.shorts += 1;
             game.penaltyMs += 4000;
             setPower(35);
@@ -1441,12 +1758,314 @@
             });
         }
 
-        // ───── Stage 3: clean ─────
+        // ───── Fix my wiring: hold the soldering iron on the sparking breaks ─────
+        function startWiring(step) {
+            game.stage = "wiring";
+            game.config = getBugConfig(step);
+            game.queue = buildQueue(game.config);
+            game.glowLeft = game.config.glowbugs;
+            const count = size.width < 360 ? 3 : 4;
+            game.breaks = Array.from({ length: count }, () => ({ fixed: false, progress: 0, element: null, spot: null }));
+            placeRepairs();
+            setTool("iron");
+            setStatus("Hold the iron on each sparking wire. Tap fleas to zap them!");
+            say("Ouch, my wires are fried...", 1600, true);
+            const now = performance.now();
+            game.nextSpawnAt = now + 2200;
+            game.nextGlowAt = now + 5000;
+        }
+
+        // Spots on the board's main traces that are clear of the chip, the HUD and the hint
+        function findBreakSpots() {
+            const spots = [];
+            boardLayer.querySelectorAll(".jb-trace:not(.jb-trace--thin)").forEach((trace, traceIndex) => {
+                const length = trace.getTotalLength();
+                if (length < 50) return;
+                [0.5, 0.65, 0.8].forEach((fraction) => {
+                    const at = length * fraction;
+                    const point = trace.getPointAtLength(at);
+                    const before = trace.getPointAtLength(Math.max(0, at - 3));
+                    const after = trace.getPointAtLength(Math.min(length, at + 3));
+                    const clear = point.x > 26 && point.x < size.width - 26 && point.y > 56 && point.y < size.height - 72
+                        && !isOnCore(point, 30);
+                    if (clear) {
+                        spots.push({ traceIndex, x: point.x, y: point.y, angle: (Math.atan2(after.y - before.y, after.x - before.x) * 180) / Math.PI });
+                    }
+                });
+            });
+            return spots;
+        }
+
+        // Breaks (and the memory lights) sit on the board, so they move when it's redrawn
+        function placeRepairs() {
+            if (!game) return;
+            // Mended wires from the wiring step belong to where the board's traces used to be
+            repairLayer.querySelectorAll(".jb-break").forEach((element) => {
+                if (!game.breaks.some((brk) => brk.element === element)) element.remove();
+            });
+            if (game.breaks.length) {
+                const spots = shuffle(findBreakSpots());
+                const used = [];
+                game.breaks.forEach((brk) => {
+                    const spot = spots.find((candidate) => used.every((other) => Math.hypot(other.x - candidate.x, other.y - candidate.y) > 64))
+                        || spots.find((candidate) => !used.includes(candidate));
+                    if (!spot) return;
+                    used.push(spot);
+                    brk.spot = spot;
+                    drawBreak(brk);
+                });
+                // A tiny board might not have room for them all
+                game.breaks = game.breaks.filter((brk) => brk.spot);
+            }
+            if (game.memory) placeMemoryPads();
+        }
+
+        function drawBreak(brk) {
+            if (brk.element) brk.element.remove();
+            const { spot } = brk;
+            const group = svgEl("g", { class: `jb-break${brk.fixed ? " is-fixed" : ""}`, transform: `translate(${spot.x.toFixed(1)} ${spot.y.toFixed(1)}) rotate(${spot.angle.toFixed(1)})` }, repairLayer);
+            svgEl("circle", { class: "jb-break-glow", r: 18 }, group);
+            svgEl("rect", { class: "jb-break-gap", x: -5, y: -5, width: 10, height: 10, rx: 2 }, group);
+            svgEl("path", { class: "jb-break-ends", d: "M-7.5 0h2.5M5 0h2.5" }, group);
+            svgEl("path", { class: "jb-break-sparks", d: "M0-2-3-10M1-1l7-6M1 2l3 8.5M-1 1l-8 3.5" }, group);
+            svgEl("path", { class: "jb-break-sparks jb-break-sparks--late", d: "M0 0-7-6M0 0l8 1M0 0l-2 9" }, group);
+            svgEl("circle", { class: "jb-break-core", r: 3.4 }, group);
+            brk.ring = svgEl("circle", { class: "jb-break-ring", r: 18, pathLength: 100 }, group);
+            brk.ring.style.strokeDashoffset = String(100 - (brk.progress * 100));
+            svgEl("ellipse", { class: "jb-solder", rx: 6.5, ry: 4.6 }, group);
+            svgEl("ellipse", { class: "jb-solder-shine", cx: -1.8, cy: -1.4, rx: 2.2, ry: 1.2 }, group);
+            brk.element = group;
+        }
+
+        function findBreak(point, isTouch) {
+            const reach = isTouch ? 30 : 22;
+            let found = null;
+            let closest = Infinity;
+            game.breaks.forEach((brk) => {
+                if (brk.fixed || !brk.spot) return;
+                const distance = Math.hypot(point.x - brk.spot.x, point.y - brk.spot.y);
+                if (distance < reach && distance < closest) {
+                    found = brk;
+                    closest = distance;
+                }
+            });
+            return found;
+        }
+
+        function beginSolder(brk, event, point) {
+            game.solder = { brk, pointerId: event.pointerId, point };
+            try {
+                root.setPointerCapture(event.pointerId);
+            } catch (error) {
+                // Pointer already gone
+            }
+            brk.element.classList.add("is-soldering");
+            useTool({ x: brk.spot.x, y: brk.spot.y }, false);
+            tool.classList.add("is-soldering");
+            lookOverride = { x: brk.spot.x, y: brk.spot.y, until: performance.now() + 1200 };
+        }
+
+        function endSolder(event) {
+            const solder = game && game.solder;
+            if (!solder || (event && event.pointerId !== solder.pointerId)) return;
+            game.solder = null;
+            if (solder.brk.element) solder.brk.element.classList.remove("is-soldering");
+            tool.classList.remove("is-soldering");
+            if (event && event.pointerType !== "mouse") {
+                clearTimeout(toolHideTimer);
+                toolHideTimer = setTimeout(() => {
+                    if (!game || !game.solder) tool.classList.remove("is-visible");
+                }, 400);
+            }
+        }
+
+        // The iron heats the joint while it's held there (and only while it's still on it)
+        function updateSolder(deltaSeconds) {
+            const solder = game.solder;
+            if (!solder) return;
+            const { brk } = solder;
+            if (Math.hypot(solder.point.x - brk.spot.x, solder.point.y - brk.spot.y) > 40) return;
+            brk.progress = Math.min(1, brk.progress + (deltaSeconds / SOLDER_SECONDS));
+            brk.ring.style.strokeDashoffset = String(100 - (brk.progress * 100));
+            if (Math.random() < deltaSeconds * 7) {
+                spawnFx("jb-solder-smoke", { x: brk.spot.x + randomBetween(-5, 5), y: brk.spot.y - 6 }, "", 900);
+            }
+            if (brk.progress >= 1) fixBreak(brk);
+        }
+
+        function fixBreak(brk) {
+            brk.fixed = true;
+            endSolder();
+            brk.element.classList.add("is-fixed");
+            sparkle({ x: brk.spot.x, y: brk.spot.y });
+            popText({ x: brk.spot.x, y: brk.spot.y - 20 }, "fixed!");
+            setPower(game.power + 8);
+            react("happy", 600);
+            if (typeof navigator.vibrate === "function") navigator.vibrate(12);
+            const left = game.breaks.filter((item) => !item.fixed).length;
+            if (left) {
+                setStatus(`${left} more wire${left === 1 ? "" : "s"} to fix!`);
+                say(left === 1 ? "Just one more!" : "Ahh, much better!", 1100);
+            }
+            checkWiringDone();
+        }
+
+        function checkWiringDone() {
+            if (game.stage !== "wiring") return;
+            const wiresLeft = game.breaks.some((brk) => !brk.fixed);
+            if (!wiresLeft && getHostileRemaining() === 0) {
+                completeStep();
+            } else if (!wiresLeft && !game.wiresDone) {
+                game.wiresDone = true;
+                setStatus("Wires fixed! Now zap those fleas.");
+            }
+        }
+
+        // ───── Reboot my memory: watch the lights, then play them back ─────
+        function startMemory() {
+            game.stage = "memory";
+            game.memory = { pads: [], sequence: [], round: 0, input: 0, showing: true, mistakes: 0 };
+            root.classList.add("no-tool");
+            setTool(null);
+            placeMemoryPads();
+            setStatus("Watch my memory lights...");
+            say("My memory's all fuzzy...", 1500, true);
+            later(nextMemoryRound, 1100);
+        }
+
+        // Four memory lights, two each side of Jukebot's chip
+        function placeMemoryPads() {
+            const { memory } = game;
+            const scale = coreLayout.scale;
+            const padSize = Math.round(52 * Math.max(0.78, scale));
+            const offsetX = coreLayout.halfWidth + (padSize / 2) + (24 * scale);
+            const offsetY = (padSize / 2) + (5 * scale);
+            const spots = [[-offsetX, -offsetY], [offsetX, -offsetY], [-offsetX, offsetY], [offsetX, offsetY]];
+            spots.forEach(([dx, dy], index) => {
+                let pad = memory.pads[index];
+                if (!pad) {
+                    const group = svgEl("g", { class: "jb-memory-pad" }, repairLayer);
+                    group.style.setProperty("--pad-color", MEMORY_COLORS[index]);
+                    const key = svgEl("rect", { class: "jb-memory-key" }, group);
+                    const note = svgEl("text", { class: "jb-memory-note", "text-anchor": "middle" }, group);
+                    note.textContent = MEMORY_NOTES[index];
+                    pad = { element: group, key, note };
+                    memory.pads[index] = pad;
+                }
+                pad.x = coreLayout.x + dx;
+                pad.y = coreLayout.y + dy;
+                pad.half = padSize / 2;
+                pad.element.setAttribute("transform", `translate(${pad.x.toFixed(1)} ${pad.y.toFixed(1)})`);
+                pad.key.setAttribute("x", String(-padSize / 2));
+                pad.key.setAttribute("y", String(-padSize / 2));
+                pad.key.setAttribute("width", String(padSize));
+                pad.key.setAttribute("height", String(padSize));
+                pad.key.setAttribute("rx", String(Math.round(padSize * 0.26)));
+                pad.note.setAttribute("y", String(Math.round(padSize * 0.16)));
+                pad.note.style.fontSize = `${Math.round(padSize * 0.5)}px`;
+            });
+        }
+
+        function flashPad(index, holdMs, variant) {
+            const pad = game.memory.pads[index];
+            if (!pad) return;
+            const className = variant || "is-lit";
+            pad.element.classList.remove(className);
+            void pad.element.getBoundingClientRect();
+            pad.element.classList.add(className);
+            lookOverride = { x: pad.x, y: pad.y, until: performance.now() + holdMs };
+            later(() => pad.element.classList.remove(className), holdMs);
+        }
+
+        function nextMemoryRound() {
+            const { memory } = game;
+            memory.round += 1;
+            const length = MEMORY_ROUNDS[memory.round - 1];
+            while (memory.sequence.length < length) {
+                const last = memory.sequence[memory.sequence.length - 1];
+                let next = Math.floor(Math.random() * 4);
+                // No light three times in a row
+                if (next === last && memory.sequence[memory.sequence.length - 2] === last) next = (next + 1 + Math.floor(Math.random() * 3)) % 4;
+                memory.sequence.push(next);
+            }
+            playMemorySequence();
+        }
+
+        function playMemorySequence() {
+            const { memory } = game;
+            memory.showing = true;
+            memory.input = 0;
+            const gap = Math.max(430, 640 - (memory.round * 45));
+            setStatus(`Round ${memory.round} of ${MEMORY_ROUNDS.length}: watch...`);
+            memory.sequence.forEach((index, order) => later(() => flashPad(index, gap * 0.62), 350 + (order * gap)));
+            later(() => {
+                memory.showing = false;
+                setStatus("Your turn! Tap them in the same order.");
+            }, 350 + (memory.sequence.length * gap));
+        }
+
+        function handleMemoryTap(point) {
+            const { memory } = game;
+            const index = memory.pads.findIndex((pad) => Math.abs(point.x - pad.x) <= pad.half + 8 && Math.abs(point.y - pad.y) <= pad.half + 8);
+            if (index < 0) {
+                if (isOnCore(point, 0)) {
+                    react("happy", 500);
+                    say(pick(BOOP_LINES), 800);
+                }
+                return;
+            }
+            if (memory.showing) {
+                flashPad(index, 160, "is-pressed");
+                return;
+            }
+            flashPad(index, 240);
+            if (index === memory.sequence[memory.input]) {
+                memory.input += 1;
+                if (memory.input < memory.sequence.length) return;
+                // That's the whole round
+                memory.showing = true;
+                react("excited", 700);
+                if (memory.round >= MEMORY_ROUNDS.length) {
+                    memory.pads.forEach((pad, padIndex) => later(() => flashPad(padIndex, 500), padIndex * 90));
+                    later(() => {
+                        memory.pads.forEach((pad) => pad.element.classList.add("is-done"));
+                        later(() => memory.pads.forEach((pad) => pad.element.remove()), 450);
+                        completeStep();
+                    }, 650);
+                } else {
+                    say(pick(MEMORY_LINES), 1100, true);
+                    later(nextMemoryRound, 950);
+                }
+            } else {
+                memory.mistakes += 1;
+                memory.showing = true;
+                game.penaltyMs += 2000;
+                memory.pads.forEach((pad, padIndex) => flashPad(padIndex, 420, "is-wrong"));
+                react("ouch", 800);
+                say("Oops! Watch again...", 1300, true);
+                popText({ x: memory.pads[index].x, y: memory.pads[index].y - memory.pads[index].half - 8 }, "+2s", "jb-pop--penalty");
+                later(playMemorySequence, 1200);
+            }
+        }
+
+        // ───── Close me up: scrub off the goo, then screw the panel back on ─────
+        function startClosing() {
+            const dirty = boardSplats.filter((splat) => splat.dirt > 0).length;
+            if (!dirty) {
+                beginScrewIn();
+                return;
+            }
+            game.stage = "clean";
+            setTool("sponge");
+            setStatus(`Scrub off all the goo! ${dirty} splat${dirty === 1 ? "" : "s"} to go.`);
+            say("Eww, so much goo...", 1400, true);
+        }
+
         function scrubAt(point, amount) {
             let cleanedAny = false;
-            game.splats.forEach((splat) => {
+            boardSplats.forEach((splat) => {
                 if (splat.dirt <= 0) return;
-                if (Math.hypot(point.x - splat.x, point.y - splat.y) > splat.radius + 12) return;
+                if (Math.hypot(point.x - splat.x, point.y - splat.y) > splat.radius + 16) return;
                 splat.dirt = Math.max(0, splat.dirt - amount);
                 splat.element.style.opacity = String(splat.dirt);
                 cleanedAny = true;
@@ -1460,89 +2079,208 @@
                 spawnFx("jb-bubble", { x: point.x + randomBetween(-12, 12), y: point.y + randomBetween(-10, 10) }, "", 700);
             }
 
-            const dirtyLeft = game.splats.filter((splat) => splat.dirt > 0).length;
+            const dirtyLeft = boardSplats.filter((splat) => splat.dirt > 0).length;
             if (dirtyLeft === 0) {
-                closeUp();
+                game.scrubbing = false;
+                say("Sparkling! Now my panel...", 1400, true);
+                later(beginScrewIn, 600);
+                game.stage = "between";
             } else if (cleanedAny) {
                 setStatus(`${dirtyLeft} goo splat${dirtyLeft === 1 ? "" : "s"} left`);
             }
         }
 
-        // ───── Stage 4: close up ─────
-        function closeUp() {
-            if (game.stage !== "clean") return;
-            game.stage = "closing";
-            game.endTime = performance.now();
-            game.scrubbing = false;
-            setTool(null);
-            lightUp(3);
+        // The panel goes back on with its screws sticking out; hold each one to tighten it
+        function beginScrewIn() {
+            if (!game) return;
+            game.stage = "screwin";
+            game.screwProgress = [1, 1, 1, 1];
+            setTool("screwdriver");
             setStatus("");
-            hideSpeech();
-            root.classList.remove("cover-off", "is-playing", "is-running");
-
-            later(() => {
-                resetScrews();
-                screws.forEach((screw) => screw.classList.add("is-screwing-in"));
-                root.classList.remove("is-broken");
-                root.classList.add("is-fixed");
-                setMoodClass("happy");
-                const line = pick(HAPPY_LINES);
-                stickerTitle.textContent = line;
-                stickerText.textContent = "All fixed up. Thanks for the repair!";
-                say(line, 2400, true);
-                for (let index = 0; index < 12; index += 1) {
-                    later(() => sparkle({ x: randomBetween(20, size.width - 20), y: randomBetween(20, size.height - 20) }), index * 70);
-                }
-                document.dispatchEvent(new CustomEvent("jukebot:fixed", { detail: { level: game.level } }));
-            }, 560);
-
-            later(showResults, 1700);
+            root.classList.remove("cover-off", "is-playing");
+            root.classList.add("is-screwing");
+            screws.forEach((screw) => {
+                screw.classList.remove("is-out", "is-in", "is-screwing-in");
+                screw.disabled = false;
+                screw.style.setProperty("--turn", "-720deg");
+                screw.style.setProperty("--lift", "1");
+            });
+            stickerTitle.textContent = "Last bit!";
+            stickerText.textContent = "Hold each screw to tighten my panel back on.";
+            renderSteps(stickerSteps, JOB_STEPS.length - 1);
+            stickerNote.textContent = `Step ${JOB_STEPS.length} of ${JOB_STEPS.length}`;
+            stickerActions.hidden = true;
         }
 
-        function showResults() {
-            const time = getElapsedSeconds();
-            const attempts = game.hits + game.misses;
-            const accuracy = attempts ? game.hits / attempts : 1;
-            const power = Math.round(game.endPower === undefined ? game.power : game.endPower);
-            let stars = 1;
-            if (time <= game.config.par * 1.5 && game.glowHits <= 1 && power >= 30) stars = 2;
-            if (time <= game.config.par && game.glowHits === 0 && accuracy >= 0.7 && power >= 60) stars = 3;
-
-            const previous = progress.best[game.level];
-            const isNewBest = !previous || time < previous.time || stars > previous.stars;
-            progress.best[game.level] = {
-                stars: Math.max(stars, previous ? previous.stars : 0),
-                time: Math.min(time, previous ? previous.time : Infinity)
-            };
-            progress.unlocked = Math.max(progress.unlocked, game.level + 1);
+        // ───── All fixed! ─────
+        function finishJob() {
+            if (!game || game.stage !== "screwin") return;
+            game.endTime = performance.now();
+            game.stage = "done";
+            progress.jobSeconds += getElapsedSeconds();
+            progress.squashed += game.squashed;
+            const firstFix = !progress.bestJob;
+            const jobSeconds = progress.jobSeconds;
+            const isBest = firstFix || jobSeconds < progress.bestJob;
+            if (isBest) progress.bestJob = jobSeconds;
+            progress.step = JOB_STEPS.length;
             saveProgress(progress);
 
-            game.stage = "done";
-            resultsTitle.textContent = `Level ${game.level} fixed!`;
-            resultsStars.forEach((star, index) => star.classList.toggle("is-earned", index < stars));
-            const stats = [`${time.toFixed(1)}s`, `${Math.round(accuracy * 100)}% aim`, `${power}% power`];
-            if (game.bestCombo >= 3) stats.push(`combo x${game.bestCombo}`);
-            if (game.zapKills) stats.push(`${game.zapKills} zapped`);
-            resultsStats.textContent = stats.join(" · ");
+            setTool(null);
+            root.classList.remove("is-running", "is-screwing", "is-broken");
+            root.classList.add("is-fixed");
+            lightUp(3);
+            setMoodClass("happy");
+            updateSticker();
+            say("I'm fixed! Thank you!", 2400, true);
+            for (let index = 0; index < 14; index += 1) {
+                later(() => sparkle({ x: randomBetween(20, size.width - 20), y: randomBetween(20, size.height - 20) }), index * 70);
+            }
+            document.dispatchEvent(new CustomEvent("jukebot:fixed"));
 
-            const notes = [];
-            if (isNewBest) notes.push("New best!");
-            if (game.glowHits) notes.push(`${game.glowHits} glowbug${game.glowHits === 1 ? "" : "s"} bonked`);
-            if (game.shorts) notes.push(`shorted out ${game.shorts}x`);
-            if (stars < 3) notes.push(`3 stars: under ${Math.round(game.config.par)}s, 60% power, 70% aim, no glowbugs`);
-            resultsNote.textContent = notes.join(" · ");
-            nextButton.textContent = `Level ${game.level + 1}`;
-            selectedLevel = game.level;
-            updateLevelPicker();
-            resultsOverlay.hidden = false;
+            later(() => {
+                const notes = [];
+                if (firstFix) notes.push("Bug blitz unlocked!");
+                else if (isBest) notes.push("New best time!");
+                notes.push("P.S. Jukebot is ticklish...");
+                showResults({
+                    badge: "\u2605 SERVICED \u2605",
+                    title: "Jukebot is fixed!",
+                    stats: `Job time ${formatClock(jobSeconds)} \u00b7 ${progress.squashed} bug${progress.squashed === 1 ? "" : "s"} squashed`,
+                    note: notes.join(" "),
+                    primary: ["Bug blitz", startBlitz],
+                    secondary: ["Done", closeResults]
+                });
+            }, 1500);
         }
 
-        // Pick a level and wait for the first screw (the clock starts then)
-        function prepareLevel(level) {
-            selectedLevel = Math.max(1, Math.min(progress.unlocked, level));
-            reset();
-            stickerTitle.textContent = `Level ${selectedLevel}: I'm glitching again!`;
-            stickerText.textContent = "Hold my 4 corner screws to open me up.";
+        function showResults({ badge, title, stats, note, primary, secondary }) {
+            resultsBadge.textContent = badge || "";
+            resultsBadge.hidden = !badge;
+            resultsTitle.textContent = title;
+            resultsStats.textContent = stats;
+            resultsNote.textContent = note;
+            resultsPrimary.textContent = primary[0];
+            resultsSecondary.textContent = secondary[0];
+            resultsActions = { primary: primary[1], secondary: secondary[1] };
+            mission.hidden = true;
+            resultsOverlay.hidden = false;
+            resultsPrimary.focus({ preventScroll: true });
+        }
+
+        function closeResults() {
+            resultsOverlay.hidden = true;
+            rest();
+        }
+
+        // ───── Bug blitz (once Jukebot's fixed): wave after wave until the power runs out ─────
+        function startBlitz() {
+            stopGame();
+            clearBoard();
+            mission.hidden = true;
+            resultsOverlay.hidden = true;
+            game = newGame(JOB_STEPS.length);
+            game.blitz = { wave: 0, score: 0 };
+            root.classList.remove("is-loose", "no-tool");
+            root.classList.add("is-running", "is-blitz");
+            root.style.setProperty("--power-level", "1");
+            hideSpeech();
+            // The panel pops off by itself for this one
+            screws.forEach((screw, index) => later(() => {
+                screw.classList.add("is-out");
+                sparkle(getElementCenter(screw));
+            }, index * 90));
+            later(() => root.classList.add("cover-off", "is-playing"), 420);
+            later(nextBlitzWave, 950);
+            updateHud();
+            game.frame = requestAnimationFrame(tick);
+        }
+
+        function nextBlitzWave() {
+            const { blitz } = game;
+            blitz.wave += 1;
+            startSwat(getBlitzConfig(blitz.wave), blitz.wave === 1 ? "Bug blitz! How long can you last?" : `Wave ${blitz.wave}!`);
+            setStatus(`Wave ${blitz.wave}: swat them all!`);
+            if (blitz.wave > 1) setPower(game.power + 15);
+        }
+
+        function waveCleared() {
+            game.stage = "between";
+            game.zapReady = false;
+            root.classList.remove("zap-ready");
+            game.bugs.forEach((bug) => {
+                if (bug.state === "alive" && bug.spec.friendly) flee(bug);
+            });
+            react("excited", 900);
+            say(`Wave ${game.blitz.wave} cleared!`, 1300, true);
+            setStatus("Next wave incoming...");
+            later(nextBlitzWave, 1600);
+        }
+
+        function endBlitz() {
+            const { wave, score } = game.blitz;
+            game.endTime = performance.now();
+            game.stage = "done";
+            game.zapReady = false;
+            root.classList.remove("zap-ready", "power-low", "is-running");
+            game.bugs.forEach((bug) => {
+                if (bug.state === "alive") flee(bug);
+            });
+            const isBest = score > progress.blitzBest;
+            if (isBest) {
+                progress.blitzBest = score;
+                saveProgress(progress);
+            }
+            setTool(null);
+            setStatus("");
+            root.classList.add("is-shorting");
+            later(() => root.classList.remove("is-shorting"), 1200);
+            react("ouch", 1400);
+            say("Bzzt... out of power!", 1600, true);
+            later(() => showResults({
+                badge: isBest && score ? "\u2605 NEW BEST \u2605" : "",
+                title: "Blitz over!",
+                stats: `Wave ${wave} \u00b7 ${score} bug${score === 1 ? "" : "s"} squashed`,
+                note: isBest ? "That's your best yet!" : `Your best: ${progress.blitzBest}`,
+                primary: ["Again", startBlitz],
+                secondary: ["Done", closeResults]
+            }), 1300);
+        }
+
+        // ───── The secret: boop the fixed Jukebot's sticker enough times in a row ─────
+        function applyGold() {
+            document.documentElement.classList.toggle("gold-record", progress.gold);
+        }
+
+        function boopSticker() {
+            const now = performance.now();
+            boops = boops.filter((time) => now - time < 2600);
+            boops.push(now);
+            stickerBoop.classList.remove("is-booped");
+            void stickerBoop.offsetWidth;
+            stickerBoop.classList.add("is-booped");
+            react("happy", 700);
+            if (game || progress.step < JOB_STEPS.length || boops.length < SECRET_BOOPS) {
+                say(pick(BOOP_LINES), 900, true);
+                return;
+            }
+            boops = [];
+            progress.gold = !progress.gold;
+            const first = !progress.secretFound;
+            progress.secretFound = true;
+            saveProgress(progress);
+            applyGold();
+            if (progress.gold) {
+                react("excited", 2400);
+                say(first ? "Hehe! You found my secret: a gold record!" : "Gold record, back on!", 2600, true);
+                const center = getElementCenter(stickerBoop);
+                for (let index = 0; index < 10; index += 1) {
+                    later(() => sparkle({ x: center.x + randomBetween(-60, 60), y: center.y + randomBetween(-40, 40) }), index * 60);
+                }
+            } else {
+                say("Back to black.", 1400, true);
+            }
+            document.dispatchEvent(new CustomEvent("jukebot:secret", { detail: { gold: progress.gold, first } }));
         }
 
         // ───── Jukebot's eyes follow the action ─────
@@ -1554,7 +2292,7 @@
                 target = lookOverride;
             } else if (pointerPoint && now - pointerPoint.at < 1500) {
                 target = pointerPoint;
-            } else if (game && game.stage === "swat") {
+            } else if (game && (game.stage === "swat" || game.stage === "wiring")) {
                 // The bug closest to the core is the scariest
                 let closest = Infinity;
                 game.bugs.forEach((bug) => {
@@ -1585,34 +2323,43 @@
         }
 
         // ───── Main loop ─────
-        function step(timestamp) {
+        function tick(timestamp) {
             if (!game) return;
             const deltaSeconds = game.lastFrame === null ? 0 : Math.min(0.05, (timestamp - game.lastFrame) / 1000);
             const seconds = performance.now() / 1000;
             game.lastFrame = timestamp;
+            const bugsOut = game.stage === "swat" || game.stage === "wiring";
 
-            if (game.stage === "unscrew" && game.hold) {
+            if ((game.stage === "unscrew" || game.stage === "screwin") && game.hold) {
                 turnScrew(game.hold.index, deltaSeconds / SCREW_HOLD_SECONDS);
             }
-            if (game.stage === "swat") {
+            if (bugsOut) {
                 spawnIfNeeded(timestamp);
+            }
+            if (game.stage === "wiring") {
+                updateSolder(deltaSeconds);
             }
             game.bugs.forEach((bug) => {
                 if (bug.state === "alive" || bug.state === "fleeing") updateBug(bug, deltaSeconds, seconds);
             });
             game.bugs = game.bugs.filter((bug) => bug.state === "alive" || bug.state === "fleeing");
-            if (game.stage === "swat") {
+            if (bugsOut && game.stage !== "done") {
                 updatePower(deltaSeconds, seconds);
-                checkBugsCleared();
             }
+            if (game && game.stage === "swat") {
+                checkBugsCleared();
+            } else if (game && game.stage === "wiring") {
+                checkWiringDone();
+            }
+            if (!game) return;
             if (performance.now() > moodHoldUntil) {
                 setMoodClass(getBaseMood());
             }
             updateLook(seconds);
             updateHud();
 
-            if (game.stage !== "done") {
-                game.frame = requestAnimationFrame(step);
+            if (game.stage !== "done" || game.bugs.length) {
+                game.frame = requestAnimationFrame(tick);
             }
         }
 
@@ -1639,12 +2386,12 @@
             // Keyboard users: each press turns it halfway
             screw.addEventListener("click", (event) => {
                 if (event.detail !== 0) return;
-                if (!game || game.stage === "done") start(selectedLevel);
+                if (!game && progress.step === 0) startStep(0);
                 turnScrew(Number(screw.dataset.screw), SCREW_TAP_TURN);
             });
         });
 
-        const isPlayStage = () => game && (game.stage === "swat" || game.stage === "clean");
+        const isPlayStage = () => game && ["swat", "clean", "wiring", "memory"].includes(game.stage);
 
         root.addEventListener("pointerdown", (event) => {
             if (!isPlayStage() || event.target.closest("button")) return;
@@ -1654,6 +2401,15 @@
 
             if (game.stage === "swat") {
                 handleSwat(point, isTouch);
+            } else if (game.stage === "wiring") {
+                const brk = findBreak(point, isTouch);
+                if (brk) {
+                    beginSolder(brk, event, point);
+                } else {
+                    handleSwat(point, isTouch);
+                }
+            } else if (game.stage === "memory") {
+                handleMemoryTap(point);
             } else {
                 game.scrubbing = true;
                 game.lastScrub = point;
@@ -1663,19 +2419,23 @@
                     // Pointer already gone
                 }
                 useTool(point, false);
-                scrubAt(point, 0.3);
+                scrubAt(point, 0.4);
             }
         });
 
         root.addEventListener("pointermove", (event) => {
-            if (!game || !["unscrew", "swat", "clean"].includes(game.stage)) return;
+            if (!game || !["unscrew", "screwin", "swat", "clean", "wiring"].includes(game.stage)) return;
             const point = toLocalPoint(event);
+            if (game.solder && event.pointerId === game.solder.pointerId) {
+                game.solder.point = point;
+            }
             if (event.pointerType === "mouse") {
-                moveTool(point);
+                // The iron stays on the joint it's soldering
+                if (!game.solder) moveTool(point);
                 tool.classList.add("is-visible");
                 pointerPoint = { x: point.x, y: point.y, at: performance.now() };
                 // Hoppers feel the swatter hovering over them
-                if (game.stage === "swat") {
+                if (game.stage === "swat" || game.stage === "wiring") {
                     const seconds = performance.now() / 1000;
                     game.bugs.forEach((bug) => {
                         if (bug.state === "alive" && bug.type === "hopper" && Math.hypot(point.x - bug.x, point.y - bug.y) < 30) {
@@ -1688,34 +2448,35 @@
                 moveTool(point);
                 const distance = Math.hypot(point.x - game.lastScrub.x, point.y - game.lastScrub.y);
                 game.lastScrub = point;
-                scrubAt(point, distance / 45);
+                scrubAt(point, distance / 30);
             }
         });
 
         const stopScrubbing = (event) => {
             if (!game) return;
             game.scrubbing = false;
+            endSolder(event);
             if (event.pointerType !== "mouse") {
                 clearTimeout(toolHideTimer);
                 toolHideTimer = setTimeout(() => {
-                    if (!game || !game.hold) tool.classList.remove("is-visible");
+                    if (!game || (!game.hold && !game.solder)) tool.classList.remove("is-visible");
                 }, 300);
             }
         };
         root.addEventListener("pointerup", stopScrubbing);
         root.addEventListener("pointercancel", stopScrubbing);
         root.addEventListener("pointerleave", (event) => {
-            if (event.pointerType === "mouse" && !(game && game.hold)) tool.classList.remove("is-visible");
+            if (event.pointerType === "mouse" && !(game && (game.hold || game.solder))) tool.classList.remove("is-visible");
             pointerPoint = null;
         });
 
-        replayButton.addEventListener("click", () => prepareLevel(game ? game.level : selectedLevel));
-        nextButton.addEventListener("click", () => prepareLevel(game ? game.level + 1 : selectedLevel + 1));
-        closeResultsButton.addEventListener("click", () => {
-            resultsOverlay.hidden = true;
+        missionStart.addEventListener("click", () => {
+            const index = Number(mission.dataset.step);
+            if (Number.isInteger(index) && index < JOB_STEPS.length) startStep(index);
         });
-        levelPrev.addEventListener("click", () => prepareLevel(selectedLevel - 1));
-        levelNext.addEventListener("click", () => prepareLevel(selectedLevel + 1));
+        resultsPrimary.addEventListener("click", () => resultsActions.primary && resultsActions.primary());
+        resultsSecondary.addEventListener("click", () => resultsActions.secondary && resultsActions.secondary());
+        stickerBoop.addEventListener("click", boopSticker);
 
         if ("ResizeObserver" in window) {
             new ResizeObserver(handleResize).observe(root);
@@ -1723,10 +2484,12 @@
             window.addEventListener("resize", handleResize);
         }
 
-        reset();
+        applyGold();
+        rest();
         handleResize();
         scheduleBlink();
-        window.jukebot = { reset, prepare: drawBoardIfDirty };
+        // Turning back to the songs puts the panel back (a step in progress starts over next time)
+        window.jukebot = { reset: rest, prepare: drawBoardIfDirty };
     }
 
     if (document.readyState === "loading") {
