@@ -379,7 +379,11 @@
                             <img class="frogquest-gif" src="images/frogblinkie.gif" alt="Frog Quest">
                         </a>
                     </div>
-                    <div class="jb-cover-band jb-cover-band--bottom">&#9888; No user-serviceable parts inside (just bugs)</div>
+                    <!-- LED sign along the bottom: Muse's sign-off, the song that's on, and the tips when
+                         the panel's too short for their card (script.js writes it) -->
+                    <div class="jb-cover-band jb-cover-band--bottom">
+                        <span class="jb-ticker" aria-hidden="true"><span class="jb-ticker-track"><span class="jb-ticker-lap"><span class="jb-ticker-item is-brand">Muse Tunes</span><span class="jb-ticker-item">Made by Muse</span><span class="jb-ticker-item is-tip">Play it loud</span></span></span></span>
+                    </div>
                     <button class="jb-screw jb-screw--tl" data-screw="0" type="button" aria-label="Unscrew the top left screw"><span class="jb-screw-head"></span></button>
                     <button class="jb-screw jb-screw--tr" data-screw="1" type="button" aria-label="Unscrew the top right screw"><span class="jb-screw-head"></span></button>
                     <button class="jb-screw jb-screw--bl" data-screw="2" type="button" aria-label="Unscrew the bottom left screw"><span class="jb-screw-head"></span></button>

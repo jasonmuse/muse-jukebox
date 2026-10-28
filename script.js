@@ -2046,6 +2046,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (track !== npShownTrack) {
             npShownTrack = track;
+            refreshCoverTicker();
             if (npEyebrow) npEyebrow.textContent = track ? "Now playing" : "Muse Jukebox";
             if (npTitle) npTitle.textContent = track ? track.title : "Pick a song";
             if (npSub) {
@@ -4974,6 +4975,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
+    // The LED sign along the bottom of Jukebot's panel: Muse's sign-off and the song that's on,
+    // and the tips too when the panel's too short for their card. A lap takes as long as its
+    // words need, so it always scrolls at the same pace.
+    const TICKER_PIXELS_PER_SECOND = 40;
+    const coverTicker = document.querySelector(".jb-ticker-track");
+    let tickerShowsTips = false;
+    let tickerWords = "";
+
+    function refreshCoverTicker() {
+        if (!coverTicker) return;
+        const items = [
+            ["Muse Tunes", "brand"],
+            [currentTrackData ? `Now spinning: ${currentTrackData.title}` : "Pick a song, any song", "song"]
+        ];
+        if (tickerShowsTips) {
+            document.querySelectorAll(".back-tip span").forEach((tip) => items.push([`Tip: ${tip.textContent}`, "tip"]));
+        }
+        items.push(["Made by Muse", "brand"], ["Play it loud", "tip"]);
+        const words = items.map(([text]) => text).join("\n");
+        if (words === tickerWords) return;
+        tickerWords = words;
+
+        const lap = document.createElement("span");
+        lap.className = "jb-ticker-lap";
+        items.forEach(([text, kind]) => {
+            const item = document.createElement("span");
+            item.className = `jb-ticker-item is-${kind}`;
+            item.textContent = text;
+            lap.append(item);
+        });
+        coverTicker.replaceChildren(lap, lap.cloneNode(true));
+        coverTicker.style.setProperty("--ticker-seconds", `${Math.max(8, lap.offsetWidth / TICKER_PIXELS_PER_SECOND).toFixed(1)}s`);
+    }
+
     // The tips on the back: as many as there's room for under Jukebot's sticker. When they don't
     // all fit they come a page at a time: tap for the next page, and they move on by themselves
     // while the back is out (unless a pointer or focus is on them)
@@ -5030,6 +5065,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // size as they turn.
         const fitTips = () => {
             if (!scroller.clientHeight) return;
+            // (measured with the card in its place)
+            tipsBox.classList.remove("is-ticker");
+            scroller.classList.remove("has-tip-ticker");
             const gap = parseFloat(getComputedStyle(scroller).rowGap) || 0;
             const spare = below ? below.offsetTop - (tipsBox.offsetTop + tipsBox.offsetHeight) - gap : 0;
             const overflow = scroller.scrollHeight - scroller.clientHeight;
@@ -5042,9 +5080,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             const rowGap = parseFloat(listStyle.rowGap) || 0;
             const maxColumns = list.clientWidth >= (2 * TIP_COLUMN_MIN_WIDTH) + (parseFloat(listStyle.columnGap) || 0) ? 2 : 1;
             let best = null;
+            let threeTips = 0;
             for (let columns = 1; columns <= maxColumns; columns += 1) {
                 list.style.gridTemplateColumns = columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : "";
                 const heights = tips.map((tip) => tip.offsetHeight);
+                if (columns === 1) threeTips = tallestPage(heights, MIN_TIPS_PER_PAGE, 1, rowGap);
                 for (let pages = 1; pages <= tips.length; pages += 1) {
                     // Pages as even as they can be (not a last page with one tip on it)
                     const pageSize = Math.ceil(tips.length / pages);
@@ -5056,14 +5096,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             }
+            // Not even a page of three fits (a short screen): they go along the LED sign instead, and
+            // the card's only kept for screen readers
+            const onSign = room + 1 < threeTips && !prefersReducedMotion();
+            if (onSign) best = { columns: 1, pages: 1, pageSize: tips.length, height: 0 };
+
             // The card fills the rest of the panel, and the tips spread out over it (up to a point) so
             // it isn't left with an empty end
             const rows = Math.ceil((best.pages > 1 ? best.pageSize : tips.length) / best.columns);
-            const spreadGap = rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, room - best.height) / (rows + 1));
+            const spreadGap = onSign ? rowGap : rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, room - best.height) / (rows + 1));
             list.style.gridTemplateColumns = best.columns > 1 ? `repeat(${best.columns}, minmax(0, 1fr))` : "";
             list.style.rowGap = spreadGap > rowGap ? `${spreadGap.toFixed(1)}px` : "";
             list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height + ((rows - 1) * (spreadGap - rowGap)))}px` : "";
             tipsBox.classList.toggle("is-paged", best.pages > 1);
+            tipsBox.classList.toggle("is-ticker", onSign);
+            scroller.classList.toggle("has-tip-ticker", onSign);
+            if (onSign !== tickerShowsTips) {
+                tickerShowsTips = onSign;
+                refreshCoverTicker();
+            }
             if (best.pageSize !== perPage) {
                 const firstShown = page * perPage;
                 perPage = best.pageSize;
@@ -5119,6 +5170,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setUpJukeboxBack() {
         if (!jukeboxPanel) return;
+        refreshCoverTicker();
         setUpBackTips();
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
