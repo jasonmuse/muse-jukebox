@@ -2777,8 +2777,11 @@ html {
     transform: scale(0.95);
 }
 
+/* The tips card takes whatever room is left on the panel (script.js spreads the tips over it) */
 .back-tips {
-    flex: 0 0 auto;
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
     padding: 10px 10px 12px 14px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2857,10 +2860,11 @@ html {
    card keeps its height from page to page (script.js picks the page size, and two columns on a
    wide panel when that fits more) */
 .back-tips-list {
+    flex: 1 0 auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    align-content: start;
+    align-content: center;
     gap: 10px 22px;
     margin: 8px 0 0;
     padding: 0;

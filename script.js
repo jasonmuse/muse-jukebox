@@ -4980,6 +4980,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const TIP_PAGE_SECONDS = 8;
     const MIN_TIPS_PER_PAGE = 3;
     const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
+    const TIP_MAX_SPREAD = 18; // px: the most extra room between two tips when there's space to fill
     let syncBackTips = () => {};
 
     function setUpBackTips() {
@@ -5036,6 +5037,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             tipsBox.classList.remove("is-paged");
             list.style.minHeight = "";
+            list.style.rowGap = "";
             const listStyle = getComputedStyle(list);
             const rowGap = parseFloat(listStyle.rowGap) || 0;
             const maxColumns = list.clientWidth >= (2 * TIP_COLUMN_MIN_WIDTH) + (parseFloat(listStyle.columnGap) || 0) ? 2 : 1;
@@ -5054,8 +5056,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             }
+            // The card fills the rest of the panel, and the tips spread out over it (up to a point) so
+            // it isn't left with an empty end
+            const rows = Math.ceil((best.pages > 1 ? best.pageSize : tips.length) / best.columns);
+            const spreadGap = rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, room - best.height) / (rows + 1));
             list.style.gridTemplateColumns = best.columns > 1 ? `repeat(${best.columns}, minmax(0, 1fr))` : "";
-            list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height)}px` : "";
+            list.style.rowGap = spreadGap > rowGap ? `${spreadGap.toFixed(1)}px` : "";
+            list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height + ((rows - 1) * (spreadGap - rowGap)))}px` : "";
             tipsBox.classList.toggle("is-paged", best.pages > 1);
             if (best.pageSize !== perPage) {
                 const firstShown = page * perPage;
