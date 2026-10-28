@@ -368,6 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const musicNotes = document.getElementById("music-notes");
     const speakerCones = Array.from(document.querySelectorAll(".speaker-cone"));
     const eqBars = Array.from(document.querySelectorAll(".speaker-eq span"));
+    const cabinetLightShades = Array.from(document.querySelectorAll(".cabinet-lights-shade"));
     const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
     const titleLights = Array.from(document.querySelectorAll(".title-lights"));
     const npCover = document.getElementById("np-cover");
@@ -375,7 +376,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const npEyebrow = document.getElementById("np-eyebrow");
     const npTitle = document.getElementById("np-title");
     const npSub = document.getElementById("np-sub");
-    const npSeek = document.getElementById("np-seek");
+    const npWave = document.getElementById("np-wave");
     const npElapsed = document.getElementById("np-elapsed");
     const npDuration = document.getElementById("np-duration");
     const npPlay = document.getElementById("np-play");
@@ -411,6 +412,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let backdropHex = "";
     const LOOP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/><path class="loop-one" d="M10.7 10.2 12.6 8.7v6.7"/></svg>`;
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
+    const PREV_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>`;
+    const NEXT_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>`;
     const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
 
     if (recordSeekControls) {
@@ -838,7 +841,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let repeatOneEnabled = false; // the same song again and again
     let shuffleEnabled = false;
     let npShownTrack;
-    let npSeekDragging = false;
+    let playingRowParts = null; // the playing song's row: its wave, times and progress line
+    let waveScrub = null; // a finger or mouse dragging along the playing song's wave
     const TRACK_PLAYING_FADE_OUT_MS = 220;
     // Keep in sync with the full-height layout media queries in styles.css
     const APP_LAYOUT_QUERY = "(max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px), (orientation: landscape) and (pointer: coarse)";
@@ -1184,11 +1188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function resetTrackElementUi(trackElement) {
         if (!trackElement) return;
         setPlayButtonLabel(trackElement.querySelector(".play-button"), "Play");
-        const timeDisplay = trackElement.querySelector(".time-display");
-        if (timeDisplay) {
-            timeDisplay.classList.remove("visible");
-            resetTimeDisplay(timeDisplay);
-        }
+        trackElement.querySelector(".song-progress")?.classList.remove("is-loading", "is-unavailable");
     }
 
     function updatePlayingTrackStickyState() {
@@ -1441,11 +1441,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         trackList.querySelectorAll(".track.track-modes-visible").forEach((element) => {
             if (element !== trackElement) {
                 element.classList.remove("track-modes-visible");
+                setRowWavePlaying(element, false);
             }
         });
         if (trackElement) {
             trackElement.classList.add("track-modes-visible");
+            setRowWavePlaying(trackElement, true);
         }
+        playingRowParts = trackElement ? {
+            wave: trackElement.querySelector(".song-wave"),
+            progress: trackElement.querySelector(".song-progress"),
+            elapsed: trackElement.querySelector(".song-time-elapsed"),
+            total: trackElement.querySelector(".song-time-total")
+        } : null;
+        updateNowPlayingProgress();
         // The x narrows the title, so re-check which titles need to scroll
         requestAnimationFrame(syncTitleMarquees);
     }
@@ -1625,12 +1634,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         player.currentTime = nextTime;
         const appliedSeekOffset = nextTime - previousTime;
 
-        const activeTimeDisplay = getCurrentTrackElement()?.querySelector(".time-display");
-        if (activeTimeDisplay && Number.isFinite(player.duration)) {
-            setTimeDisplayReady(player, activeTimeDisplay, nextTime);
-            activeTimeDisplay.classList.add("visible");
-        }
-
         updateNowPlayingProgress();
         nudgeRecordForSeek(appliedSeekOffset);
     }
@@ -1704,18 +1707,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     function resumeCurrentTrack() {
         if (!currentTrackData) return;
 
-        const currentTrack = getCurrentTrackElement();
-        const currentButton = currentTrack?.querySelector(".play-button");
-        const currentTimeDisplay = currentTrack?.querySelector(".time-display");
-
-        if (currentTimeDisplay) {
-            currentTimeDisplay.classList.add("visible");
-            if (player.readyState < 1 || !Number.isFinite(player.duration)) {
-                setTimeDisplayLoading(currentTimeDisplay);
-            } else {
-                setTimeDisplayReady(player, currentTimeDisplay);
-            }
-        }
+        const currentButton = getCurrentTrackElement()?.querySelector(".play-button");
+        updateNowPlayingProgress();
 
         record.classList.add("up");
         startSpinning();
@@ -1768,30 +1761,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         isSwitchingTrack = true;
         currentTrackData = track;
         const trackElement = getCurrentTrackElement();
-        const timeDisplay = trackElement?.querySelector(".time-display");
         showModeButtonsOnTrack(trackElement);
-        if (timeDisplay) {
-            timeDisplay.classList.add("visible");
-            setTimeDisplayLoading(timeDisplay);
-        }
         setPlayButtonLabel(trackElement?.querySelector(".play-button"), "Pause");
 
         const startingInBackground = document.hidden;
         // Hold the sound back while the record drops. Only where the page can set the volume:
         // an iPhone would play a blip of the song and then restart it.
         const holdAudio = !startingInBackground && canFadeVolume;
+        // A tap on the song's wave starts it from there; a song mixed in skips its silent intro
+        const startOffset = options.startAt > 0 ? options.startAt : (prepared ? prepared.startAt : 0);
         if (prepared) {
             const previousDeck = player;
             player = prepared.deck;
             previousDeck.pause();
             setDeckSource(previousDeck, null);
-            cueDeck(player, prepared.startAt);
+            cueDeck(player, startOffset);
         } else {
-            setDeckSource(player, track.file);
+            // (#t= asks the browser to start there, so not a moment of the beginning is heard)
+            setDeckSource(player, startOffset > 0 ? `${track.file}#t=${startOffset.toFixed(2)}` : track.file);
         }
         const deck = player;
         syncDeckLooping();
-        const startOffset = prepared ? prepared.startAt : 0;
         deck.volume = holdAudio ? 0 : 1;
         const playbackStartTime = performance.now() + 300;
         const playPromise = deck.play();
@@ -1916,31 +1906,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         };
 
-        onPlayingDeck("loadstart", () => {
-            const timeDisplay = getCurrentTrackElement()?.querySelector(".time-display");
-            if (timeDisplay) {
-                setTimeDisplayLoading(timeDisplay);
-                timeDisplay.classList.add("visible");
-            }
-        });
-
-        const syncTime = () => {
-            const timeDisplay = getCurrentTrackElement()?.querySelector(".time-display");
-            if (timeDisplay && Number.isFinite(player.duration)) {
-                setTimeDisplayReady(player, timeDisplay);
-            }
-            updateNowPlayingProgress();
-        };
+        onPlayingDeck("loadstart", () => updateNowPlayingProgress());
         onPlayingDeck("loadedmetadata", () => {
-            syncTime();
+            updateNowPlayingProgress();
             updateMediaSessionPosition();
             requestTrackTempo(currentTrackData);
+            rememberSongDuration(currentTrackData, player.duration);
         });
         onPlayingDeck("timeupdate", () => {
-            syncTime();
+            updateNowPlayingProgress();
             checkAutoMix();
         });
-        onPlayingDeck("seeked", updateMediaSessionPosition);
+        onPlayingDeck("seeked", () => {
+            updateMediaSessionPosition();
+            updateNowPlayingProgress();
+        });
 
         // The last song keeps its own time while it finishes
         decks.forEach((deck) => {
@@ -1982,12 +1962,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         onPlayingDeck("error", () => {
             if (!currentTrackData) return;
             const trackElement = getCurrentTrackElement();
-            const timeDisplay = trackElement?.querySelector(".time-display");
-            if (timeDisplay) {
-                timeDisplay.classList.remove("loading");
-                timeDisplay.classList.add("ready", "visible");
-                shownTimes.delete(timeDisplay);
-                timeDisplay.textContent = "unavailable";
+            const progress = trackElement?.querySelector(".song-progress");
+            if (progress) {
+                progress.classList.remove("is-loading");
+                progress.classList.add("is-unavailable");
             }
             setPlayButtonLabel(trackElement?.querySelector(".play-button"), "Play");
             isSwitchingTrack = false;
@@ -2074,6 +2052,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     : "Press play and let the jukebox spin";
             }
 
+            if (npWave) drawSongWave(npWave);
+
             const cover = track ? getTrackCoverPreview(track) : "images/penguin.gif";
             setSafeImageSource(npCover, cover);
             setSafeImageSource(npBackdrop, cover);
@@ -2090,24 +2070,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateNowPlayingProgress();
     }
 
-    function updateNowPlayingProgress() {
-        if (railRingProgress) {
-            const progress = currentTrackData && Number.isFinite(player.duration) && player.duration > 0
-                ? player.currentTime / player.duration
-                : 0;
-            railRingProgress.style.strokeDashoffset = String(RAIL_RING_LENGTH * (1 - Math.min(1, progress)));
+    // Where the playing song is: its row's wave fills up as it plays (and the deck's), the times
+    // count along and the side rail's ring goes round. `previewTime` shows a spot being scratched to.
+    function updateNowPlayingProgress(previewTime = null) {
+        const duration = currentTrackData && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
+        let position = currentTrackData ? player.currentTime : 0;
+        if (previewTime !== null) {
+            position = previewTime;
+        } else if (waveScrub && waveScrub.active && duration) {
+            position = waveScrub.fraction * duration;
         }
-        if (!nowPlaying || !npSeek) return;
+        const fraction = duration ? Math.min(1, Math.max(0, position / duration)) : 0;
+        const loading = Boolean(currentTrackData) && !duration;
 
-        const duration = currentTrackData && Number.isFinite(player.duration) ? player.duration : 0;
-        if (!npSeekDragging) {
-            const position = currentTrackData ? player.currentTime : 0;
-            npSeek.value = duration ? Math.round((position / duration) * 1000) : 0;
-            if (npElapsed) setTextIfChanged(npElapsed, formatTime(position));
+        if (railRingProgress) {
+            railRingProgress.style.strokeDashoffset = String(RAIL_RING_LENGTH * (1 - fraction));
         }
-        npSeek.style.setProperty("--progress", `${npSeek.value / 10}%`);
-        npSeek.disabled = !duration;
-        if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration) : "--:--");
+        if (playingRowParts) {
+            setWaveProgress(playingRowParts.wave, fraction, position, duration);
+            playingRowParts.progress?.classList.toggle("is-loading", loading);
+            if (playingRowParts.elapsed) setTextIfChanged(playingRowParts.elapsed, formatTime(position));
+            if (playingRowParts.total && duration) setTextIfChanged(playingRowParts.total, formatTime(duration));
+        }
+        if (npWave) {
+            setWaveProgress(npWave, fraction, position, duration);
+            npWave.parentElement?.classList.toggle("is-loading", loading);
+            npWave.setAttribute("aria-disabled", String(!duration));
+            if (npElapsed) setTextIfChanged(npElapsed, formatTime(position));
+            if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration) : "--:--");
+        }
     }
 
     function setUpNowPlayingControls() {
@@ -2120,23 +2111,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         npContinuous?.addEventListener("click", cycleLoopMode);
         npClear?.addEventListener("click", clearCurrentTrack);
         npShuffle?.addEventListener("click", toggleShuffle);
-
-        if (npSeek) {
-            npSeek.addEventListener("input", () => {
-                npSeekDragging = true;
-                const duration = Number.isFinite(player.duration) ? player.duration : 0;
-                npSeek.style.setProperty("--progress", `${npSeek.value / 10}%`);
-                if (npElapsed) npElapsed.textContent = formatTime((npSeek.value / 1000) * duration);
-            });
-            npSeek.addEventListener("change", () => {
-                npSeekDragging = false;
-                if (currentTrackData && Number.isFinite(player.duration)) {
-                    finishAutoMixNow();
-                    player.currentTime = (npSeek.value / 1000) * player.duration;
-                }
-                updateNowPlayingProgress();
-            });
-        }
     }
 
     let accelerationRequest; // New variable to track acceleration frame
@@ -2365,48 +2339,330 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 250);
     }
 
-    // What each time display last showed, so the 4-times-a-second updates only touch the page
-    // when the shown time actually changes
-    const shownTimes = new WeakMap();
-
+    // The progress updates come many times a second, so only touch the page when something changes
     function setTextIfChanged(element, text) {
         if (element.textContent !== text) element.textContent = text;
     }
 
-    function setTimeDisplayLoading(timeDisplay) {
-        shownTimes.delete(timeDisplay);
-        timeDisplay.classList.remove("ready", "ready-fade");
-        timeDisplay.classList.add("loading");
-        timeDisplay.textContent = "loading";
-    }
+    // ───── Song waves: each song's shape in its row; the playing song's is its scrubber ─────
+    // waves.json has every song's length and how loud it is along the way (tools/make-waves.py
+    // makes it). A song that isn't in it yet gets a plain wave until it's been heard all the way
+    // through, then its real one (remembered on this device).
+    const WAVE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const WAVE_POINTS = 96;
+    const WAVE_BAR = 2.5; // px wide, with round ends
+    const WAVE_GAP = 2;
+    const WAVE_CURVE = 2.4; // most of a song sits near the top, so the top is spread out
+    const WAVE_PLAIN_LEVEL = 0.62;
+    const WAVE_STORAGE_KEY = "museJukeboxWaves";
+    const songWaves = new Map(); // file -> { duration, levels }
+    const learnedWaves = readLearnedWaves();
+    const drawnWaves = new WeakMap();
+    const shownWaveProgress = new WeakMap();
+    const waveObserver = typeof ResizeObserver === "function"
+        ? new ResizeObserver((entries) => entries.forEach((entry) => drawSongWave(entry.target)))
+        : null;
 
-    function triggerTimeDisplayFade(timeDisplay) {
-        timeDisplay.classList.remove("ready-fade");
-        void timeDisplay.offsetWidth;
-        timeDisplay.classList.add("ready-fade");
-    }
-
-    function setTimeDisplayReady(audio, timeDisplay, currentTime = audio.currentTime) {
-        if (!Number.isFinite(audio.duration)) return;
-        const wasLoading = timeDisplay.classList.contains("loading");
-        const formattedCurrentTime = formatTime(currentTime);
-        const formattedDuration = formatTime(audio.duration);
-        const html = `${formattedCurrentTime}<span class="time-total"> / ${formattedDuration}</span>`;
-        if (shownTimes.get(timeDisplay) !== html) {
-            timeDisplay.innerHTML = html;
-            shownTimes.set(timeDisplay, html);
-        }
-        timeDisplay.classList.remove("loading");
-        timeDisplay.classList.add("ready");
-        if (wasLoading) {
-            triggerTimeDisplayFade(timeDisplay);
+    function readLearnedWaves() {
+        try {
+            return JSON.parse(localStorage.getItem(WAVE_STORAGE_KEY) || "{}") || {};
+        } catch (error) {
+            return {};
         }
     }
 
-    function resetTimeDisplay(timeDisplay) {
-        shownTimes.delete(timeDisplay);
-        timeDisplay.classList.remove("loading", "ready", "ready-fade");
-        timeDisplay.innerHTML = '0:00<span class="time-total"> / --:--</span>';
+    function decodeWaveShape(shape) {
+        const levels = new Float32Array(shape.length);
+        for (let index = 0; index < shape.length; index += 1) {
+            levels[index] = Math.max(0, WAVE_ALPHABET.indexOf(shape[index])) / 63;
+        }
+        return levels;
+    }
+
+    function addSongWave(file, entry) {
+        if (!entry || !(entry.duration > 0)) return;
+        songWaves.set(file, {
+            duration: entry.duration,
+            levels: typeof entry.shape === "string" && entry.shape.length ? decodeWaveShape(entry.shape) : null
+        });
+    }
+
+    async function loadSongWaves() {
+        Object.entries(learnedWaves).forEach(([file, entry]) => addSongWave(file, entry));
+        try {
+            const response = await fetch("waves.json", { cache: "no-cache" });
+            if (response.ok) {
+                Object.entries(await response.json()).forEach(([file, entry]) => addSongWave(file, entry));
+            }
+        } catch (error) {
+            // No waves: the rows keep their plain ones
+        }
+        trackList.querySelectorAll(".track").forEach((trackElement) => {
+            const total = trackElement.querySelector(".song-time-total");
+            if (total && !total.textContent) total.textContent = formatKnownDuration(trackElement.dataset.file);
+            const wave = trackElement.querySelector(".song-wave");
+            if (wave) drawSongWave(wave);
+        });
+        if (npWave) drawSongWave(npWave);
+    }
+
+    function getKnownDuration(file) {
+        if (currentTrackData && currentTrackData.file === file && Number.isFinite(player.duration)) return player.duration;
+        const wave = songWaves.get(file);
+        return wave ? wave.duration : NaN;
+    }
+
+    function formatKnownDuration(file) {
+        const duration = getKnownDuration(file);
+        return Number.isFinite(duration) ? formatTime(duration) : "";
+    }
+
+    // A song that isn't in waves.json yet: at least its length shows from now on
+    function rememberSongDuration(track, duration) {
+        if (!track || !Number.isFinite(duration) || songWaves.has(track.file)) return;
+        songWaves.set(track.file, { duration, levels: null });
+        const total = trackList.querySelector(`.track[data-file="${CSS.escape(track.file)}"] .song-time-total`);
+        if (total) total.textContent = formatTime(duration);
+    }
+
+    // Once a song without a wave has been measured all the way through (the spectrum's left and
+    // right levels), its real wave is worked out and remembered
+    function learnSongWave(spectrum) {
+        const known = songWaves.get(spectrum.file);
+        if ((known && known.levels) || spectrum.measuredCount < spectrum.frameCount * 0.97) return;
+
+        const loudness = new Float32Array(WAVE_POINTS);
+        for (let point = 0; point < WAVE_POINTS; point += 1) {
+            const from = Math.floor((point * spectrum.frameCount) / WAVE_POINTS);
+            const to = Math.max(from + 1, Math.floor(((point + 1) * spectrum.frameCount) / WAVE_POINTS));
+            let power = 0;
+            for (let frame = from; frame < to; frame += 1) {
+                for (let side = 0; side < 2; side += 1) {
+                    const level = (spectrum.levels[(frame * SPECTRUM_VALUES) + SPECTRUM_BANDS + side] / 2) - 100;
+                    power += Math.pow(10, level / 10) / 2;
+                }
+            }
+            loudness[point] = 10 * Math.log10((power / (to - from)) + 1e-12);
+        }
+        const top = Math.max(...loudness);
+        let shape = "";
+        loudness.forEach((level) => {
+            shape += WAVE_ALPHABET[Math.round(Math.max(0, Math.min(1, (level - (top - 36)) / 36)) * 63)];
+        });
+
+        const entry = { duration: Math.round(spectrum.duration * 100) / 100, shape };
+        addSongWave(spectrum.file, entry);
+        learnedWaves[spectrum.file] = entry;
+        try {
+            localStorage.setItem(WAVE_STORAGE_KEY, JSON.stringify(learnedWaves));
+        } catch (error) {
+            // Storage full or blocked: it's just not remembered
+        }
+        const wave = trackList.querySelector(`.track[data-file="${CSS.escape(spectrum.file)}"] .song-wave`);
+        if (wave) drawSongWave(wave);
+        if (npWave) drawSongWave(npWave);
+    }
+
+    function watchSongWave(wave) {
+        if (waveObserver) {
+            waveObserver.observe(wave);
+        } else {
+            requestAnimationFrame(() => drawSongWave(wave));
+        }
+    }
+
+    // One round-ended bar per few pixels, each as tall as the loudest part of the song it covers
+    function buildWavePath(levels, width, height) {
+        const pitch = WAVE_BAR + WAVE_GAP;
+        const count = Math.max(4, Math.floor((width + WAVE_GAP) / pitch));
+        const first = ((width - ((count * pitch) - WAVE_GAP)) / 2) + (WAVE_BAR / 2);
+        const middle = height / 2;
+        const reach = Math.max(0, (height - WAVE_BAR) / 2);
+        let path = "";
+        for (let bar = 0; bar < count; bar += 1) {
+            let level = WAVE_PLAIN_LEVEL;
+            if (levels) {
+                const from = Math.floor((bar * levels.length) / count);
+                const to = Math.max(from + 1, Math.ceil(((bar + 1) * levels.length) / count));
+                level = 0;
+                for (let index = from; index < to; index += 1) {
+                    level = Math.max(level, levels[index]);
+                }
+            }
+            const half = Math.max(0.01, Math.pow(level, WAVE_CURVE) * reach);
+            const x = (first + (bar * pitch)).toFixed(2);
+            path += `M${x} ${(middle - half).toFixed(2)}V${(middle + half).toFixed(2)}`;
+        }
+        return path;
+    }
+
+    function drawSongWave(wave) {
+        const width = wave.clientWidth;
+        const height = wave.clientHeight;
+        const file = wave === npWave
+            ? (currentTrackData ? currentTrackData.file : "")
+            : wave.closest(".track")?.dataset.file;
+        const levels = file && songWaves.has(file) ? songWaves.get(file).levels : null;
+        const key = `${file}|${width}|${height}|${levels ? "shape" : "plain"}`;
+        if (drawnWaves.get(wave) === key) return;
+        drawnWaves.set(wave, key);
+
+        const path = width > 0 && height > 0 && file ? buildWavePath(levels, width, height) : "";
+        wave.querySelectorAll("svg").forEach((svg) => {
+            svg.setAttribute("viewBox", `0 0 ${Math.max(1, width)} ${Math.max(1, height)}`);
+            svg.firstElementChild.setAttribute("d", path);
+        });
+        wave.classList.toggle("has-shape", Boolean(levels));
+    }
+
+    function setWaveProgress(wave, fraction, position, duration) {
+        if (!wave) return;
+        const shown = shownWaveProgress.get(wave) || {};
+        const progress = fraction.toFixed(4);
+        if (shown.progress !== progress) {
+            wave.style.setProperty("--wave-progress", progress);
+            shown.progress = progress;
+        }
+        const seconds = Math.round(position);
+        const total = Math.round(duration);
+        if (shown.seconds !== seconds || shown.total !== total) {
+            wave.setAttribute("aria-valuenow", String(seconds));
+            wave.setAttribute("aria-valuemax", String(total));
+            wave.setAttribute("aria-valuetext", duration ? `${formatTime(position)} of ${formatTime(duration)}` : "Loading");
+            shown.seconds = seconds;
+            shown.total = total;
+        }
+        shownWaveProgress.set(wave, shown);
+    }
+
+    // The playing song's wave is a slider you can drag (or use the arrow keys on); the others are
+    // just pictures you can tap to start the song from there
+    function setRowWavePlaying(trackElement, isPlaying) {
+        const wave = trackElement.querySelector(".song-wave");
+        if (!wave) return;
+        if (isPlaying) {
+            trackElement.querySelector(".song-progress")?.classList.remove("is-unavailable");
+            wave.setAttribute("role", "slider");
+            wave.setAttribute("tabindex", "0");
+            wave.setAttribute("aria-label", "Song position");
+            wave.setAttribute("aria-valuemin", "0");
+            wave.removeAttribute("aria-hidden");
+            wave.removeAttribute("title");
+        } else {
+            ["role", "tabindex", "aria-label", "aria-valuemin", "aria-valuemax", "aria-valuenow", "aria-valuetext"].forEach((name) => wave.removeAttribute(name));
+            wave.setAttribute("aria-hidden", "true");
+            wave.setAttribute("title", "Play from here");
+            wave.classList.remove("is-scrubbing");
+            wave.style.removeProperty("--wave-progress");
+            shownWaveProgress.delete(wave);
+        }
+    }
+
+    function isPlayingWave(wave) {
+        return Boolean(currentTrackData) && (wave === npWave || (playingRowParts && wave === playingRowParts.wave));
+    }
+
+    function getWaveFraction(wave, clientX) {
+        const rect = wave.getBoundingClientRect();
+        return rect.width ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) : 0;
+    }
+
+    function seekPlayingSong(time) {
+        if (!currentTrackData || !Number.isFinite(player.duration)) return;
+        finishAutoMixNow();
+        player.currentTime = Math.min(Math.max(0, time), Math.max(0, player.duration - 0.25));
+        updateNowPlayingProgress();
+    }
+
+    // Dragging along the playing song's wave. A mouse scrubs straight away; a finger only once it
+    // moves sideways (up and down still scrolls the list), and a tap jumps to that spot.
+    function setUpSongWaves() {
+        document.addEventListener("pointerdown", (event) => {
+            const wave = event.target.closest(".song-wave");
+            if (!wave || !isPlayingWave(wave) || !Number.isFinite(player.duration)) return;
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            waveScrub = {
+                wave,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                fraction: getWaveFraction(wave, event.clientX),
+                active: event.pointerType === "mouse"
+            };
+            if (waveScrub.active) {
+                event.preventDefault();
+                wave.setPointerCapture?.(event.pointerId);
+                wave.classList.add("is-scrubbing");
+                updateNowPlayingProgress();
+            }
+        });
+
+        document.addEventListener("pointermove", (event) => {
+            if (!waveScrub || event.pointerId !== waveScrub.pointerId) return;
+            const { wave } = waveScrub;
+            if (!waveScrub.active) {
+                const sideways = Math.abs(event.clientX - waveScrub.startX);
+                if (sideways < 6 || sideways < Math.abs(event.clientY - waveScrub.startY)) return;
+                waveScrub.active = true;
+                wave.setPointerCapture?.(event.pointerId);
+                wave.classList.add("is-scrubbing");
+            }
+            waveScrub.fraction = getWaveFraction(wave, event.clientX);
+            updateNowPlayingProgress();
+        });
+
+        const finishScrub = (event, commit) => {
+            if (!waveScrub || event.pointerId !== waveScrub.pointerId) return;
+            const { wave, fraction, active } = waveScrub;
+            const moved = Math.hypot(event.clientX - waveScrub.startX, event.clientY - waveScrub.startY);
+            waveScrub = null;
+            wave.classList.remove("is-scrubbing");
+            if (commit && (active || moved < 10) && isPlayingWave(wave)) {
+                seekPlayingSong(fraction * player.duration);
+            } else {
+                updateNowPlayingProgress();
+            }
+        };
+        document.addEventListener("pointerup", (event) => finishScrub(event, true));
+        document.addEventListener("pointercancel", (event) => finishScrub(event, false));
+
+        // Another song's wave: start that song from where it was tapped
+        trackList.addEventListener("click", (event) => {
+            const wave = event.target.closest(".song-wave");
+            if (!wave || isPlayingWave(wave)) return;
+            const track = getTrackDataForElement(wave.closest(".track"));
+            if (!track) return;
+            const duration = getKnownDuration(track.file);
+            const fraction = getWaveFraction(wave, event.clientX);
+            startTrack(track, { startAt: Number.isFinite(duration) ? fraction * duration : 0 });
+        });
+
+        document.addEventListener("keydown", (event) => {
+            const wave = event.target.closest?.(".song-wave");
+            if (!wave || !isPlayingWave(wave) || !Number.isFinite(player.duration)) return;
+            const duration = player.duration;
+            const steps = {
+                ArrowRight: 5,
+                ArrowUp: 5,
+                ArrowLeft: -5,
+                ArrowDown: -5,
+                PageUp: duration / 10,
+                PageDown: -duration / 10
+            };
+            if (event.key in steps) {
+                seekPlayingSong(player.currentTime + steps[event.key]);
+            } else if (event.key === "Home") {
+                seekPlayingSong(0);
+            } else if (event.key === "End") {
+                seekPlayingSong(duration);
+            } else {
+                return;
+            }
+            event.preventDefault();
+        });
+
+        if (npWave) watchSongWave(npWave);
+        loadSongWaves();
     }
 
     function showTrackListSkeleton(count = 8) {
@@ -2584,18 +2840,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playButton = trackElement.querySelector(".play-button");
         playButton.dataset.label = label;
         playButton.innerHTML = splitIntoLetters(label);
-
-        const timeDisplay = trackElement.querySelector(".time-display");
-        timeDisplay.classList.add("visible");
-        if (Number.isFinite(player.duration)) {
-            setTimeDisplayReady(player, timeDisplay);
-        } else {
-            setTimeDisplayLoading(timeDisplay);
-        }
     }
 
     function populateTrackList(tracks) {
         trackList.classList.remove("skeleton-loading", "tracks-ready");
+        // The old rows' waves go with them
+        if (waveObserver) {
+            waveObserver.disconnect();
+            if (npWave) waveObserver.observe(npWave);
+        }
         trackList.innerHTML = '';
 
         tracks.forEach((track, index) => {
@@ -2618,10 +2871,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             <p class="title"><span class="title-scroll-content"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></span></p>
             <p class="tags horizontal-scroll"><span class="tags-scroll-content">${tagMarkup}${gameLinkMarkup}</span></p>
             <div class="playback-controls">
+            <button class="mode-button skip-button skip-button--prev" type="button" aria-label="Previous song (or back to the start)" title="Previous song">${PREV_ICON}</button>
             <button class="play-button">Play</button>
+            <button class="mode-button skip-button skip-button--next" type="button" aria-label="Next song" title="Next song">${NEXT_ICON}</button>
             <button class="mode-button mode-button--continuous" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">${LOOP_ICON}</button>
             <button class="mode-button mode-button--shuffle" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs">${SHUFFLE_ICON}</button>
-            <span class="time-display">0:00<span class="time-total"> / --:--</span></span>
+            <div class="song-progress">
+            <div class="song-wave" aria-hidden="true" title="Play from here">
+            <svg class="song-wave-bars" aria-hidden="true"><path></path></svg>
+            <svg class="song-wave-bars song-wave-played" aria-hidden="true"><path></path></svg>
+            <span class="song-wave-thumb" aria-hidden="true"></span>
+            </div>
+            <span class="song-time"><span class="song-time-elapsed">0:00</span><span class="song-time-total">${formatKnownDuration(track.file)}</span></span>
+            </div>
             </div>
             </div>
             <button class="track-clear" type="button" aria-label="Stop and clear this song" title="Stop and clear">${CLEAR_ICON}</button>
@@ -2632,7 +2894,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const coverImage = trackElement.querySelector("img");
             trackElement.querySelector(".mode-button--continuous").addEventListener("click", cycleLoopMode);
             trackElement.querySelector(".mode-button--shuffle").addEventListener("click", toggleShuffle);
+            trackElement.querySelector(".skip-button--prev").addEventListener("click", playPreviousTrack);
+            trackElement.querySelector(".skip-button--next").addEventListener("click", playNextTrack);
             trackElement.querySelector(".track-clear").addEventListener("click", clearCurrentTrack);
+            watchSongWave(trackElement.querySelector(".song-wave"));
             coverImage.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
 
             
@@ -2887,9 +3152,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Byte size + where the audio starts (after the ID3 tag), so we can ask for slices of a song
-    async function fetchAudioFileInfo(file) {
-        if (audioFileInfo.has(file)) return audioFileInfo.get(file);
+    // (fetched once, however many things ask for it at the same time)
+    function fetchAudioFileInfo(file) {
+        if (!audioFileInfo.has(file)) {
+            const request = loadAudioFileInfo(file);
+            audioFileInfo.set(file, request);
+            request.catch(() => audioFileInfo.delete(file));
+        }
+        return audioFileInfo.get(file);
+    }
 
+    async function loadAudioFileInfo(file) {
         const response = await fetch(file, { headers: { Range: "bytes=0-9" } });
         const contentRange = response.headers.get("Content-Range") || "";
         const total = Number(contentRange.split("/")[1]);
@@ -2904,9 +3177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Skip the ID3 tag at the front of the file
             audioStart = 10 + (((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F));
         }
-        const info = { total, audioStart };
-        audioFileInfo.set(file, info);
-        return info;
+        return { total, audioStart };
     }
 
     // Fetch and decode ~6 seconds of the song around `centerTime`
@@ -3048,17 +3319,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function previewScratchTime(time) {
         const duration = player.duration;
         if (!Number.isFinite(duration) || duration <= 0) return;
-        const timeDisplay = getCurrentTrackElement()?.querySelector(".time-display");
-        if (timeDisplay) {
-            setTimeDisplayReady(player, timeDisplay, time);
-        }
-        if (npSeek) {
-            npSeek.value = Math.round((time / duration) * 1000);
-            npSeek.style.setProperty("--progress", `${npSeek.value / 10}%`);
-        }
-        if (npElapsed) {
-            npElapsed.textContent = formatTime(time);
-        }
+        updateNowPlayingProgress(time);
     }
 
     function setPreservesPitch(value) {
@@ -3470,36 +3731,53 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function applyBeatLevel(level, beatIndex) {
-        speakerCones.forEach((cone) => {
-            cone.style.transform = `scale(${(1 + (level * 0.13)).toFixed(3)})`;
-        });
-        // Equaliser: a new shape every beat (taller in the middle), scaled by how hard it hits
+    // Until a song's sound has been measured, the bars dance to its tempo: a new shape every beat
+    // (fuller in the bass), scaled by how hard the beat hits
+    function guessLevels(level, beatIndex, out) {
         if (beatIndex !== null && beatIndex !== eqBeatIndex) {
             eqBeatIndex = beatIndex;
-            const middle = (eqBars.length - 1) / 2;
-            eqShape = eqBars.map((bar, index) => (1 - (0.45 * Math.abs(index - middle) / middle)) * (0.55 + (Math.random() * 0.45)));
+            eqShape = eqBars.map((bar, index) => (1 - (0.4 * index / Math.max(1, eqBars.length - 1))) * (0.5 + (Math.random() * 0.5)));
         }
-        eqBars.forEach((bar, index) => {
-            bar.style.transform = `scaleY(${(0.18 + (level * 0.82 * (eqShape[index] || 0))).toFixed(3)})`;
+        for (let band = 0; band < SPECTRUM_BANDS; band += 1) {
+            out[band] = level * (eqShape[band] || 0);
+        }
+        out[SPECTRUM_BANDS] = 0.35 + (level * 0.5);
+        out[SPECTRUM_BANDS + 1] = 0.3 + (level * 0.55);
+        return level;
+    }
+
+    function applyBeatLevel(levels, punch, beatIndex) {
+        const playing = isPlayerActive();
+        speakerCones.forEach((cone) => {
+            cone.style.transform = `scale(${(1 + (punch * 0.14)).toFixed(3)})`;
         });
+        eqBars.forEach((bar, band) => {
+            bar.style.transform = `scaleY(${(0.1 + (0.9 * levels[band])).toFixed(3)})`;
+        });
+        // The side lights: a level meter for each speaker
+        cabinetLightShades.forEach((shade, side) => {
+            shade.style.transform = `translateY(${(-100 * levels[SPECTRUM_BANDS + side]).toFixed(1)}%)`;
+        });
+        const loudness = (levels[SPECTRUM_BANDS] + levels[SPECTRUM_BANDS + 1]) / 2;
         const sway = beatIndex === null ? 0 : (beatIndex % 2 === 0 ? 1 : -1);
         titlePenguins.forEach((penguin, index) => {
             const facing = index === 0 ? 1 : -1;
-            penguin.style.transform = `translateY(${(-level * 5).toFixed(2)}px) rotate(${(sway * facing * level * 7).toFixed(2)}deg)`;
+            penguin.style.transform = `translateY(${(-punch * 5).toFixed(2)}px) rotate(${(sway * facing * punch * 7).toFixed(2)}deg)`;
         });
         if (jukeboxGlow) {
-            jukeboxGlow.style.opacity = isPlayerActive() ? (0.22 + (level * 0.45)).toFixed(3) : "0";
+            jukeboxGlow.style.opacity = playing ? (0.18 + (loudness * 0.22) + (punch * 0.3)).toFixed(3) : "0";
         }
         titleLights.forEach((lights) => {
-            lights.style.setProperty("--lights-level", (0.6 + (level * 0.4)).toFixed(3));
+            lights.style.setProperty("--lights-level", (0.6 + (punch * 0.4)).toFixed(3));
         });
     }
 
-    function stepBeatVisuals() {
+    function stepBeatVisuals(timestamp) {
         const playing = isPlayerActive() && Boolean(currentTrackData) && !document.hidden;
-        let level = 0;
+        const elapsed = lastVisualTimestamp === null ? 1 / 60 : Math.min(0.1, Math.max(0, (timestamp - lastVisualTimestamp) / 1000));
+        lastVisualTimestamp = timestamp;
         let beatIndex = null;
+        let bass = 0;
 
         if (playing) {
             const tempo = tempoCache.get(currentTrackData.file) || DEFAULT_TEMPO;
@@ -3508,29 +3786,377 @@ document.addEventListener("DOMContentLoaded", async () => {
             beatIndex = Math.floor(beats);
             const phase = beats - beatIndex;
             const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
-            level = Math.exp(-(phase * tempo.period) / 0.12) * accent;
+            const level = Math.exp(-(phase * tempo.period) / 0.12) * accent;
             if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
                 onBeat(beatIndex);
             }
             lastBeatIndex = beatIndex;
+
+            // The song's wave fills smoothly (between the few time updates a second)
+            updateNowPlayingProgress(scratch ? time : null);
+
+            const spectrum = getSpectrum(currentTrackData);
+            if (spectrum && !isFrontHidden()) {
+                measureSpectrumAhead(spectrum, time);
+            }
+            if (spectrum && readSpectrum(spectrum, time + SPECTRUM_LEAD_SECONDS, targetLevels)) {
+                // The speakers thump when the bass jumps (a kick drum), and lean out a little with a
+                // steady bass line
+                let kick = 0;
+                let low = 0;
+                bassAverages.forEach((average, band) => {
+                    const bandLevel = targetLevels[band];
+                    bassAverages[band] = average + ((bandLevel - average) * (1 - Math.exp(-elapsed / 0.35)));
+                    kick = Math.max(kick, bandLevel - bassAverages[band]);
+                    low += bandLevel / bassAverages.length;
+                });
+                bass = Math.max(Math.min(1, kick / 0.2), low * 0.4);
+            } else {
+                bass = guessLevels(level, beatIndex, targetLevels);
+            }
         } else {
             lastBeatIndex = null;
+            targetLevels.fill(0);
+            bassAverages.fill(0);
         }
 
-        beatLevel = playing ? level : beatLevel * 0.82;
-        applyBeatLevel(beatLevel, beatIndex);
+        // Like a real meter: up at once, then falling back smoothly
+        let moving = false;
+        for (let value = 0; value < SPECTRUM_VALUES; value += 1) {
+            const target = targetLevels[value];
+            const shown = shownLevels[value];
+            const settle = target > shown ? 0.03 : (value < SPECTRUM_BANDS ? 0.16 : 0.24);
+            shownLevels[value] = shown + ((target - shown) * (1 - Math.exp(-elapsed / settle)));
+            if (shownLevels[value] > 0.01) moving = true;
+        }
+        beatLevel = Math.max(bass, beatLevel * Math.exp(-elapsed / 0.12));
+        applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5), beatIndex);
 
-        if (playing || beatLevel > 0.01) {
+        if (playing || moving || beatLevel > 0.01) {
             beatFrame = requestAnimationFrame(stepBeatVisuals);
         } else {
-            applyBeatLevel(0, null);
+            shownLevels.fill(0);
+            beatLevel = 0;
+            applyBeatLevel(shownLevels, 0, null);
             beatFrame = null;
+            lastVisualTimestamp = null;
         }
     }
 
     function startBeatVisuals() {
         if (beatFrame !== null || prefersReducedMotion()) return;
         beatFrame = requestAnimationFrame(stepBeatVisuals);
+    }
+
+    // ───── Frequencies: the equaliser, speakers and lights follow the real sound ─────
+    // Like the tempo, the levels can't come from the audio that's playing (that stops phones playing
+    // with the screen off), so each song is measured a few seconds ahead of where it's playing: a
+    // slice of it is decoded off to the side and split into frequency bands, 30 times a second.
+    const SPECTRUM_RATE = 30; // measurements per second of song
+    const SPECTRUM_FFT_SIZE = 1024; // at 22050 Hz: 46ms windows with bins 21.5 Hz apart
+    // The bins in each equaliser bar: half an octave apart, from the bass (43 Hz) to the top (11 kHz)
+    const SPECTRUM_BAND_BINS = [2, 3, 4, 6, 8, 11, 16, 23, 32, 45, 64, 91, 128, 181, 256, 362, 512];
+    const SPECTRUM_BANDS = SPECTRUM_BAND_BINS.length - 1;
+    const SPECTRUM_VALUES = SPECTRUM_BANDS + 2; // the bars, then the left and right channels
+    const SPECTRUM_SLICE_SECONDS = 6;
+    const SPECTRUM_LOOKAHEAD_SECONDS = 4;
+    const SPECTRUM_PREROLL_SECONDS = 0.2; // a slice's first moment can decode wrong, so it starts early
+    const SPECTRUM_LEAD_SECONDS = 0.05; // a song's measurements land a touch late; this lines them up
+    // How loud (dB) the top of each bar usually is in these songs, used until a song has been
+    // measured for a while; after that each bar's top is the song's own loudest moments
+    const SPECTRUM_TYPICAL_TOPS = [-15, -14, -16, -21, -22, -22, -22, -23, -25, -26, -29, -31, -33, -34, -32, -37, -9.5, -9.5];
+    const SPECTRUM_TRUST_SECONDS = 40;
+    const SPECTRUM_TRUST_UP_SECONDS = 6;
+    const SPECTRUM_BAND_RANGE = 28; // dB from the bottom of a bar to the top
+    const SPECTRUM_CHANNEL_RANGE = 20;
+    const spectra = new Map();
+    const songSources = new Map(); // songs fetched whole (the next song) are measured from memory
+    const targetLevels = new Float32Array(SPECTRUM_VALUES);
+    const shownLevels = new Float32Array(SPECTRUM_VALUES);
+    let lastVisualTimestamp = null;
+    const bassAverages = new Float32Array(4); // the lowest bars' recent levels
+    let fftTables = null;
+
+    function getSpectrum(track) {
+        let spectrum = spectra.get(track.file);
+        if (spectrum) return spectrum;
+        const duration = player.duration;
+        if (!Number.isFinite(duration) || duration < 1) return null;
+
+        const frameCount = Math.floor(duration * SPECTRUM_RATE) + 1;
+        spectrum = {
+            file: track.file,
+            duration,
+            frameCount,
+            levels: new Uint8Array(frameCount * SPECTRUM_VALUES), // dB, in half-dB steps from -100
+            measured: new Uint8Array(frameCount),
+            measuredCount: 0,
+            histogram: new Uint32Array(SPECTRUM_VALUES * 256),
+            bottoms: new Float32Array(SPECTRUM_VALUES),
+            spans: new Float32Array(SPECTRUM_VALUES),
+            busy: false,
+            failures: 0,
+            retryAt: 0
+        };
+        updateSpectrumScale(spectrum);
+        spectra.set(track.file, spectrum);
+        if (spectra.size > 8) {
+            spectra.delete(spectra.keys().next().value);
+        }
+        return spectrum;
+    }
+
+    // Measure the next stretch of the song that hasn't been measured yet, if it's coming up soon
+    function measureSpectrumAhead(spectrum, time) {
+        if (spectrum.busy || spectrum.failures >= 3 || performance.now() < spectrum.retryAt) return;
+        const from = Math.max(0, Math.floor(time * SPECTRUM_RATE));
+        const to = Math.min(spectrum.frameCount - 1, Math.ceil((time + SPECTRUM_LOOKAHEAD_SECONDS) * SPECTRUM_RATE));
+        let frame = from;
+        while (frame <= to && spectrum.measured[frame]) frame += 1;
+        if (frame > to) return;
+
+        spectrum.busy = true;
+        measureSpectrumSlice(spectrum, frame)
+            .catch(() => {
+                spectrum.failures += 1;
+                spectrum.retryAt = performance.now() + 2000;
+            })
+            .finally(() => {
+                spectrum.busy = false;
+            });
+    }
+
+    async function measureSpectrumSlice(spectrum, firstFrame) {
+        const fromTime = firstFrame / SPECTRUM_RATE;
+        const toTime = Math.min(spectrum.duration, fromTime + SPECTRUM_SLICE_SECONDS);
+        const lastFrame = Math.min(spectrum.frameCount - 1, Math.floor(toTime * SPECTRUM_RATE));
+        const slice = await decodeSongSlice(spectrum.file, spectrum.duration, Math.max(0, fromTime - SPECTRUM_PREROLL_SECONDS), toTime);
+        const { buffer } = slice;
+        const left = buffer.getChannelData(0);
+        const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+        const mono = new Float32Array(buffer.length);
+        for (let index = 0; index < buffer.length; index += 1) {
+            mono[index] = (left[index] + right[index]) / 2;
+        }
+
+        const values = new Float32Array(SPECTRUM_VALUES);
+        const halfHop = Math.round(buffer.sampleRate / SPECTRUM_RATE / 2);
+        for (let frame = firstFrame; frame <= lastFrame; frame += 1) {
+            if (!spectra.has(spectrum.file)) return;
+            if (!spectrum.measured[frame]) {
+                const center = Math.round(((frame / SPECTRUM_RATE) - slice.startTime) * buffer.sampleRate);
+                measureBands(mono, center, values);
+                values[SPECTRUM_BANDS] = measureLoudness(left, center - halfHop, center + halfHop);
+                values[SPECTRUM_BANDS + 1] = measureLoudness(right, center - halfHop, center + halfHop);
+                const offset = frame * SPECTRUM_VALUES;
+                for (let value = 0; value < SPECTRUM_VALUES; value += 1) {
+                    const byte = Math.max(0, Math.min(255, Math.round((values[value] + 100) * 2)));
+                    spectrum.levels[offset + value] = byte;
+                    spectrum.histogram[(value * 256) + byte] += 1;
+                }
+                spectrum.measured[frame] = 1;
+                spectrum.measuredCount += 1;
+            }
+            // A breather now and then, so the page never stutters
+            if ((frame - firstFrame) % 45 === 44) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+        updateSpectrumScale(spectrum);
+        learnSongWave(spectrum);
+    }
+
+    // A stretch of the song, decoded: from memory when the whole song is here, otherwise fetched.
+    // Resolves to the audio and the song time it starts at.
+    async function decodeSongSlice(file, duration, fromTime, toTime) {
+        const context = getAnalysisContext();
+        const source = songSources.get(file);
+        if (source) {
+            const { blob, frames } = source;
+            const frameSeconds = frames.samplesPerFrame / frames.sampleRate;
+            const first = Math.min(frames.offsets.length - 1, Math.floor(fromTime / frameSeconds));
+            const last = Math.min(frames.offsets.length, Math.ceil(toTime / frameSeconds) + 1);
+            const end = last < frames.offsets.length ? frames.offsets[last] : frames.end;
+            const buffer = await decodeAudio(context, await blob.slice(frames.offsets[first], end).arrayBuffer());
+            // Lined up by its end: a decoder can drop a little from the front, never the back
+            return { buffer, startTime: (last * frameSeconds) - buffer.duration };
+        }
+
+        if (navigator.connection && navigator.connection.saveData) throw new Error("Saving data");
+        const info = await fetchAudioFileInfo(file);
+        const bytesPerSecond = (info.total - info.audioStart) / duration;
+        const startByte = info.audioStart + Math.floor(fromTime * bytesPerSecond);
+        const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil(toTime * bytesPerSecond) + 1500);
+        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
+        if (response.status !== 206) {
+            if (response.body) response.body.cancel();
+            throw new Error("Range requests not supported");
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const frameStart = findMp3FrameStart(bytes);
+        // Whole frames only, so the slice's end is a known moment in the song
+        let end = frameStart;
+        let frameCount = 0;
+        let header = readMp3FrameHeader(bytes, end);
+        const firstHeader = header;
+        while (header && end + header.length <= bytes.length) {
+            end += header.length;
+            frameCount += 1;
+            header = readMp3FrameHeader(bytes, end);
+        }
+        if (!firstHeader || !frameCount) throw new Error("No MP3 frames");
+        const buffer = await decodeAudio(context, bytes.slice(frameStart, end).buffer);
+        const endTime = ((startByte + frameStart - info.audioStart) / bytesPerSecond)
+            + ((frameCount * firstHeader.samplesPerFrame) / firstHeader.sampleRate);
+        return { buffer, startTime: endTime - buffer.duration };
+    }
+
+    function getFftTables() {
+        if (fftTables) return fftTables;
+        const size = SPECTRUM_FFT_SIZE;
+        const bits = Math.round(Math.log2(size));
+        const reversed = new Uint16Array(size);
+        for (let index = 0; index < size; index += 1) {
+            let value = 0;
+            for (let bit = 0; bit < bits; bit += 1) {
+                value |= ((index >> bit) & 1) << (bits - 1 - bit);
+            }
+            reversed[index] = value;
+        }
+        const cos = new Float32Array(size / 2);
+        const sin = new Float32Array(size / 2);
+        for (let index = 0; index < size / 2; index += 1) {
+            cos[index] = Math.cos((2 * Math.PI * index) / size);
+            sin[index] = Math.sin((2 * Math.PI * index) / size);
+        }
+        const window = new Float32Array(size);
+        let windowPower = 0;
+        for (let index = 0; index < size; index += 1) {
+            window[index] = 0.5 - (0.5 * Math.cos((2 * Math.PI * index) / size));
+            windowPower += window[index] * window[index];
+        }
+        fftTables = {
+            reversed,
+            cos,
+            sin,
+            window,
+            // Scaled so a band's power reads like the loudness of the sound in it
+            scale: 2 / (size * windowPower),
+            real: new Float32Array(size),
+            imag: new Float32Array(size)
+        };
+        return fftTables;
+    }
+
+    // How loud (dB) each band is in the window of samples centred on `center`
+    function measureBands(samples, center, out) {
+        const { reversed, cos, sin, window, scale, real, imag } = getFftTables();
+        const size = SPECTRUM_FFT_SIZE;
+        const start = center - (size / 2);
+        for (let index = 0; index < size; index += 1) {
+            const position = start + index;
+            const sample = position >= 0 && position < samples.length ? samples[position] : 0;
+            real[reversed[index]] = sample * window[index];
+            imag[reversed[index]] = 0;
+        }
+        for (let half = 1; half < size; half *= 2) {
+            const step = size / (half * 2);
+            for (let group = 0; group < size; group += half * 2) {
+                for (let pair = 0; pair < half; pair += 1) {
+                    const even = group + pair;
+                    const odd = even + half;
+                    const twiddle = pair * step;
+                    const oddReal = (real[odd] * cos[twiddle]) + (imag[odd] * sin[twiddle]);
+                    const oddImag = (imag[odd] * cos[twiddle]) - (real[odd] * sin[twiddle]);
+                    real[odd] = real[even] - oddReal;
+                    imag[odd] = imag[even] - oddImag;
+                    real[even] += oddReal;
+                    imag[even] += oddImag;
+                }
+            }
+        }
+        for (let band = 0; band < SPECTRUM_BANDS; band += 1) {
+            let power = 0;
+            for (let bin = SPECTRUM_BAND_BINS[band]; bin < SPECTRUM_BAND_BINS[band + 1]; bin += 1) {
+                power += (real[bin] * real[bin]) + (imag[bin] * imag[bin]);
+            }
+            out[band] = 10 * Math.log10((power * scale) + 1e-12);
+        }
+    }
+
+    function measureLoudness(samples, from, to) {
+        let sum = 0;
+        let count = 0;
+        for (let index = Math.max(0, from); index < Math.min(samples.length, to); index += 1) {
+            sum += samples[index] * samples[index];
+            count += 1;
+        }
+        return 10 * Math.log10((count ? sum / count : 0) + 1e-12);
+    }
+
+    // Where each bar's bottom and top sit (dB): its top is how loud it gets in the song's loudest
+    // moments, though a band the song hardly uses stays low instead of being blown up to match.
+    // A loud song raises the tops within seconds; a quiet start only lowers them slowly.
+    function updateSpectrumScale(spectrum) {
+        const measuredSeconds = spectrum.measuredCount / SPECTRUM_RATE;
+        const trustUp = Math.min(1, measuredSeconds / SPECTRUM_TRUST_UP_SECONDS);
+        const trustDown = Math.min(1, measuredSeconds / SPECTRUM_TRUST_SECONDS);
+        const tops = new Float32Array(SPECTRUM_VALUES);
+        for (let value = 0; value < SPECTRUM_VALUES; value += 1) {
+            let measuredTop = SPECTRUM_TYPICAL_TOPS[value];
+            if (spectrum.measuredCount) {
+                let remaining = spectrum.measuredCount * 0.03;
+                let byte = 255;
+                while (byte > 0 && remaining >= spectrum.histogram[(value * 256) + byte]) {
+                    remaining -= spectrum.histogram[(value * 256) + byte];
+                    byte -= 1;
+                }
+                measuredTop = (byte / 2) - 100;
+            }
+            const trust = measuredTop > SPECTRUM_TYPICAL_TOPS[value] ? trustUp : trustDown;
+            tops[value] = SPECTRUM_TYPICAL_TOPS[value] + ((measuredTop - SPECTRUM_TYPICAL_TOPS[value]) * trust);
+        }
+        let loudestBand = -100;
+        for (let band = 0; band < SPECTRUM_BANDS; band += 1) {
+            loudestBand = Math.max(loudestBand, tops[band]);
+        }
+        const channelTop = Math.max(tops[SPECTRUM_BANDS], tops[SPECTRUM_BANDS + 1]);
+        for (let value = 0; value < SPECTRUM_VALUES; value += 1) {
+            const isBand = value < SPECTRUM_BANDS;
+            // A little headroom, so a steady bass note doesn't pin its bar to the top
+            const top = (isBand ? Math.max(tops[value], loudestBand - 20) : channelTop) + 2;
+            const range = isBand ? SPECTRUM_BAND_RANGE : SPECTRUM_CHANNEL_RANGE;
+            // Kept in the same half-dB steps as the measurements
+            spectrum.bottoms[value] = (top - range + 100) * 2;
+            spectrum.spans[value] = range * 2;
+        }
+    }
+
+    // Each bar's level (0–1), then the left and right channels', at `time`; false if not measured yet
+    function readSpectrum(spectrum, time, out) {
+        const position = Math.max(0, time * SPECTRUM_RATE);
+        const frame = Math.min(spectrum.frameCount - 2, Math.floor(position));
+        if (frame < 0 || !spectrum.measured[frame] || !spectrum.measured[frame + 1]) return false;
+
+        const mix = Math.min(1, position - frame);
+        const { levels, bottoms, spans } = spectrum;
+        const offset = frame * SPECTRUM_VALUES;
+        for (let value = 0; value < SPECTRUM_VALUES; value += 1) {
+            const before = levels[offset + value];
+            const after = levels[offset + SPECTRUM_VALUES + value];
+            const level = (before + ((after - before) * mix) - bottoms[value]) / spans[value];
+            out[value] = Math.max(0, Math.min(1, level));
+        }
+        return true;
+    }
+
+    // The next song's whole file, so it can be measured without fetching it again
+    function rememberSongSource(file, blob, frames) {
+        songSources.delete(file);
+        songSources.set(file, { blob, frames });
+        while (songSources.size > 2) {
+            songSources.delete(songSources.keys().next().value);
+        }
     }
 
     // ───── Auto-mix: keep-playing moves from each song straight into the next ─────
@@ -3673,7 +4299,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             offset += header.length;
             header = readMp3FrameHeader(bytes, offset);
         }
-        return { offsets, sampleRate: first.sampleRate, samplesPerFrame: first.samplesPerFrame };
+        return { offsets, end: offset, sampleRate: first.sampleRate, samplesPerFrame: first.samplesPerFrame };
     }
 
     function getSpareDeck() {
@@ -3762,8 +4388,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const bytes = new Uint8Array(await response.arrayBuffer());
         if (upNext !== entry) return;
 
+        let frames = null;
         try {
-            const info = await analyzeMixFromBytes(bytes, parseMp3Frames(bytes));
+            frames = parseMp3Frames(bytes);
+            const info = await analyzeMixFromBytes(bytes, frames);
             mixInfoCache.set(entry.track.file, info);
             entry.startAt = info.audibleStart;
         } catch (error) {
@@ -3771,7 +4399,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (upNext !== entry) return;
 
-        setDeckSource(entry.deck, URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })), { blob: true });
+        const blob = new Blob([bytes], { type: "audio/mpeg" });
+        if (frames) {
+            rememberSongSource(entry.track.file, blob, frames);
+        }
+        setDeckSource(entry.deck, URL.createObjectURL(blob), { blob: true });
         cueDeck(entry.deck, entry.startAt);
         entry.ready = true;
     }
@@ -3951,15 +4583,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         resetTrackElementUi(previousElement);
         const trackElement = getCurrentTrackElement();
         showModeButtonsOnTrack(trackElement);
-        const timeDisplay = trackElement?.querySelector(".time-display");
-        if (timeDisplay) {
-            timeDisplay.classList.add("visible");
-            if (Number.isFinite(player.duration)) {
-                setTimeDisplayReady(player, timeDisplay);
-            } else {
-                setTimeDisplayLoading(timeDisplay);
-            }
-        }
         setPlayButtonLabel(trackElement?.querySelector(".play-button"), "Pause");
         updateMediaSessionMetadata(entry.track);
         if ("mediaSession" in navigator) {
@@ -4271,6 +4894,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpPlayerEvents();
     setUpMediaSession();
     setUpNowPlayingControls();
+    setUpSongWaves();
     setUpJukeboxBack();
     setUpSideRail();
     setUpRecordScratching();

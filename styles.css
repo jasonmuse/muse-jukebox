@@ -185,6 +185,8 @@ text-align: center;
 max-width: 500px;
 width: 90vw;
 padding: 20px 20px 14px 20px;
+/* The side lights sit in the side padding, so they share its width */
+--lights-gutter: 20px;
 border-radius: 40px 40px 16px 16px;
 background:
     radial-gradient(120% 55% at 50% 0%, rgba(150, 125, 255, 0.24), transparent 62%),
@@ -499,6 +501,7 @@ box-shadow: 0 0 0 3px #ffffff;
     border-bottom: 1px solid #444;
     padding: 15px 10px 15px 10px;
     --cover-size: 88px;
+    --cover-gap: 15px;
 }
 
 .track.track-playing {
@@ -550,7 +553,7 @@ box-shadow: 0 0 0 3px #ffffff;
     aspect-ratio: 1 / 1;
     display: block;
     border-radius: 12px;
-    margin-right: 15px;
+    margin-right: var(--cover-gap);
     cursor: pointer;
     object-fit: cover;
     border: 2px solid rgba(100, 100, 120, 0.4);
@@ -957,63 +960,14 @@ audio {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
 }
 
-.time-display {
-    display: inline-block;
-    vertical-align: middle;
-    font-size: 0.85em;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.86);
-    background: rgba(255, 255, 255, 0.08);
-    padding: 5px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
-    opacity: 0;
-    transform: translateX(-14px);
-    max-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transition: opacity 160ms ease-out, transform 220ms ease-out, max-width 220ms ease-out;
-    position: relative;
-    z-index: 0;
-    letter-spacing: 0.2px;
-    line-height: 1;
-}
-
-.time-display.visible {
-    opacity: 1;
-    transform: translateX(0);
-    max-width: 150px;
-}
-
-.time-display.loading {
-    color: rgba(255, 255, 255, 0.74);
-    filter: saturate(0.65);
-}
-
-.time-display.ready-fade {
-    animation: timeReadyFade 220ms ease-out;
-}
-
-@keyframes timeReadyFade {
-    from {
-        opacity: 0.38;
-        filter: blur(0.8px);
-    }
-    to {
-        opacity: 1;
-        filter: blur(0);
-    }
-}
-
 .playback-controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0;
     position: relative;
     overflow: visible;
+    width: 100%;
 
     margin-top: auto;
     padding-bottom: 1px;        /* NEW: tiny buffer so it never kisses the bottom */
@@ -1152,8 +1106,198 @@ audio {
     }
 }
 
-.time-display {
+/* ───── SKIP BUTTONS + SONG WAVES IN THE SONG LIST ───── */
+/* Previous / next beside the playing song's Pause (they unfold like the mode buttons) */
+.skip-button svg {
+    width: 15px;
+    height: 15px;
+    fill: currentColor;
+    stroke: none;
+    opacity: 0.85;
+}
+
+.track-modes-visible .skip-button {
+    width: var(--mode-size);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition:
+        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        margin 340ms cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 260ms ease-out 60ms,
+        transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1),
+        background-color 180ms ease-out,
+        box-shadow 180ms ease-out,
+        visibility 0s linear 0s;
+}
+
+.track-modes-visible .skip-button--prev {
+    margin-right: 6px;
+}
+
+.track-modes-visible .skip-button--next {
+    margin-left: 6px;
+}
+
+.skip-button--prev {
+    transform: translateX(10px) scale(0.6);
+}
+
+/* The song's shape, with its length, after the Play button. The playing song's fills up as it
+   plays and can be dragged along; another song's starts it from wherever it's tapped. */
+.song-progress {
+    flex: 1 1 60px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-left: 12px;
+}
+
+.song-wave {
+    --wave-progress: 0;
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 36px;
+    height: 22px;
+    color: rgba(214, 220, 255, 0.24);
+    cursor: pointer;
+    touch-action: pan-y;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 300ms ease;
+}
+
+.song-wave-bars {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    pointer-events: none;
+}
+
+/* The part that's been played: the same bars, brighter, cut off at the playhead */
+.song-wave-played {
+    color: #eef0ff;
+    clip-path: inset(0 calc(100% - (var(--wave-progress) * 100%)) 0 0);
+}
+
+.song-wave-thumb {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--wave-progress) * 100%);
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(123, 168, 208, 0.45), 0 1px 5px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: scale(0.4);
+    transition: opacity 200ms ease-out, transform 200ms cubic-bezier(0.34, 1.5, 0.64, 1);
+    pointer-events: none;
+}
+
+.track-modes-visible .song-wave,
+.np-wave {
+    color: rgba(214, 220, 255, 0.3);
+}
+
+.track-modes-visible .song-wave-thumb,
+.np-wave .song-wave-thumb {
+    opacity: 1;
+    transform: none;
+}
+
+.song-wave.is-scrubbing .song-wave-thumb {
+    transform: scale(1.35);
+}
+
+.song-wave:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+@media (hover: hover) {
+    .song-wave:hover {
+        color: rgba(214, 220, 255, 0.42);
+    }
+}
+
+/* Waiting for the song to load: the wave breathes */
+.is-loading .song-wave-bars {
+    animation: waveLoading 900ms ease-in-out infinite alternate;
+}
+
+@keyframes waveLoading {
+    from {
+        opacity: 0.35;
+    }
+}
+
+.song-time {
+    flex: 0 0 auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.2px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+}
+
+.song-time-elapsed {
+    display: none;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.track-modes-visible .song-time-elapsed {
+    display: inline;
+}
+
+.track-modes-visible .song-time-total:not(:empty)::before {
+    content: " / ";
+}
+
+.is-unavailable .song-time {
+    font-family: inherit;
+}
+
+.is-unavailable .song-time > span {
+    display: none;
+}
+
+.is-unavailable .song-time::after {
+    content: "unavailable";
+}
+
+/* The playing song in a narrow row: its wave gets a line of its own under the buttons, running
+   the whole width of the card (under the cover too), so there's room to drag it */
+.track-modes-visible .song-progress {
+    flex: 0 0 calc(100% + var(--cover-size) + var(--cover-gap));
+    margin: 10px 0 0 calc(-1 * (var(--cover-size) + var(--cover-gap)));
+    animation: songProgressIn 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.track.track-modes-visible img {
+    align-self: flex-start;
+}
+
+.track-modes-visible .song-wave {
+    height: 26px;
+}
+
+@keyframes songProgressIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
 }
 
 /* Size the controls row to the space each song card actually has */
@@ -1161,28 +1305,105 @@ audio {
     container-type: inline-size;
 }
 
-@container (max-width: 265px) {
-    .time-total {
-        display: none;
+/* A wide row has room for everything on one line, the wave included */
+@container (min-width: 560px) {
+    .track-modes-visible .song-progress {
+        flex: 1 1 60px;
+        margin: 0 0 0 12px;
+        animation: none;
     }
 
-    .time-display {
-        margin-left: 8px;
-    }
-
-    .mode-button {
-        --mode-size: 32px;
-    }
-
-    .track-modes-visible .mode-button--continuous,
-    #track-list.continuous-on .track-modes-visible .mode-button--shuffle {
-        margin-left: 6px;
+    .track-modes-visible .song-wave {
+        height: 22px;
     }
 }
 
-@container (max-width: 175px) {
-    .track-modes-visible .time-display {
-        display: none;
+@container (max-width: 265px) {
+    .mode-button {
+        --mode-size: 30px;
+    }
+
+    .track-modes-visible .mode-button--continuous,
+    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .skip-button--next {
+        margin-left: 5px;
+    }
+
+    .track-modes-visible .skip-button--prev {
+        margin-right: 5px;
+    }
+
+    .track-modes-visible .play-button {
+        min-width: 60px;
+        padding: 0 11px;
+    }
+
+    .song-progress {
+        margin-left: 10px;
+    }
+}
+
+@container (max-width: 210px) {
+    .mode-button {
+        --mode-size: 28px;
+    }
+
+    .track-modes-visible .mode-button--continuous,
+    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .skip-button--next {
+        margin-left: 4px;
+    }
+
+    .track-modes-visible .skip-button--prev {
+        margin-right: 4px;
+    }
+
+    .track-modes-visible .play-button {
+        min-width: 56px;
+        padding: 0 9px;
+    }
+}
+
+/* Too narrow for the skip buttons too (the record's own are close by) */
+@container (max-width: 185px) {
+    .track-modes-visible .skip-button {
+        width: 0;
+        margin: 0;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}
+
+/* The two-panel deck has its own transport and big scrubber, so the playing row stays on one line
+   (keep in sync with DECK_LAYOUT_QUERY in script.js) */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
+    .track-modes-visible .skip-button {
+        width: 0;
+        margin: 0;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .track-modes-visible .song-progress {
+        flex: 1 1 60px;
+        margin: 0 0 0 10px;
+        animation: none;
+    }
+
+    .track-modes-visible .song-wave {
+        height: 22px;
+    }
+
+    .track.track-modes-visible img {
+        align-self: flex-end;
+    }
+
+    @container (max-width: 300px) {
+        .track-modes-visible .song-time-total {
+            display: none;
+        }
     }
 }
 
@@ -1266,6 +1487,7 @@ audio {
         height: 98%;
         max-height: 98%;
         padding: 10px 10px 8px 10px;
+        --lights-gutter: 10px;
         border-radius: 28px 28px 14px 14px;
         box-sizing: border-box;
         display: flex;
@@ -1331,12 +1553,12 @@ audio {
         flex-direction: row;
         align-items: stretch;
         --cover-size: 78px;
+        --cover-gap: 10px;
     }
 
     .track img {
         width: var(--cover-size);
         height: var(--cover-size);
-        margin-right: 10px;
     }
 
     .track-info {
@@ -1358,15 +1580,6 @@ audio {
         padding: 0 14px;
         min-height: 32px;
         min-width: 66px;
-    }
-
-    .time-display {
-        font-size: 0.72em;
-        padding: 3px 8px;
-    }
-
-    .time-display.visible {
-        max-width: 128px;
     }
 
     .cover-modal-close {
@@ -1638,6 +1851,7 @@ html {
     #jukebox {
         width: min(720px, calc(100% - 48px));
         padding: 18px 18px 10px;
+        --lights-gutter: 18px;
         border-radius: 40px 40px 16px 16px;
     }
 
@@ -1687,9 +1901,8 @@ html {
         --mode-size: 36px;
     }
 
-    .time-display {
-        font-size: 0.85em;
-        padding: 5px 12px;
+    .song-time {
+        font-size: 0.8rem;
     }
 
     .record {
@@ -1945,63 +2158,18 @@ html {
     color: rgba(255, 255, 255, 0.75);
 }
 
-.np-seek {
-    --progress: 0%;
+.np-wave {
     flex: 1;
-    min-width: 0;
-    height: 24px;
-    margin: 0;
-    background: transparent;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-    -webkit-tap-highlight-color: transparent;
+    height: 30px;
+    touch-action: none;
 }
 
-.np-seek::-webkit-slider-runnable-track {
-    height: 6px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #a9cbea 0 var(--progress), rgba(255, 255, 255, 0.18) var(--progress) 100%);
-}
-
-.np-seek::-moz-range-track {
-    height: 6px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #a9cbea 0 var(--progress), rgba(255, 255, 255, 0.18) var(--progress) 100%);
-}
-
-.np-seek::-webkit-slider-thumb {
-    width: 16px;
-    height: 16px;
-    margin-top: -5px;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-    transition: transform 150ms ease-out;
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.np-seek::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border: 0;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-}
-
-.np-seek:active::-webkit-slider-thumb {
-    transform: scale(1.3);
-}
-
-.np-seek:disabled {
-    opacity: 0.4;
+.np-wave[aria-disabled="true"] {
     cursor: default;
 }
 
-.np-seek:disabled::-webkit-slider-thumb {
-    transform: scale(0);
+.np-wave[aria-disabled="true"] .song-wave-thumb {
+    opacity: 0;
 }
 
 .np-transport {
@@ -2212,6 +2380,7 @@ html {
         display: flex;
         flex-direction: column;
         padding: clamp(8px, 2vh, 18px) clamp(8px, 1.4vw, 16px) 6px;
+        --lights-gutter: clamp(8px, 1.4vw, 16px);
         border-radius: 26px 26px 12px 12px;
     }
 
@@ -2283,7 +2452,7 @@ html {
 /* Phones on their side */
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
     .jukebox-speakers,
-    .bubble-tube,
+    .cabinet-lights,
     .np-eyebrow,
     .flip-sign-extra {
         display: none;
@@ -2510,7 +2679,7 @@ html {
 
 /* While the back is out the front's parts hide (named one by one: a :not() here would restyle
    every song), and the song list skips rendering but keeps its size and scroll spot */
-#jukebox.is-flipped:not(.is-turning) > .bubble-tube,
+#jukebox.is-flipped:not(.is-turning) > .cabinet-lights,
 #jukebox.is-flipped:not(.is-turning) > .jukebox-title,
 #jukebox.is-flipped:not(.is-turning) > .flip-sign,
 #jukebox.is-flipped:not(.is-turning) > #filters,
@@ -2548,7 +2717,7 @@ html {
 #jukebox.is-flipped .title-muse,
 #jukebox.is-flipped .penguin-icon,
 #jukebox.is-flipped .title-lights::after,
-#jukebox.is-flipped .bubble-tube {
+#jukebox.is-flipped .cabinet-lights-glint {
     animation-play-state: paused !important;
 }
 
@@ -5132,113 +5301,80 @@ h1.jukebox-title {
     }
 }
 
-/* ───── CABINET DETAILS: bubble tubes, speakers, glow, music notes ───── */
-.bubble-tube {
+/* ───── CABINET DETAILS: side lights, speakers, glow, music notes ───── */
+/* A column of bulbs up each side of the cabinet. While a song plays each one is a level meter for
+   its speaker (script.js slides a shade off the bulbs as the sound gets louder); otherwise a glint
+   runs up them now and then, like marquee lights. The bulbs are a mask, so they stay round on
+   any screen and only whole bulbs are shown. */
+.cabinet-lights {
+    --bulb: 8px;
+    --bulb-pitch: 13px;
     position: absolute;
     top: var(--tube-top, 92px);
     bottom: var(--tube-bottom, 84px);
     z-index: 0;
-    width: 8px;
+    width: var(--lights-gutter, 20px);
     overflow: hidden;
-    border-radius: 999px;
     pointer-events: none;
-    background: linear-gradient(180deg, #ff7ad9, #ffb36b 25%, #ffe680 45%, #7ee8ff 70%, #9b8cff 90%, #ff7ad9);
-    background-size: 100% 300%;
-    box-shadow: 0 0 10px rgba(255, 122, 217, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
-    opacity: 0.72;
-    animation: tubeFlow 9s linear infinite;
-    transition: opacity 600ms ease, box-shadow 600ms ease;
-    /* The bubbles measure their climb against the tube (cqh) */
+    background: linear-gradient(0deg, #7fe6ff, #b79bff 48%, #ff86d6);
+    -webkit-mask-image: radial-gradient(circle closest-side, #000 0 60%, transparent 95%);
+    mask-image: radial-gradient(circle closest-side, #000 0 60%, transparent 95%);
+    -webkit-mask-size: var(--bulb) var(--bulb-pitch);
+    mask-size: var(--bulb) var(--bulb-pitch);
+    -webkit-mask-position: 50% 0;
+    mask-position: 50% 0;
+    -webkit-mask-repeat: no-repeat space;
+    mask-repeat: no-repeat space;
+    /* The glint measures its run against the column (cqh) */
     container-type: size;
 }
 
-.bubble-tube--left {
-    left: 6px;
+.cabinet-lights--left {
+    left: 0;
 }
 
-.bubble-tube--right {
-    right: 6px;
+.cabinet-lights--right {
+    right: 0;
 }
 
-/* Glass highlight */
-.bubble-tube::after {
-    content: "";
+/* The unlit bulbs: covers the ones above the current level; its soft lower edge lets the top
+   lit bulb glow part-way */
+.cabinet-lights-shade {
     position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 1px;
-    width: 2px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.5);
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: -16px;
+    background: linear-gradient(180deg, #4a4462 calc(100% - 16px), rgba(74, 68, 98, 0));
+    will-change: transform;
 }
 
-.bubble-tube span {
+.cabinet-lights-glint {
     position: absolute;
-    left: 50%;
+    left: 0;
+    right: 0;
     top: 100%;
-    width: 4px;
-    height: 4px;
-    margin-left: -2px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.85);
-    animation: bubbleRise 4.4s linear infinite;
-    /* Rest along with the tube */
-    animation-play-state: inherit;
+    height: 56px;
+    background: linear-gradient(0deg, transparent, rgba(255, 239, 204, 0.95) 38% 62%, transparent);
+    animation: lightsChase 5.2s cubic-bezier(0.45, 0, 0.4, 1) infinite;
+    transition: opacity 500ms ease;
 }
 
-.bubble-tube span:nth-child(2) {
-    width: 3px;
-    height: 3px;
-    animation-delay: -1.1s;
+.cabinet-lights--right .cabinet-lights-glint {
+    animation-delay: -2.6s;
 }
 
-.bubble-tube span:nth-child(3) {
-    animation-delay: -2.3s;
-}
-
-.bubble-tube span:nth-child(4) {
-    width: 2px;
-    height: 2px;
-    animation-delay: -3.4s;
-}
-
-.bubble-tube--right span {
-    animation-delay: -0.6s;
-}
-
-.bubble-tube--right span:nth-child(2) {
-    animation-delay: -2s;
-}
-
-.bubble-tube--right span:nth-child(3) {
-    animation-delay: -2.9s;
-}
-
-.bubble-tube--right span:nth-child(4) {
-    animation-delay: -3.9s;
-}
-
-@keyframes tubeFlow {
-    to {
-        background-position: 0 300%;
+/* From under the column to over it, then a rest */
+@keyframes lightsChase {
+    55%,
+    100% {
+        transform: translateY(calc(-100cqh - 56px));
     }
 }
 
-/* From just under the tube to just over it (a transform, so it never re-lays out the page) */
-@keyframes bubbleRise {
-    to {
-        transform: translateY(calc(-100cqh - 6px));
-    }
-}
-
-#jukebox-container.is-music-playing .bubble-tube {
-    opacity: 1;
-    box-shadow: 0 0 14px rgba(255, 122, 217, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-    animation-duration: 4s;
-}
-
-#jukebox-container.is-music-playing .bubble-tube span {
-    animation-duration: 2.2s;
+#jukebox-container.is-music-playing .cabinet-lights-glint {
+    opacity: 0;
+    animation-play-state: paused;
 }
 
 /* Speaker grille with two cones */
@@ -5283,22 +5419,24 @@ h1.jukebox-title {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 14px rgba(255, 138, 216, 0.35);
 }
 
-/* Little equaliser between the speakers; its bars bounce with the beat (script.js) */
+/* Equaliser between the speakers: a bar for each band of the sound, bass on the left, treble on
+   the right; script.js sets their heights from the song */
 .speaker-eq {
     display: flex;
-    align-items: center;
-    gap: 4px;
+    align-items: flex-end;
+    gap: 3px;
     height: 26px;
 }
 
 .speaker-eq span {
     width: 4px;
     height: 100%;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #ff8ad8, #8be9ff);
-    box-shadow: 0 0 6px rgba(255, 138, 216, 0.35);
+    border-radius: 2px 2px 1px 1px;
+    background: var(--c);
+    box-shadow: 0 0 5px var(--c);
     opacity: 0.35;
-    transform: scaleY(0.18);
+    transform: scaleY(0.1);
+    transform-origin: 50% 100%;
     transition: opacity 400ms ease;
     will-change: transform;
 }
@@ -5498,20 +5636,9 @@ html.viewport-short #jukebox-wrapper {
         --jukebox-depth: 34px;
     }
 
-    .bubble-tube {
-        width: 5px;
-    }
-
-    .bubble-tube--left {
-        left: 2px;
-    }
-
-    .bubble-tube--right {
-        right: 2px;
-    }
-
-    .bubble-tube::after {
-        width: 1.5px;
+    .cabinet-lights {
+        --bulb: 7px;
+        --bulb-pitch: 11px;
     }
 }
 
@@ -5533,16 +5660,9 @@ html.viewport-short #jukebox-wrapper {
         --jukebox-depth: 42px;
     }
 
-    .bubble-tube {
-        width: 7px;
-    }
-
-    .bubble-tube--left {
-        left: 5px;
-    }
-
-    .bubble-tube--right {
-        right: 5px;
+    .cabinet-lights {
+        --bulb: 8px;
+        --bulb-pitch: 13px;
     }
 }
 
@@ -5558,16 +5678,9 @@ html.viewport-short #jukebox-wrapper {
         --jukebox-depth: 36px;
     }
 
-    .bubble-tube {
-        width: 5px;
-    }
-
-    .bubble-tube--left {
-        left: 2px;
-    }
-
-    .bubble-tube--right {
-        right: 2px;
+    .cabinet-lights {
+        --bulb: 7px;
+        --bulb-pitch: 11px;
     }
 }
 
@@ -5585,8 +5698,7 @@ html.viewport-short #jukebox-wrapper {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .bubble-tube,
-    .bubble-tube span,
+    .cabinet-lights-glint,
     .title-muse,
     .title-penguin .penguin-icon,
     .title-lights::after,

@@ -163,7 +163,11 @@
             </div>
             <div class="np-progress">
                 <span id="np-elapsed" class="np-time">0:00</span>
-                <input id="np-seek" class="np-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" disabled>
+                <div id="np-wave" class="song-wave np-wave" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00" aria-disabled="true">
+                    <svg class="song-wave-bars" aria-hidden="true"><path></path></svg>
+                    <svg class="song-wave-bars song-wave-played" aria-hidden="true"><path></path></svg>
+                    <span class="song-wave-thumb" aria-hidden="true"></span>
+                </div>
                 <span id="np-duration" class="np-time">--:--</span>
             </div>
             <div class="np-transport">
@@ -187,9 +191,9 @@
         </aside>
     <div id="jukebox">
 
-        <!-- Glowing bubble tubes up the sides of the cabinet -->
-        <span class="bubble-tube bubble-tube--left" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-        <span class="bubble-tube bubble-tube--right" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <!-- Lights up the sides of the cabinet: a level meter for each speaker while a song plays -->
+        <span class="cabinet-lights cabinet-lights--left" aria-hidden="true"><span class="cabinet-lights-shade"></span><span class="cabinet-lights-glint"></span></span>
+        <span class="cabinet-lights cabinet-lights--right" aria-hidden="true"><span class="cabinet-lights-shade"></span><span class="cabinet-lights-glint"></span></span>
 
         <h1 class="jukebox-title">
             <span class="title-lights title-lights--left" aria-hidden="true"></span>
@@ -273,7 +277,7 @@
         <!-- Speaker grille: the cones pump with the beat -->
         <div class="jukebox-speakers" aria-hidden="true">
             <span class="speaker speaker--left"><span class="speaker-cone"></span></span>
-            <span class="speaker-eq"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+            <span class="speaker-eq"><span style="--c: #ff86d6"></span><span style="--c: #f589db"></span><span style="--c: #ec8ce1"></span><span style="--c: #e28ee6"></span><span style="--c: #d991ec"></span><span style="--c: #cf94f1"></span><span style="--c: #c597f7"></span><span style="--c: #bc9afc"></span><span style="--c: #b3a0ff"></span><span style="--c: #acaaff"></span><span style="--c: #a4b4ff"></span><span style="--c: #9dbeff"></span><span style="--c: #95c8ff"></span><span style="--c: #8ed2ff"></span><span style="--c: #86dcff"></span><span style="--c: #7fe6ff"></span></span>
             <span class="speaker speaker--right"><span class="speaker-cone"></span></span>
         </div>
 
