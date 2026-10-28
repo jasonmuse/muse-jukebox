@@ -843,6 +843,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let npShownTrack;
     let playingRowParts = null; // the playing song's row: its wave, times and progress line
     let waveScrub = null; // a finger or mouse dragging along the playing song's wave
+    let trackStartOffset = 0; // where the playing song was started (shown while it loads)
     const TRACK_PLAYING_FADE_OUT_MS = 220;
     // Keep in sync with the full-height layout media queries in styles.css
     const APP_LAYOUT_QUERY = "(max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px), (orientation: landscape) and (pointer: coarse)";
@@ -1770,6 +1771,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const holdAudio = !startingInBackground && canFadeVolume;
         // A tap on the song's wave starts it from there; a song mixed in skips its silent intro
         const startOffset = options.startAt > 0 ? options.startAt : (prepared ? prepared.startAt : 0);
+        trackStartOffset = startOffset;
         if (prepared) {
             const previousDeck = player;
             player = prepared.deck;
@@ -2052,7 +2054,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                     : "Press play and let the jukebox spin";
             }
 
-            if (npWave) drawSongWave(npWave);
+            if (npWave) {
+                drawSongWave(npWave);
+                // The new song's shape grows out of the middle
+                if (track && !prefersReducedMotion() && typeof npWave.animate === "function") {
+                    npWave.querySelectorAll(".song-wave-bars").forEach((bars) => bars.animate(
+                        [{ transform: "scaleY(0.15)", opacity: 0.3 }, { transform: "none", opacity: 1 }],
+                        { duration: 480, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+                    ));
+                }
+            }
 
             const cover = track ? getTrackCoverPreview(track) : "images/penguin.gif";
             setSafeImageSource(npCover, cover);
@@ -2073,32 +2084,95 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Where the playing song is: its row's wave fills up as it plays (and the deck's), the times
     // count along and the side rail's ring goes round. `previewTime` shows a spot being scratched to.
     function updateNowPlayingProgress(previewTime = null) {
-        const duration = currentTrackData && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
-        let position = currentTrackData ? player.currentTime : 0;
+        const playerDuration = currentTrackData && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
+        const loading = Boolean(currentTrackData) && !playerDuration;
+        // Until the song has loaded, its known length shows where it's about to start from
+        const knownDuration = loading ? getKnownDuration(currentTrackData.file) : 0;
+        const duration = playerDuration || (knownDuration > 0 ? knownDuration : 0);
+        let position = currentTrackData ? (playerDuration ? player.currentTime : trackStartOffset) : 0;
+        if (previewTime === null && scratch) previewTime = scratch.targetTime;
+        const dragging = Boolean(waveScrub && waveScrub.active);
         if (previewTime !== null) {
             position = previewTime;
-        } else if (waveScrub && waveScrub.active && duration) {
+        } else if (dragging && duration) {
             position = waveScrub.fraction * duration;
         }
         const fraction = duration ? Math.min(1, Math.max(0, position / duration)) : 0;
-        const loading = Boolean(currentTrackData) && !duration;
+        const following = previewTime !== null || dragging;
+        const now = performance.now();
+        let gliding = false;
+        const glide = (element) => {
+            const shown = glidePlayhead(element, fraction, duration, following, now);
+            if (shown !== fraction) gliding = true;
+            return shown;
+        };
 
         if (railRingProgress) {
-            railRingProgress.style.strokeDashoffset = String(RAIL_RING_LENGTH * (1 - fraction));
+            railRingProgress.style.strokeDashoffset = String(RAIL_RING_LENGTH * (1 - glide(railRingProgress)));
         }
-        if (playingRowParts) {
-            setWaveProgress(playingRowParts.wave, fraction, position, duration);
+        if (playingRowParts && playingRowParts.wave) {
+            const shown = glide(playingRowParts.wave);
+            setWaveProgress(playingRowParts.wave, shown, position, duration);
             playingRowParts.progress?.classList.toggle("is-loading", loading);
-            if (playingRowParts.elapsed) setTextIfChanged(playingRowParts.elapsed, formatTime(position));
+            if (playingRowParts.elapsed) setTextIfChanged(playingRowParts.elapsed, formatTime(duration ? shown * duration : position));
             if (playingRowParts.total && duration) setTextIfChanged(playingRowParts.total, formatTime(duration));
         }
         if (npWave) {
-            setWaveProgress(npWave, fraction, position, duration);
+            const shown = glide(npWave);
+            setWaveProgress(npWave, shown, position, duration);
             npWave.parentElement?.classList.toggle("is-loading", loading);
-            npWave.setAttribute("aria-disabled", String(!duration));
-            if (npElapsed) setTextIfChanged(npElapsed, formatTime(position));
+            const cantSeek = String(!playerDuration);
+            if (npWave.getAttribute("aria-disabled") !== cantSeek) npWave.setAttribute("aria-disabled", cantSeek);
+            if (npElapsed) setTextIfChanged(npElapsed, formatTime(duration ? shown * duration : position));
             if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration) : "--:--");
         }
+
+        // Keep drawing while it glides, and while the song plays if nothing else is drawing frames
+        if (gliding || (beatFrame === null && isPlayerActive() && !document.hidden)) {
+            schedulePlayheadFrame();
+        }
+    }
+
+    // The playhead glides to a new spot (a song starting part-way through, a tap, a skip, the next
+    // song) rather than jumping there. While the song plays it just follows along, and while it's
+    // dragged or scratched it follows the finger, only easing in to where the drag began.
+    const PLAYHEAD_GLIDE_MS = 500;
+    const PLAYHEAD_CATCH_UP_MS = 220;
+    const PLAYHEAD_JUMP_SECONDS = 1; // more than playing ever moves it between two updates
+    const playheads = new WeakMap(); // element -> where its playhead is drawn, and any glide
+    let playheadFrame = null;
+
+    function glidePlayhead(element, target, duration, following, now) {
+        let head = playheads.get(element);
+        if (!head) {
+            head = { shown: 0, target: 0, from: 0, start: 0, length: 0, following: false };
+            playheads.set(element, head);
+        }
+        const jumped = Math.abs(target - head.target) * (duration || 1) > PLAYHEAD_JUMP_SECONDS;
+        if (jumped && (!following || !head.following) && !prefersReducedMotion()) {
+            head.from = head.shown;
+            head.start = now;
+            head.length = following ? PLAYHEAD_CATCH_UP_MS : PLAYHEAD_GLIDE_MS;
+        }
+        head.target = target;
+        head.following = following;
+        const progress = head.length ? (now - head.start) / head.length : 1;
+        if (progress >= 1) {
+            head.length = 0;
+            head.shown = target;
+        } else {
+            const eased = 1 - Math.pow(1 - Math.max(0, progress), 4);
+            head.shown = head.from + ((target - head.from) * eased);
+        }
+        return head.shown;
+    }
+
+    function schedulePlayheadFrame() {
+        if (playheadFrame !== null) return;
+        playheadFrame = requestAnimationFrame(() => {
+            playheadFrame = null;
+            updateNowPlayingProgress();
+        });
     }
 
     function setUpNowPlayingControls() {
@@ -2564,6 +2638,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             wave.style.removeProperty("--wave-progress");
             wave.querySelector(".song-wave-thumb")?.style.removeProperty("transform");
             shownWaveProgress.delete(wave);
+            playheads.delete(wave);
         }
     }
 

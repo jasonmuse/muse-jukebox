@@ -2179,7 +2179,8 @@ html {
     cursor: default;
 }
 
-.np-wave[aria-disabled="true"] .song-wave-thumb::before {
+/* No playhead until there's a song (one that's still loading shows where it'll start) */
+.now-playing.is-empty .np-wave .song-wave-thumb::before {
     opacity: 0;
 }
 
@@ -6061,10 +6062,11 @@ h1.jukebox-title {
 }
 
 /* Equaliser between the speakers: a bar for each band of the sound, bass on the left, treble on
-   the right; script.js sets their heights from the song */
+   the right. script.js sets their heights from the song, and they grow up and down from the
+   middle. */
 .speaker-eq {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 3px;
     height: 26px;
 }
@@ -6072,12 +6074,11 @@ h1.jukebox-title {
 .speaker-eq span {
     width: 4px;
     height: 100%;
-    border-radius: 2px 2px 1px 1px;
+    border-radius: 2px;
     background: var(--c);
     box-shadow: 0 0 5px var(--c);
     opacity: 0.35;
     transform: scaleY(0.1);
-    transform-origin: 50% 100%;
     transition: opacity 400ms ease;
     will-change: transform;
 }
