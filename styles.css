@@ -1092,19 +1092,42 @@ audio {
 }
 
 #track-list.continuous-on .mode-button--continuous,
+#track-list.repeat-one .mode-button--continuous,
 #track-list.shuffle-on .mode-button--shuffle {
     background-color: #7BA8D0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 12px rgba(123, 168, 208, 0.45);
 }
 
 #track-list.continuous-on .mode-button--continuous svg,
+#track-list.repeat-one .mode-button--continuous svg,
 #track-list.shuffle-on .mode-button--shuffle svg {
     opacity: 1;
     transform: rotate(180deg);
 }
 
+/* Repeat-one turns the loop on round (so its 1 lands the right way up) */
+#track-list.repeat-one .mode-button--continuous svg {
+    transform: rotate(360deg);
+}
+
 #track-list.shuffle-on .mode-button--shuffle svg {
     transform: scaleX(-1);
+}
+
+/* The little 1 inside the loop when it's repeating one song */
+.loop-one {
+    stroke-width: 1.9;
+    opacity: 0;
+    transform: scale(0.3);
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: opacity 160ms ease-out, transform 320ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+#track-list.repeat-one .mode-button--continuous .loop-one,
+.now-playing.repeat-one #np-continuous .loop-one {
+    opacity: 1;
+    transform: none;
 }
 
 .mode-button:active svg {
@@ -1123,6 +1146,7 @@ audio {
     }
 
     #track-list.continuous-on .track-modes-visible .mode-button--continuous:hover,
+    #track-list.repeat-one .track-modes-visible .mode-button--continuous:hover,
     #track-list.shuffle-on .track-modes-visible .mode-button--shuffle:hover {
         background-color: #6B98C0;
     }
@@ -2069,18 +2093,24 @@ html {
 }
 
 .now-playing.continuous-on #np-continuous,
+.now-playing.repeat-one #np-continuous,
 .now-playing.shuffle-on #np-shuffle {
     background: #7BA8D0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 12px rgba(123, 168, 208, 0.45);
 }
 
 .now-playing.continuous-on #np-continuous svg,
+.now-playing.repeat-one #np-continuous svg,
 .now-playing.shuffle-on #np-shuffle svg {
     opacity: 1;
 }
 
 .now-playing.continuous-on #np-continuous svg {
     transform: rotate(180deg);
+}
+
+.now-playing.repeat-one #np-continuous svg {
+    transform: rotate(360deg);
 }
 
 .now-playing.shuffle-on #np-shuffle svg {
@@ -2115,6 +2145,7 @@ html {
 
     .np-play:hover,
     .now-playing.continuous-on #np-continuous:hover,
+    .now-playing.repeat-one #np-continuous:hover,
     .now-playing.shuffle-on #np-shuffle:hover {
         background: #6B98C0;
     }

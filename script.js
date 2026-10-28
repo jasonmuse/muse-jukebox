@@ -409,7 +409,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const IDLE_BACKDROP_RGB = [30, 26, 77]; // #1e1a4d
     const SPACE_BACKDROP_RGB = [1, 5, 15]; // the sky in images/where.gif
     let backdropHex = "";
-    const KEEP_PLAYING_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg>`;
+    const LOOP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/><path class="loop-one" d="M10.7 10.2 12.6 8.7v6.7"/></svg>`;
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
     const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
 
@@ -813,8 +813,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return Math.abs(probe.volume - 0.5) < 0.01;
     })();
     let upNext = null; // the song waiting on the spare deck for keep-playing
-    let mixOut = null; // the last song, fading out underneath the new one
-    let mixFadeIn = null;
+    let mixOut = null; // the last song, playing out its final moment as the new one starts
     let autoMixBlocked = false;
     let currentTrackData = null;
     let isSwitchingTrack = false;
@@ -835,7 +834,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let trackListScrollAnimationResolve = null;
     let trackListScrollAnimationId = 0;
     let randomPlayRequestId = 0;
-    let continuousPlayEnabled = false;
+    let continuousPlayEnabled = false; // keep playing: the next song follows on its own
+    let repeatOneEnabled = false; // the same song again and again
     let shuffleEnabled = false;
     let npShownTrack;
     let npSeekDragging = false;
@@ -1419,10 +1419,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         [trackList, nowPlaying].forEach((element) => {
             if (!element) return;
             element.classList.toggle("continuous-on", continuousPlayEnabled);
+            element.classList.toggle("repeat-one", repeatOneEnabled);
             element.classList.toggle("shuffle-on", shuffleEnabled);
         });
+        const loopLabel = repeatOneEnabled ? "Repeat this song" : "Keep playing songs";
+        let loopTitle = "Keep playing songs";
+        if (continuousPlayEnabled) loopTitle = "Keeping songs playing (tap again to repeat just this one)";
+        if (repeatOneEnabled) loopTitle = "Repeating this song (tap again to turn off)";
         document.querySelectorAll(".mode-button--continuous, #np-continuous").forEach((button) => {
-            button.setAttribute("aria-pressed", String(continuousPlayEnabled));
+            button.setAttribute("aria-pressed", String(continuousPlayEnabled || repeatOneEnabled));
+            button.setAttribute("aria-label", loopLabel);
+            button.setAttribute("title", loopTitle);
         });
         document.querySelectorAll(".mode-button--shuffle, #np-shuffle").forEach((button) => {
             button.setAttribute("aria-pressed", String(shuffleEnabled));
@@ -1443,13 +1450,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         requestAnimationFrame(syncTitleMarquees);
     }
 
-    function toggleContinuousPlay() {
-        continuousPlayEnabled = !continuousPlayEnabled;
-        savePlaybackModePreference("museJukeboxContinuousPlay", continuousPlayEnabled);
-        if (!continuousPlayEnabled) {
+    // The loop button goes round: off → keep playing → repeat this song → off
+    function cycleLoopMode() {
+        if (repeatOneEnabled) {
+            setLoopMode(false, false);
+        } else if (continuousPlayEnabled) {
+            setLoopMode(false, true);
+        } else {
+            setLoopMode(true, false);
+        }
+    }
+
+    function setLoopMode(keepPlaying, repeatOne) {
+        continuousPlayEnabled = keepPlaying;
+        repeatOneEnabled = repeatOne;
+        savePlaybackModePreference("museJukeboxContinuousPlay", keepPlaying);
+        savePlaybackModePreference("museJukeboxRepeatOne", repeatOne);
+        if (!keepPlaying) {
             discardUpNext();
         }
+        syncDeckLooping();
         updatePlaybackModeButtons();
+    }
+
+    // Repeat-one loops the playing deck itself, so it carries on with the screen off
+    function syncDeckLooping() {
+        decks.forEach((deck) => {
+            deck.loop = repeatOneEnabled && deck === player;
+        });
     }
 
     function toggleShuffle() {
@@ -1762,6 +1790,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setDeckSource(player, track.file);
         }
         const deck = player;
+        syncDeckLooping();
         const startOffset = prepared ? prepared.startAt : 0;
         deck.volume = holdAudio ? 0 : 1;
         const playbackStartTime = performance.now() + 300;
@@ -1847,6 +1876,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // A song reached its end (or the silence at its end)
     function handleTrackFinished() {
         if (!currentTrackData) return;
+        // The deck loops by itself for repeat-one; this catches a song that ended just as it was turned on
+        if (repeatOneEnabled) {
+            restartCurrentTrack();
+            return;
+        }
         // The next song is already on its way in on the spare deck
         if (continuousPlayEnabled && upNext && upNext.starting) return;
 
@@ -1908,10 +1942,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
         onPlayingDeck("seeked", updateMediaSessionPosition);
 
-        // The fading song keeps its own time
+        // The last song keeps its own time while it finishes
         decks.forEach((deck) => {
             deck.addEventListener("timeupdate", () => {
-                if (mixOut && mixOut.deck === deck) stepMixFades();
+                if (mixOut && mixOut.deck === deck) checkMixOut();
             });
         });
 
@@ -2083,7 +2117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         npRecord?.addEventListener("click", togglePlayback);
         npPrev?.addEventListener("click", playPreviousTrack);
         npNext?.addEventListener("click", playNextTrack);
-        npContinuous?.addEventListener("click", toggleContinuousPlay);
+        npContinuous?.addEventListener("click", cycleLoopMode);
         npClear?.addEventListener("click", clearCurrentTrack);
         npShuffle?.addEventListener("click", toggleShuffle);
 
@@ -2585,7 +2619,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <p class="tags horizontal-scroll"><span class="tags-scroll-content">${tagMarkup}${gameLinkMarkup}</span></p>
             <div class="playback-controls">
             <button class="play-button">Play</button>
-            <button class="mode-button mode-button--continuous" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">${KEEP_PLAYING_ICON}</button>
+            <button class="mode-button mode-button--continuous" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">${LOOP_ICON}</button>
             <button class="mode-button mode-button--shuffle" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs">${SHUFFLE_ICON}</button>
             <span class="time-display">0:00<span class="time-total"> / --:--</span></span>
             </div>
@@ -2596,7 +2630,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const playButton = trackElement.querySelector(".play-button");
             const coverImage = trackElement.querySelector("img");
-            trackElement.querySelector(".mode-button--continuous").addEventListener("click", toggleContinuousPlay);
+            trackElement.querySelector(".mode-button--continuous").addEventListener("click", cycleLoopMode);
             trackElement.querySelector(".mode-button--shuffle").addEventListener("click", toggleShuffle);
             trackElement.querySelector(".track-clear").addEventListener("click", clearCurrentTrack);
             coverImage.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
@@ -2826,9 +2860,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             lsf,
             sampleRate,
             samplesPerFrame: lsf ? 576 : 1152,
-            length: Math.floor(((lsf ? 72 : 144) * bitrate) / sampleRate) + padding,
-            hasCrc: (bytes[index + 1] & 1) === 0,
-            channels: (bytes[index + 3] >> 6) === 3 ? 1 : 2
+            length: Math.floor(((lsf ? 72 : 144) * bitrate) / sampleRate) + padding
         };
     }
 
@@ -3501,28 +3533,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         beatFrame = requestAnimationFrame(stepBeatVisuals);
     }
 
-    // ───── Auto-mix: keep-playing blends each song into the next ─────
-    // Each song's ending is measured (where it goes quiet, where only silence is left) so the next
-    // song can come in as it fades out, and long silent endings get skipped. iPhones won't let a
-    // page turn a song down, so there the fade-out is written into the queued song's MP3 frames.
+    // ───── Auto-mix: keep-playing moves from each song straight into the next ─────
+    // Every song plays right to its end, with no fading, and the next one is started a moment early
+    // on the spare deck so there's no gap. Each song's ending is measured so that a long stretch of
+    // silence at the end gets skipped, leaving just a short pause.
     const MIX_ANALYSIS_SECONDS = 20;
     const MIX_HEAD_SECONDS = 4;
-    const MIX_SILENCE_DB = -50;
-    const MIX_QUIET_DB = 18; // "gone quiet" = this far under the song's usual loudness
-    const MIX_FADE_SECONDS = 4;
-    const MIX_MAX_OVERLAP_SECONDS = 8;
-    const MIX_FADE_IN_SECONDS = 1.2;
+    const MIX_SILENCE_DB = -60; // quieter than this is silence; a fading reverb tail still counts as the song
+    const MIX_LONG_SILENCE_SECONDS = 3; // a silent ending this long is empty space worth skipping
+    const MIX_PAUSE_SECONDS = 1; // what's left of it, like the gap between tracks on an album
     const MIX_GAPLESS_LEAD_SECONDS = 0.06;
     const MIX_PREPARE_SECONDS = 40;
-    const MP3_GAIN_STEP_DB = 1.5051; // one global_gain step is 2^(1/4) in amplitude
     const SILENT_CLIP = `data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACA${"gICA".repeat(133)}`;
     const mixInfoCache = new Map();
     const mixInfoRequests = new Set();
     const deckBlobUrls = new Map();
-    const bakedDecks = new Set();
     const primedDecks = new Set();
     let autoMixTimer = null;
-    let mixFadeTimer = null;
+    let mixOutTimer = null;
 
     // Loudness (dBFS) of each 50ms window, lined up so the last window ends with the buffer
     function measureWindowLevels(buffer) {
@@ -3551,22 +3579,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         return { levels, windowSeconds: windowLength / buffer.sampleRate, offset: firstSample / buffer.sampleRate };
     }
 
-    // Where a song goes quiet and where only silence is left (song time), from a slice of its ending
+    // Where only silence is left (song time), from a slice of the song's ending
     function measureMixInfo(tail, duration, head) {
         const { levels, windowSeconds } = measureWindowLevels(tail);
         const sliceStart = duration - (levels.length * windowSeconds);
         let last = levels.length - 1;
         while (last >= 0 && levels[last] <= MIX_SILENCE_DB) last -= 1;
         // Nothing audible at all is more likely a bad decode than a silent song: don't trim anything
-        if (last < 0) return { silentFrom: duration, quietFrom: duration, audibleStart: 0 };
-
-        const audible = Array.from(levels).filter((level) => level > MIX_SILENCE_DB).sort((a, b) => a - b);
-        const reference = audible.length ? audible[Math.floor(audible.length * 0.85)] : MIX_SILENCE_DB;
-        let quiet = last;
-        while (quiet >= 0 && levels[quiet] < reference - MIX_QUIET_DB) quiet -= 1;
+        if (last < 0) return { silentFrom: duration, audibleStart: 0 };
 
         const silentFrom = Math.min(duration, Math.max(0, sliceStart + ((last + 1) * windowSeconds)));
-        const quietFrom = Math.min(silentFrom, Math.max(0, sliceStart + ((quiet + 1) * windowSeconds)));
 
         // A silent intro gets skipped when the song is mixed in (if there's enough of one to notice)
         let audibleStart = 0;
@@ -3577,7 +3599,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const start = intro.offset + (first * intro.windowSeconds) - 0.05;
             if (first < intro.levels.length && start >= 0.25) audibleStart = Math.min(start, silentFrom);
         }
-        return { silentFrom, quietFrom, audibleStart };
+        return { silentFrom, audibleStart };
     }
 
     async function analyzeMixFromBytes(bytes, frames) {
@@ -3626,37 +3648,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             .finally(() => mixInfoRequests.delete(track.file));
     }
 
-    function getDeckFadeMode(deck) {
-        if (bakedDecks.has(deck)) return "baked";
-        return canFadeVolume ? "volume" : "none";
-    }
-
-    // When the next song comes in, and how this one bows out
-    function computeMixPlan(info, fadeMode) {
-        const { silentFrom, quietFrom } = info;
-        const fadeLength = Math.min(MIX_FADE_SECONDS, Math.max(0.3, silentFrom * 0.2));
-        const maxOverlap = Math.min(MIX_MAX_OVERLAP_SECONDS, Math.max(0.3, silentFrom * 0.3));
-
-        if (fadeMode === "none") {
-            // Can't fade it: bring the next song in once this one has gone quiet, or right as it stops
-            const fadesOut = silentFrom - quietFrom >= 1;
-            return {
-                fadeMode,
-                mixAt: fadesOut ? Math.max(quietFrom, silentFrom - maxOverlap) : Math.max(0, silentFrom - MIX_GAPLESS_LEAD_SECONDS),
-                fadeStart: silentFrom,
-                endAt: silentFrom
-            };
-        }
-
-        const fadeStart = Math.max(0, silentFrom - maxOverlap, Math.min(quietFrom, silentFrom - fadeLength));
-        // Where the next song can't be faded in (iPhone), let this one dip a little before it arrives
-        const dip = canFadeVolume || quietFrom <= fadeStart + 0.05 ? 0 : Math.min(1, (silentFrom - fadeStart) * 0.25);
-        return { fadeMode, mixAt: fadeStart + dip, fadeStart, endAt: silentFrom };
-    }
-
-    // Fade-out level in dB as `progress` goes 0 → 1 across the fade
-    function getMixFadeDb(progress) {
-        return -48 * Math.pow(Math.min(1, Math.max(0, progress)), 1.6);
+    // Where this song is over and the next one comes in: the very end, unless it ends in a long
+    // silence, which is cut down to a short pause
+    function computeMixPlan(info, duration) {
+        const skipsSilence = duration - info.silentFrom >= MIX_LONG_SILENCE_SECONDS;
+        const endAt = skipsSilence ? info.silentFrom + MIX_PAUSE_SECONDS : duration;
+        return { endAt, mixAt: Math.max(0, endAt - MIX_GAPLESS_LEAD_SECONDS), skipsSilence };
     }
 
     // Every frame of an MP3, so a moment in the song can be found in the file
@@ -3679,83 +3676,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         return { offsets, sampleRate: first.sampleRate, samplesPerFrame: first.samplesPerFrame };
     }
 
-    function readBits(bytes, start, bitOffset, count) {
-        let value = 0;
-        for (let index = 0; index < count; index += 1) {
-            const bit = bitOffset + index;
-            value = (value << 1) | ((bytes[start + (bit >> 3)] >> (7 - (bit & 7))) & 1);
-        }
-        return value;
-    }
-
-    function writeBits(bytes, start, bitOffset, count, value) {
-        for (let index = 0; index < count; index += 1) {
-            const bit = bitOffset + index;
-            const mask = 1 << (7 - (bit & 7));
-            if ((value >> (count - 1 - index)) & 1) {
-                bytes[start + (bit >> 3)] |= mask;
-            } else {
-                bytes[start + (bit >> 3)] &= ~mask;
-            }
-        }
-    }
-
-    // CRC-16 (0x8005) over the header's last two bytes and the side info, which decoders check
-    function getMp3FrameCrc(bytes, frameOffset, sideStart, sideLength) {
-        let crc = 0xFFFF;
-        const feed = (byte) => {
-            for (let bit = 7; bit >= 0; bit -= 1) {
-                const carry = ((crc >> 15) & 1) ^ ((byte >> bit) & 1);
-                crc = (crc << 1) & 0xFFFF;
-                if (carry) crc ^= 0x8005;
-            }
-        };
-        feed(bytes[frameOffset + 2]);
-        feed(bytes[frameOffset + 3]);
-        for (let index = 0; index < sideLength; index += 1) {
-            feed(bytes[sideStart + index]);
-        }
-        return crc;
-    }
-
-    // Fade a song out inside its MP3 frames: each granule's global gain steps down 1.5 dB at a time.
-    // The audio data itself isn't touched, so the song sounds exactly the same until the fade.
-    function bakeMp3FadeOut(bytes, frames, fadeStart, fadeEnd) {
-        const { offsets, sampleRate, samplesPerFrame } = frames;
-        const span = Math.max(0.05, fadeEnd - fadeStart);
-        const firstFrame = Math.max(0, Math.floor((fadeStart * sampleRate) / samplesPerFrame));
-
-        for (let frame = firstFrame; frame < offsets.length; frame += 1) {
-            const offset = offsets[frame];
-            const header = readMp3FrameHeader(bytes, offset);
-            if (!header) break;
-            const sideStart = offset + 4 + (header.hasCrc ? 2 : 0);
-            // Side info bits ahead of the granule fields, and the size of each granule/channel block
-            const leadBits = header.lsf ? (header.channels === 1 ? 9 : 10) : (header.channels === 1 ? 18 : 20);
-            const blockBits = header.lsf ? 63 : 59;
-            const granules = header.lsf ? 1 : 2;
-
-            for (let granule = 0; granule < granules; granule += 1) {
-                const time = ((frame * samplesPerFrame) + (granule * 576)) / sampleRate;
-                if (time < fadeStart) continue;
-                const steps = time >= fadeEnd ? 255 : Math.round(-getMixFadeDb((time - fadeStart) / span) / MP3_GAIN_STEP_DB);
-                if (steps <= 0) continue;
-                for (let channel = 0; channel < header.channels; channel += 1) {
-                    // global_gain follows part2_3_length (12 bits) and big_values (9 bits)
-                    const bit = leadBits + (((granule * header.channels) + channel) * blockBits) + 21;
-                    writeBits(bytes, sideStart, bit, 8, Math.max(0, readBits(bytes, sideStart, bit, 8) - steps));
-                }
-            }
-
-            if (header.hasCrc) {
-                const sideLength = header.lsf ? (header.channels === 1 ? 9 : 17) : (header.channels === 1 ? 17 : 32);
-                const crc = getMp3FrameCrc(bytes, offset, sideStart, sideLength);
-                bytes[offset + 4] = crc >> 8;
-                bytes[offset + 5] = crc & 0xFF;
-            }
-        }
-    }
-
     function getSpareDeck() {
         return decks.find((deck) => deck !== player);
     }
@@ -3764,11 +3684,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setDeckSource(deck, src, options = {}) {
         const previousUrl = deckBlobUrls.get(deck);
         deckBlobUrls.delete(deck);
-        bakedDecks.delete(deck);
         if (src) {
             deck.src = src;
             if (options.blob) deckBlobUrls.set(deck, src);
-            if (options.baked) bakedDecks.add(deck);
         } else {
             deck.removeAttribute("src");
             deck.load();
@@ -3820,7 +3738,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return visibleTracks[(currentIndex + 1) % visibleTracks.length] === queuedElement;
     }
 
-    // Get the next song ready on the spare deck: fetched whole, measured and (on iPhone) given its fade
+    // Get the next song ready on the spare deck: fetched whole and measured
     function prepareUpNext() {
         const deck = getSpareDeck();
         const track = getTrackDataForElement(pickNextTrackElement(getCurrentTrackElement()));
@@ -3844,23 +3762,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const bytes = new Uint8Array(await response.arrayBuffer());
         if (upNext !== entry) return;
 
-        let baked = false;
         try {
-            const frames = parseMp3Frames(bytes);
-            const info = await analyzeMixFromBytes(bytes, frames);
+            const info = await analyzeMixFromBytes(bytes, parseMp3Frames(bytes));
             mixInfoCache.set(entry.track.file, info);
             entry.startAt = info.audibleStart;
-            if (!canFadeVolume) {
-                const plan = computeMixPlan(info, "baked");
-                bakeMp3FadeOut(bytes, frames, plan.fadeStart, plan.endAt);
-                baked = true;
-            }
         } catch (error) {
-            // Couldn't measure it: it still plays, just without the fade
+            // Couldn't measure it: it still plays, just from the very start and right to the end
         }
         if (upNext !== entry) return;
 
-        setDeckSource(entry.deck, URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })), { blob: true, baked });
+        setDeckSource(entry.deck, URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })), { blob: true });
         cueDeck(entry.deck, entry.startAt);
         entry.ready = true;
     }
@@ -3910,9 +3821,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (info === undefined && time > 1) {
             requestMixInfo(currentTrackData);
         }
-        const plan = info ? computeMixPlan(info, getDeckFadeMode(player)) : null;
-        // Only silence left, and enough of it to matter: the song is over
-        const inSilentEnding = Boolean(plan) && duration - plan.endAt >= 1.5 && time >= plan.endAt + 0.2;
+        const plan = info ? computeMixPlan(info, duration) : null;
+        // Into a long silent ending (past the short pause that's kept): the song is over
+        const inSilentEnding = Boolean(plan) && plan.skipsSilence && time >= plan.endAt;
+
+        if (repeatOneEnabled) {
+            // Round again: a long silent ending is skipped here too (otherwise the deck loops by itself)
+            if (plan && plan.skipsSilence) {
+                const wait = (plan.endAt - time) / (player.playbackRate || 1);
+                if (wait <= 0.02) {
+                    restartCurrentTrack();
+                } else if (wait < 1.5) {
+                    scheduleAutoMixCheck(wait);
+                }
+            }
+            return;
+        }
 
         if (!continuousPlayEnabled) {
             if (inSilentEnding) finishTrackEarly();
@@ -3951,6 +3875,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, waitSeconds * 1000);
     }
 
+    // Repeat-one: back to the top of the song
+    function restartCurrentTrack() {
+        clearTimeout(autoMixTimer);
+        const info = mixInfoCache.get(currentTrackData.file);
+        player.currentTime = info ? info.audibleStart : 0;
+        if (player.paused) {
+            const playPromise = player.play();
+            if (playPromise && typeof playPromise.catch === "function") playPromise.catch(() => {});
+        }
+    }
+
     // Nothing but silence left: treat the song as finished
     function finishTrackEarly() {
         clearTimeout(autoMixTimer);
@@ -3964,7 +3899,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         clearTimeout(autoMixTimer);
         const incoming = entry.deck;
         cueDeck(incoming, entry.startAt);
-        incoming.volume = canFadeVolume ? 0 : 1;
+        incoming.volume = 1;
 
         const giveUpTimer = setTimeout(() => {
             if (upNext !== entry) return;
@@ -3987,7 +3922,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         playPromise.then(handOver).catch(() => {
             clearTimeout(giveUpTimer);
             if (upNext !== entry) return;
-            // This browser won't start the spare deck by itself: no overlapping until a tap allows it
+            // This browser won't start the spare deck by itself: no early starts until a tap allows it
             autoMixBlocked = true;
             primedDecks.delete(incoming);
             discardUpNext();
@@ -3995,24 +3930,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // The queued song is playing: it becomes the current song while the last one fades out underneath
+    // The queued song is playing: it becomes the current song while the last one plays out its
+    // final moment
     function handOverToDeck(entry, outgoingPlan) {
         const outgoing = player;
         const previousElement = getCurrentTrackElement();
         player = entry.deck;
         currentTrackData = entry.track;
+        syncDeckLooping();
 
         mixOut = {
             deck: outgoing,
-            fadeStart: outgoingPlan.fadeStart,
             endAt: outgoingPlan.endAt,
-            byVolume: outgoingPlan.fadeMode === "volume",
             deadline: performance.now() + ((Math.max(0, outgoingPlan.endAt - outgoing.currentTime) + 3) * 1000)
         };
-        mixFadeIn = canFadeVolume ? { deck: player, from: player.currentTime } : null;
-        clearInterval(mixFadeTimer);
-        mixFadeTimer = setInterval(stepMixFades, 50);
-        stepMixFades();
+        clearInterval(mixOutTimer);
+        mixOutTimer = setInterval(checkMixOut, 50);
+        checkMixOut();
 
         resetTrackElementUi(previousElement);
         const trackElement = getCurrentTrackElement();
@@ -4049,54 +3983,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function stepMixFades() {
-        if (mixFadeIn) {
-            const { deck, from } = mixFadeIn;
-            const progress = deck === player && !deck.paused
-                ? Math.min(1, Math.max(0, (deck.currentTime - from) / MIX_FADE_IN_SECONDS))
-                : 1;
-            deck.volume = Math.sin((progress * Math.PI) / 2);
-            if (progress >= 1) mixFadeIn = null;
-        }
-
-        if (mixOut) {
-            const { deck } = mixOut;
-            const time = deck.currentTime;
-            if (deck.ended || deck.paused || !Number.isFinite(time) || time >= mixOut.endAt - 0.02 || performance.now() > mixOut.deadline) {
-                retireMixOut();
-            } else if (mixOut.byVolume) {
-                const progress = (time - mixOut.fadeStart) / Math.max(0.1, mixOut.endAt - mixOut.fadeStart);
-                deck.volume = Math.pow(10, getMixFadeDb(progress) / 20);
-            }
-        }
-
-        if (!mixOut && !mixFadeIn) {
-            clearInterval(mixFadeTimer);
-            mixFadeTimer = null;
+    // The last song's deck is freed once it reaches its end (or the silence that's being skipped)
+    function checkMixOut() {
+        if (!mixOut) return;
+        const { deck } = mixOut;
+        const time = deck.currentTime;
+        if (deck.ended || deck.paused || !Number.isFinite(time) || time >= mixOut.endAt - 0.02 || performance.now() > mixOut.deadline) {
+            retireMixOut();
         }
     }
 
     function retireMixOut() {
+        clearInterval(mixOutTimer);
+        mixOutTimer = null;
         const mix = mixOut;
         if (!mix) return;
         mixOut = null;
         mix.deck.pause();
-        mix.deck.volume = 1;
         setDeckSource(mix.deck, null);
     }
 
-    // The visitor took over (pause, seek, skip, scratch): drop the fading song, full volume on the new one
+    // The visitor took over (pause, seek, skip, scratch): drop the last song's final moment
     function finishAutoMixNow() {
         if (upNext && upNext.starting) {
             discardUpNext();
         }
         retireMixOut();
-        if (mixFadeIn) {
-            mixFadeIn.deck.volume = 1;
-            mixFadeIn = null;
-        }
-        clearInterval(mixFadeTimer);
-        mixFadeTimer = null;
     }
 
     // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
@@ -4353,7 +4265,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     continuousPlayEnabled = readPlaybackModePreference("museJukeboxContinuousPlay");
+    repeatOneEnabled = !continuousPlayEnabled && readPlaybackModePreference("museJukeboxRepeatOne");
     shuffleEnabled = readPlaybackModePreference("museJukeboxShuffle");
+    syncDeckLooping();
     setUpPlayerEvents();
     setUpMediaSession();
     setUpNowPlayingControls();
