@@ -2399,6 +2399,170 @@ html {
     }
 }
 
+/* ───── NOW PLAYING VIEW (no room for the deck beside the jukebox) ─────
+   The record poking out of the jukebox opens the deck as a view of its own, over the jukebox:
+   it drops down from the record, with the turntable as big as fits and everything else under it.
+   (Only without the deck: the query is the opposite of the two-panel one below.) */
+.np-close,
+.np-scrim {
+    display: none;
+}
+
+@media not all and (orientation: landscape), (orientation: landscape) and (pointer: fine) and (width < 1000px), (orientation: landscape) and (pointer: fine) and (height < 560px) {
+    .np-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 69;
+        background: rgba(8, 6, 24, 0.62);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.now-playing-open .np-scrim {
+        display: block;
+        animation: npScrimIn 300ms ease-out both;
+    }
+
+    body.now-playing-closing .np-scrim {
+        display: block;
+        animation: npScrimOut 260ms ease-in both;
+    }
+
+    .now-playing.is-open {
+        display: flex;
+        position: fixed;
+        z-index: 70;
+        top: calc(8px + env(safe-area-inset-top, 0px));
+        left: 50%;
+        width: min(calc(100% - 16px), 540px);
+        height: calc(var(--app-height, 100vh) - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        justify-content: center;
+        gap: 14px;
+        padding: 52px 18px 22px;
+        border-radius: 26px 26px 14px 14px;
+        transform: translateX(-50%);
+        animation: npViewIn 440ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+    }
+
+    .now-playing.is-open.is-closing {
+        animation: npViewOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
+    }
+
+    /* The turntable's as wide as the view, or shorter where the screen's short */
+    .now-playing.is-open .np-stage {
+        flex: 0 1 auto;
+        aspect-ratio: 1;
+    }
+
+    .now-playing.is-open .np-button {
+        --size: 46px;
+    }
+
+    .now-playing.is-open .np-play {
+        --size: 64px;
+    }
+
+    .now-playing.is-open .np-transport {
+        max-width: 320px;
+    }
+
+    .now-playing.is-open .np-close {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        height: 32px;
+        padding: 0 13px 0 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(20, 22, 36, 0.55);
+        color: #ffffff;
+        font: inherit;
+        font-size: 0.86rem;
+        font-weight: 700;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
+
+    .np-close svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .np-close:active {
+        transform: scale(0.94);
+    }
+
+    .np-close:focus-visible {
+        outline: 2px solid #d6e6ff;
+        outline-offset: 2px;
+    }
+
+    @media (hover: hover) {
+        .np-close:hover {
+            background: rgba(123, 168, 208, 0.45);
+        }
+    }
+
+    /* Short screens (a folded Duo, an iPhone SE): a little smaller all round */
+    @media (max-height: 700px) {
+        .now-playing.is-open {
+            gap: 10px;
+            padding: 48px 14px 16px;
+        }
+
+        .now-playing.is-open .np-button {
+            --size: 42px;
+        }
+
+        .now-playing.is-open .np-play {
+            --size: 56px;
+        }
+    }
+}
+
+@keyframes npViewIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-40px) scale(0.92);
+    }
+}
+
+@keyframes npViewOut {
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-28px) scale(0.95);
+    }
+}
+
+@keyframes npScrimIn {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes npScrimOut {
+    to {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .now-playing.is-open,
+    .now-playing.is-open.is-closing,
+    body.now-playing-open .np-scrim {
+        animation: none;
+    }
+}
+
 /* Two-panel jukebox: touch screens held sideways (phones, tablets, unfolded foldables) and
    desktop windows with room for both panels. Keep in sync with DECK_LAYOUT_QUERY in script.js */
 @media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
@@ -2533,9 +2697,17 @@ html {
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
     .jukebox-speakers,
     .cabinet-lights,
-    .np-eyebrow,
-    .flip-sign-extra {
+    .np-eyebrow {
         display: none;
+    }
+
+    /* (the flip sign's LED at phone size: the height's short) */
+    .led-sign.flip-sign-led {
+        height: 20px;
+    }
+
+    .flip-sign-led .led-sign-track {
+        font-size: 0.72rem;
     }
 
     .track {
@@ -2689,26 +2861,28 @@ html {
     }
 }
 
-@media (max-width: 430px) {
-    .flip-sign-extra {
-        display: none;
-    }
-}
-
-/* On phones the flip sign is an LED sign instead of words (.led-sign shows it otherwise) */
-.led-sign.flip-sign-led {
+/* The flip sign is an LED sign: the song that's on and what's round the back scroll past (the
+   button's label says it for screen readers). Bigger letters where there's room for them. */
+.flip-sign-text,
+.flip-sign-extra {
     display: none;
 }
 
+.led-sign.flip-sign-led {
+    height: 26px;
+}
+
+.flip-sign-led .led-sign-track {
+    font-size: 0.88rem;
+}
+
 @media (max-width: 600px) {
-    .flip-sign-text,
-    .flip-sign-extra {
-        display: none;
+    .led-sign.flip-sign-led {
+        height: 20px;
     }
 
-    .led-sign.flip-sign-led {
-        display: flex;
-        height: 20px;
+    .flip-sign-led .led-sign-track {
+        font-size: 0.72rem;
     }
 }
 
@@ -5963,16 +6137,9 @@ body {
     touch-action: manipulation;
 }
 
-/* ───── FLIP SIGN: drop the extra words when space runs out ───── */
+/* ───── FLIP SIGN: the LED window stays inside it ───── */
 .flip-sign {
-    container-type: inline-size;
     overflow: hidden;
-}
-
-@container (max-width: 400px) {
-    .flip-sign-extra {
-        display: none;
-    }
 }
 
 /* ───── DJ SCRATCHING ───── */

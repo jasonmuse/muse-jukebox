@@ -780,11 +780,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && coverModal && coverModal.classList.contains("active")) {
             closeCoverModal();
+        } else if (e.key === "Escape" && nowPlayingOpen) {
+            closeNowPlayingView();
         }
     });
 
     if (record) {
         record.addEventListener("click", () => {
+            // Without the deck beside the jukebox, the record opens it as a view of its own
+            if (currentTrackData && !deckLayout.matches) {
+                openNowPlayingView();
+                return;
+            }
             toggleCurrentTrackFromRecord();
         });
     }
@@ -863,6 +870,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The two-panel deck: touch screens held sideways, and desktop windows with room for both panels
     // (keep in sync with the deck media queries in styles.css)
     const DECK_LAYOUT_QUERY = "(orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px)";
+    const deckLayout = window.matchMedia(DECK_LAYOUT_QUERY);
 
     function isMobileViewport() {
         return window.matchMedia("(max-width: 600px)").matches;
@@ -2463,6 +2471,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         refreshLedSigns();
+        if (!track) closeNowPlayingView();
         if (track !== npShownTrack) {
             npShownTrack = track;
             if (npEyebrow) npEyebrow.textContent = track ? "Now playing" : "Muse Jukebox";
@@ -2606,6 +2615,67 @@ document.addEventListener("DOMContentLoaded", async () => {
         npContinuous?.addEventListener("click", cycleLoopMode);
         npClear?.addEventListener("click", clearCurrentTrack);
         npShuffle?.addEventListener("click", toggleShuffle);
+    }
+
+    // ───── Now playing view (no room for the deck beside the jukebox) ─────
+    // On phones held upright, a folded Duo and narrow windows the deck is a view of its own: the
+    // record poking out of the jukebox opens it over the jukebox, and "Songs" (or a tap beside it,
+    // or Escape) puts it away. It goes by itself when the song's cleared or the screen turns sideways.
+    const npClose = document.getElementById("np-close");
+    const npScrim = document.getElementById("np-scrim");
+    let nowPlayingOpen = false;
+    let nowPlayingCloseTimer = null;
+
+    function openNowPlayingView() {
+        if (!nowPlaying || nowPlayingOpen || deckLayout.matches || !currentTrackData) return;
+        nowPlayingOpen = true;
+        clearTimeout(nowPlayingCloseTimer);
+        document.body.classList.remove("now-playing-closing");
+        document.body.classList.add("now-playing-open");
+        nowPlaying.classList.remove("is-closing");
+        nowPlaying.classList.add("is-open");
+        nowPlaying.setAttribute("role", "dialog");
+        nowPlaying.setAttribute("aria-modal", "true");
+        // It's been out of sight: its wave is drawn for its size, and it catches up with the song
+        if (npWave) drawSongWave(npWave);
+        updateNowPlayingProgress();
+        npClose?.focus({ preventScroll: true });
+    }
+
+    function closeNowPlayingView(immediately = false) {
+        if (!nowPlayingOpen) return;
+        nowPlayingOpen = false;
+        const hadFocus = nowPlaying.contains(document.activeElement);
+        nowPlaying.removeAttribute("role");
+        nowPlaying.removeAttribute("aria-modal");
+        document.body.classList.remove("now-playing-open");
+        if (hadFocus) getCurrentTrackElement()?.querySelector(".play-button")?.focus({ preventScroll: true });
+        const done = () => {
+            nowPlaying.classList.remove("is-open", "is-closing");
+            document.body.classList.remove("now-playing-closing");
+        };
+        if (immediately || prefersReducedMotion()) {
+            done();
+            return;
+        }
+        nowPlaying.classList.add("is-closing");
+        document.body.classList.add("now-playing-closing");
+        nowPlayingCloseTimer = setTimeout(() => {
+            if (!nowPlayingOpen) done();
+        }, 280);
+    }
+
+    function setUpNowPlayingView() {
+        npClose?.addEventListener("click", () => closeNowPlayingView());
+        npScrim?.addEventListener("click", () => closeNowPlayingView());
+        const closeForDeck = () => {
+            if (deckLayout.matches) closeNowPlayingView(true);
+        };
+        if (typeof deckLayout.addEventListener === "function") {
+            deckLayout.addEventListener("change", closeForDeck);
+        } else if (typeof deckLayout.addListener === "function") {
+            deckLayout.addListener(closeForDeck);
+        }
     }
 
     let accelerationRequest; // New variable to track acceleration frame
@@ -5931,7 +6001,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             lane.className = "led-sign-lane";
             track.replaceChildren(lane);
             ticker = {
-                sign, track, lane, width: null, key: "", items: [], next: 0, pieces: [], laidTo: 0, lastOffset: 0,
+                sign, track, lane, width: null, letters: "", key: "", items: [], next: 0, pieces: [], laidTo: 0, lastOffset: 0,
                 push: null, newWordsAt: 0, pushAgain: false
             };
             ledTickers.set(sign, ticker);
@@ -6106,11 +6176,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function refreshLedSigns() {
-        const invitation = ["Psst\u2026 flip me around", ""];
+        const invitation = [["Psst\u2026 flip me around", ""], ["About \u00b7 tips \u00b7 settings \u00b7 fix me", ""]];
         const song = currentTrackData
             ? [`${isPlayerActive() ? "Now spinning" : "Paused"}: ${currentTrackData.title}`, "song"]
             : null;
-        setLedSign(flipSignLed, song ? [song, invitation] : [invitation]);
+        setLedSign(flipSignLed, song ? [song, ...invitation] : invitation);
 
         const panelItems = [["Muse Tunes", "brand"], song || ["Pick a song, any song", "song"]];
         if (tickerShowsTips) {
@@ -6133,6 +6203,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const ticker = ledTickers.get(entry.target);
                 if (!ticker) return;
                 ticker.width = entry.contentRect.width;
+                // Bigger or smaller letters now (the screen turned): the words are laid out again
+                const letters = getComputedStyle(ticker.track).fontSize;
+                if (ticker.letters && ticker.letters !== letters) clearLedSign(ticker);
+                ticker.letters = letters;
                 layLedSign(ticker);
             }));
             [coverLed, flipSignLed].forEach((sign) => sign && observer.observe(sign));
@@ -6340,6 +6414,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpPlayerEvents();
     setUpMediaSession();
     setUpNowPlayingControls();
+    setUpNowPlayingView();
     setUpSongWaves();
     setUpJukeboxBack();
     setUpSideRail();
