@@ -365,7 +365,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const npRecord = document.getElementById("np-record");
     const recordDisc = record ? record.querySelector(".record-disc") : null;
     const npRecordDisc = npRecord ? npRecord.querySelector(".np-record-disc") : null;
-    const recordTurns = Array.from(document.querySelectorAll(".record-turn"));
+    // Only the cabinet's record turns over with the jukebox: the deck's sits on its own turntable
+    const recordTurns = record ? Array.from(record.querySelectorAll(".record-turn")) : [];
     const jukeboxContainer = document.getElementById("jukebox-container");
     const jukeboxGlow = document.getElementById("jukebox-glow");
     const musicNotes = document.getElementById("music-notes");
@@ -1292,6 +1293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The x button: stop the song and unload it (also clears the lock screen player)
     function clearCurrentTrack() {
         cancelSideSwitch();
+        closeRhythmInvite(false);
         if (!currentTrackData) return;
         stopCurrentPlayback();
         setDeckSource(player, null);
@@ -1909,7 +1911,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (prepared) {
             // Already loaded, so no loadedmetadata is coming
             updateMediaSessionPosition();
-            requestTrackTempo(track);
+            requestSongBeats(track);
         }
 
         if (startingInBackground || options.sideFlip) {
@@ -2243,7 +2245,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         onPlayingDeck("loadedmetadata", () => {
             updateNowPlayingProgress();
             updateMediaSessionPosition();
-            requestTrackTempo(currentTrackData);
+            requestSongBeats(currentTrackData);
             rememberSongDuration(currentTrackData, player.duration);
         });
         onPlayingDeck("timeupdate", () => {
@@ -4008,16 +4010,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── Beat visuals: speakers, penguins, glow and notes move with the music ─────
-    // Phones won't let a page measure the audio it's playing without breaking
-    // background playback, so each song's tempo is worked out from a short slice of it.
-    const DEFAULT_TEMPO = { period: 60 / 112, firstBeat: 0 };
+    // Only with Rhythm on (below): then the penguins dance to the song's beats, the speakers thump
+    // with its bass, the glow pulses and notes float out. With it off the jukebox stays calm.
     const NOTE_COLORS = ["#ffd1f4", "#c7f9ff", "#fff3b0", "#d9dcff", "#ffd8b0"];
     const NOTE_SHAPES = [
         `<svg viewBox="0 0 24 24"><ellipse cx="9.5" cy="18" rx="4" ry="3" transform="rotate(-20 9.5 18)"/><path d="M13.2 18V3.5c1.2 3.2 6 3.8 6 9.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
         `<svg viewBox="0 0 24 24"><ellipse cx="6.5" cy="18.5" rx="3.4" ry="2.6" transform="rotate(-20 6.5 18.5)"/><ellipse cx="16.5" cy="16.5" rx="3.4" ry="2.6" transform="rotate(-20 16.5 16.5)"/><path d="M9.4 18.5V6.2l10-2.6v12.9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.4 6.2l10-2.6v3.2l-10 2.6z"/></svg>`
     ];
-    const tempoCache = new Map();
-    const tempoRequests = new Set();
     let beatFrame = null;
     let beatLevel = 0;
     let lastBeatIndex = null;
@@ -4029,102 +4028,105 @@ document.addEventListener("DOMContentLoaded", async () => {
     const punchValues = new Float32Array(64);
     let punchSlot = 0;
 
-    function detectTempo(buffer, sliceStart) {
-        const sampleRate = buffer.sampleRate;
-        const mono = new Float32Array(buffer.length);
-        for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-            const channelData = buffer.getChannelData(channel);
-            for (let index = 0; index < buffer.length; index += 1) {
-                mono[index] += channelData[index] / buffer.numberOfChannels;
-            }
-        }
+    // ───── Rhythm: the jukebox moving to the beat ─────
+    // Off at the start of every visit: things bouncing to a beat nobody asked for just look like a
+    // glitch. Once a song has been playing for a few seconds the penguins ask (once a visit) if they
+    // should dance to it, and tapping them switches it on or off any time.
+    const RHYTHM_INVITE_AFTER_MS = 4000;
+    const RHYTHM_INVITE_LINGER_MS = 14000;
+    const rhythmInvite = document.getElementById("rhythm-invite");
+    const rhythmNote = document.getElementById("rhythm-note");
+    let rhythmOn = false;
+    let rhythmInviteState = "waiting"; // then "open", then "answered" (not asked again this visit)
+    let rhythmInviteTimer = null;
+    let rhythmNoteTimer = null;
+    let listeningSince = null; // when the song that's playing started (or carried on) playing
 
-        // Low-passed energy per ~12ms hop picks out the kick and bass
-        const hop = Math.max(1, Math.round(sampleRate * 0.0116));
-        const hopSeconds = hop / sampleRate;
-        const alpha = 1 - Math.exp((-2 * Math.PI * 160) / sampleRate);
-        const frames = Math.floor(mono.length / hop);
-        const energy = new Float32Array(frames);
-        let low = 0;
-        for (let frame = 0; frame < frames; frame += 1) {
-            let sum = 0;
-            for (let index = frame * hop; index < (frame + 1) * hop; index += 1) {
-                low += alpha * (mono[index] - low);
-                sum += low * low;
-            }
-            energy[frame] = Math.sqrt(sum / hop);
+    function setRhythm(on) {
+        rhythmOn = on;
+        if (jukeboxContainer) jukeboxContainer.classList.toggle("rhythm-on", on);
+        titlePenguins.forEach((penguin) => {
+            if (penguin.hasAttribute("aria-pressed")) penguin.setAttribute("aria-pressed", String(on));
+            penguin.title = on ? "Rhythm is on: tap to stop the dancing" : "Rhythm: dance to the beat";
+        });
+        showRhythmNote(on);
+        if (on) {
+            PENGUIN_POSES.forEach((source) => {
+                const image = new Image();
+                image.src = source;
+            });
+            requestSongBeats(currentTrackData);
+        } else {
+            calmVisualsFor = null;
+            applyCalmVisuals(isPlayerActive());
         }
-        const onset = new Float32Array(frames);
-        for (let frame = 1; frame < frames; frame += 1) {
-            onset[frame] = Math.max(0, energy[frame] - energy[frame - 1]);
-        }
-
-        // Autocorrelate for a tempo between 70 and 180 BPM, leaning towards ~120
-        const minLag = Math.round(60 / 180 / hopSeconds);
-        const maxLag = Math.min(frames - 1, Math.round(60 / 70 / hopSeconds));
-        const scores = [];
-        let bestLag = 0;
-        let bestScore = 0;
-        for (let lag = minLag; lag <= maxLag; lag += 1) {
-            let score = 0;
-            for (let frame = 0; frame + lag < frames; frame += 1) {
-                score += onset[frame] * onset[frame + lag];
-            }
-            score /= (frames - lag);
-            scores[lag] = score;
-            const bpm = 60 / (lag * hopSeconds);
-            const weighted = score * Math.exp(-0.5 * Math.pow(Math.log2(bpm / 120) / 0.7, 2));
-            if (weighted > bestScore) {
-                bestScore = weighted;
-                bestLag = lag;
-            }
-        }
-        if (!bestLag) throw new Error("No beat found");
-
-        let lag = bestLag;
-        const before = scores[bestLag - 1];
-        const after = scores[bestLag + 1];
-        if (before !== undefined && after !== undefined) {
-            const curve = before - (2 * scores[bestLag]) + after;
-            if (curve !== 0) lag += (0.5 * (before - after)) / curve;
-        }
-
-        // Find where the beats land within the slice
-        let bestOffset = 0;
-        let bestSum = -1;
-        for (let offset = 0; offset < Math.ceil(lag); offset += 1) {
-            let sum = 0;
-            for (let position = offset; position < frames; position += lag) {
-                sum += onset[Math.round(position)] || 0;
-            }
-            if (sum > bestSum) {
-                bestSum = sum;
-                bestOffset = offset;
-            }
-        }
-
-        return { period: lag * hopSeconds, firstBeat: sliceStart + (bestOffset * hopSeconds) };
+        startBeatVisuals();
     }
 
-    async function analyzeTrackTempo(track, duration) {
-        const context = getAnalysisContext();
-        const info = await fetchAudioFileInfo(track.file);
-        const bytesPerSecond = (info.total - info.audioStart) / duration;
-        const sliceLength = Math.min(10, duration);
-        const startTime = Math.max(0, Math.min(duration * 0.3, duration - sliceLength));
-        const startByte = info.audioStart + Math.floor(startTime * bytesPerSecond);
-        const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil((startTime + sliceLength) * bytesPerSecond));
-
-        const response = await fetch(track.file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
-        if (response.status !== 206) {
-            if (response.body) response.body.cancel();
-            throw new Error("Range requests not supported");
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const frameStart = findMp3FrameStart(bytes);
-        const decoded = await decodeAudio(context, bytes.slice(frameStart).buffer);
-        return detectTempo(decoded, startTime + (frameStart / bytesPerSecond));
+    function showRhythmNote(on) {
+        if (!rhythmNote) return;
+        rhythmNote.textContent = on ? "♪ Rhythm on" : "Rhythm off";
+        rhythmNote.classList.toggle("is-off", !on);
+        rhythmNote.classList.add("is-visible");
+        clearTimeout(rhythmNoteTimer);
+        rhythmNoteTimer = setTimeout(() => rhythmNote.classList.remove("is-visible"), 1500);
     }
+
+    function openRhythmInvite() {
+        if (!rhythmInvite || rhythmInviteState !== "waiting" || rhythmOn) return;
+        if (isFrontHidden() || isJukeboxFlipping || scratch || (coverModal && coverModal.classList.contains("active"))) return;
+        rhythmInviteState = "open";
+        rhythmInvite.classList.add("is-open");
+        clearTimeout(rhythmInviteTimer);
+        rhythmInviteTimer = setTimeout(() => closeRhythmInvite(true), RHYTHM_INVITE_LINGER_MS);
+    }
+
+    // Answered (or left to time out), it isn't asked again this visit; put away for another reason
+    // (the jukebox turned around, the song cleared away) it can ask next time
+    function closeRhythmInvite(answered) {
+        if (!rhythmInvite || rhythmInviteState !== "open") return;
+        rhythmInviteState = answered ? "answered" : "waiting";
+        listeningSince = null;
+        clearTimeout(rhythmInviteTimer);
+        rhythmInvite.classList.remove("is-open");
+    }
+
+    function setUpRhythm() {
+        titlePenguins.forEach((penguin) => {
+            penguin.addEventListener("click", () => {
+                closeRhythmInvite(true);
+                setRhythm(!rhythmOn);
+            });
+        });
+        if (rhythmInvite) {
+            rhythmInvite.querySelector(".rhythm-invite-button--yes").addEventListener("click", () => {
+                closeRhythmInvite(true);
+                setRhythm(true);
+            });
+            rhythmInvite.querySelector(".rhythm-invite-button--no").addEventListener("click", () => closeRhythmInvite(true));
+        }
+        // Each equaliser bar's place, for the gentle ripple when Rhythm is off
+        eqBars.forEach((bar, index) => bar.style.setProperty("--i", index));
+    }
+
+    // ───── Beats: where every beat of a song lands ─────
+    // With Rhythm on the whole song is gone through a stretch at a time (decoded off to the side:
+    // phones won't let a page measure the audio it's playing without breaking background playback),
+    // measuring 43 times a second how sharply the sound gets louder across the spectrum. From that
+    // the tempo is found the way librosa does it (the average of the autocorrelations in 8 second
+    // windows, leaning towards 120 BPM) and every beat is placed by dynamic programming (Ellis's beat
+    // tracker: beats on strong onsets, each about one beat after the last), so they stay on the
+    // music all the way through.
+    const BEAT_FFT_SIZE = 2048;
+    const BEAT_HOP = 512; // at 22050 Hz: 43 measurements a second
+    const BEAT_BAND_COUNT = 40; // from 30 Hz to 8 kHz, evenly spaced in pitch
+    const BEAT_FLOOR_DB = -60;
+    const BEAT_CHUNK_SECONDS = 20;
+    const BEAT_TIGHTNESS = 100; // how firmly the beats keep to the tempo
+    const BEAT_ONSET_LAG = 0.03; // seconds
+    const BEAT_SLICE_MS = 5; // the longest the page works on it at a time
+    const beatAnalyses = new Map();
+    const beatBandBins = new Map(); // by sample rate
 
     // One offline context decodes every slice we measure (phones only allow a few contexts)
     let analysisContext = null;
@@ -4136,21 +4138,454 @@ document.addEventListener("DOMContentLoaded", async () => {
         return analysisContext;
     }
 
-    function requestTrackTempo(track) {
-        if (!track || document.hidden || tempoCache.has(track.file) || tempoRequests.has(track.file)) return;
+    function requestSongBeats(track) {
+        if (!track || !rhythmOn || document.hidden || track !== currentTrackData) return;
         const settling = songSettleAt - performance.now();
         if (settling > 0) {
-            setTimeout(() => requestTrackTempo(track), settling + 20);
+            setTimeout(() => requestSongBeats(track), settling + 20);
             return;
         }
         const duration = player.duration;
-        if (!Number.isFinite(duration) || duration < 4) return;
+        if (!Number.isFinite(duration) || duration < 8) return;
 
-        tempoRequests.add(track.file);
-        analyzeTrackTempo(track, duration)
-            .then((tempo) => tempoCache.set(track.file, tempo))
-            .catch(() => tempoCache.set(track.file, null))
-            .finally(() => tempoRequests.delete(track.file));
+        let analysis = beatAnalyses.get(track.file);
+        if (!analysis) {
+            let sampleRate;
+            try {
+                sampleRate = getAnalysisContext().sampleRate;
+            } catch (error) {
+                return;
+            }
+            const rate = sampleRate / BEAT_HOP;
+            const frameCount = Math.floor((duration * sampleRate) / BEAT_HOP) + 1;
+            const chunkFrames = Math.round(BEAT_CHUNK_SECONDS * rate);
+            analysis = {
+                file: track.file,
+                duration,
+                sampleRate,
+                rate,
+                onsets: new Float32Array(frameCount),
+                chunkFrames,
+                chunksDone: new Uint8Array(Math.ceil(frameCount / chunkFrames)),
+                period: 0, // the tempo: a beat's length in frames
+                periodComplete: false, // (worked out from the whole song)
+                beats: null, // when each beat lands (seconds)
+                strengths: null, // and how hard it hits (0–1)
+                firstIndex: 0, // which beat of the song the first one is
+                busy: false,
+                failures: 0
+            };
+            beatAnalyses.set(track.file, analysis);
+            while (beatAnalyses.size > 6) {
+                beatAnalyses.delete(beatAnalyses.keys().next().value);
+            }
+        }
+        continueSongBeats(analysis);
+    }
+
+    function getPlayingBeatChunk(analysis) {
+        const time = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+        return Math.min(analysis.chunksDone.length - 1, Math.max(0, Math.floor((time * analysis.rate) / analysis.chunkFrames)));
+    }
+
+    // Measure the next stretch: from the one that's playing onwards, then from the top
+    function continueSongBeats(analysis) {
+        if (analysis.busy || analysis.failures >= 3 || !rhythmOn || document.hidden) return;
+        if (!currentTrackData || currentTrackData.file !== analysis.file) return;
+        const chunkCount = analysis.chunksDone.length;
+        const playingChunk = getPlayingBeatChunk(analysis);
+        let chunk = -1;
+        for (let step = 0; step < chunkCount && chunk < 0; step += 1) {
+            const candidate = (playingChunk + step) % chunkCount;
+            if (!analysis.chunksDone[candidate]) chunk = candidate;
+        }
+        if (chunk < 0) return;
+
+        analysis.busy = true;
+        measureBeatChunk(analysis, chunk)
+            .then(() => new Promise((resolve) => setTimeout(resolve, 0)))
+            .then(() => {
+                analysis.chunksDone[chunk] = 1;
+                placeSongBeats(analysis);
+            })
+            .catch(() => {
+                // A stretch that won't decode is left out (it has no beats) rather than holding up the rest
+                analysis.failures += 1;
+                if (beatAnalyses.get(analysis.file) === analysis) analysis.chunksDone[chunk] = 1;
+            })
+            .finally(() => {
+                analysis.busy = false;
+                setTimeout(() => continueSongBeats(analysis), 40);
+            });
+    }
+
+    async function measureBeatChunk(analysis, chunk) {
+        const first = chunk * analysis.chunkFrames;
+        const end = Math.min(analysis.onsets.length, first + analysis.chunkFrames);
+        // Frame f looks at BEAT_FFT_SIZE samples from f × BEAT_HOP, and its onset is how much louder
+        // it is than the frame before, so the stretch starts a frame early
+        const from = Math.max(0, first - 1);
+        const fromTime = Math.max(0, ((from * BEAT_HOP) / analysis.sampleRate) - SPECTRUM_PREROLL_SECONDS);
+        const toTime = Math.min(analysis.duration, (((end - 1) * BEAT_HOP) + BEAT_FFT_SIZE) / analysis.sampleRate);
+        const { buffer, startTime } = await decodeSongSlice(analysis.file, analysis.duration, fromTime, toTime);
+        // (the buffer's length and channel count read once: in the loop they'd be asked for every sample)
+        const length = buffer.length;
+        const channels = buffer.numberOfChannels;
+        const mono = new Float32Array(length);
+        for (let channel = 0; channel < channels; channel += 1) {
+            const data = buffer.getChannelData(channel);
+            for (let index = 0; index < length; index += 1) {
+                mono[index] += data[index] / channels;
+            }
+        }
+        const tables = getFftTables(BEAT_FFT_SIZE);
+        const bins = getBeatBandBins(buffer.sampleRate);
+        const offset = Math.round(startTime * buffer.sampleRate);
+        const levels = new Float32Array(BEAT_BAND_COUNT);
+        let previous = null;
+        let sliceStart = performance.now();
+        for (let frame = from; frame < end; frame += 1) {
+            measureBeatBands(mono, (frame * BEAT_HOP) - offset, tables, bins, levels);
+            if (frame >= first) {
+                let rise = 0;
+                if (previous) {
+                    for (let band = 0; band < BEAT_BAND_COUNT; band += 1) {
+                        rise += Math.max(0, levels[band] - previous[band]);
+                    }
+                }
+                analysis.onsets[frame] = rise / BEAT_BAND_COUNT;
+            }
+            previous = previous || new Float32Array(BEAT_BAND_COUNT);
+            previous.set(levels);
+            // A few milliseconds at a time, so frames keep coming even on a slow phone
+            if (performance.now() - sliceStart > BEAT_SLICE_MS) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+                if (beatAnalyses.get(analysis.file) !== analysis) throw new Error("Song forgotten");
+                sliceStart = performance.now();
+            }
+        }
+    }
+
+    // The FFT bins in each band
+    function getBeatBandBins(sampleRate) {
+        if (!beatBandBins.has(sampleRate)) {
+            const binHz = sampleRate / BEAT_FFT_SIZE;
+            const edges = [];
+            for (let band = 0; band <= BEAT_BAND_COUNT; band += 1) {
+                edges.push(Math.round((30 * Math.pow(8000 / 30, band / BEAT_BAND_COUNT)) / binHz));
+            }
+            const bins = [];
+            for (let band = 0; band < BEAT_BAND_COUNT; band += 1) {
+                const low = Math.max(1, edges[band]);
+                bins.push([low, Math.max(low + 1, edges[band + 1])]);
+            }
+            beatBandBins.set(sampleRate, bins);
+        }
+        return beatBandBins.get(sampleRate);
+    }
+
+    // How loud (dB) each band is in the BEAT_FFT_SIZE samples from `start`
+    function measureBeatBands(samples, start, tables, bins, out) {
+        const { real, imag } = transformWindow(samples, start, tables);
+        for (let band = 0; band < bins.length; band += 1) {
+            const [low, high] = bins[band];
+            let power = 0;
+            for (let bin = low; bin < high; bin += 1) {
+                power += (real[bin] * real[bin]) + (imag[bin] * imag[bin]);
+            }
+            out[band] = Math.max(BEAT_FLOOR_DB, 10 * Math.log10((power / (high - low)) + 1e-10));
+        }
+    }
+
+    // The beats through the measured stretch that's playing (the whole song once it's all in)
+    function placeSongBeats(analysis) {
+        const chunks = analysis.chunksDone;
+        let firstChunk = getPlayingBeatChunk(analysis);
+        if (!chunks[firstChunk]) firstChunk = chunks.indexOf(1);
+        if (firstChunk < 0) return;
+        let lastChunk = firstChunk;
+        while (firstChunk > 0 && chunks[firstChunk - 1]) firstChunk -= 1;
+        while (lastChunk + 1 < chunks.length && chunks[lastChunk + 1]) lastChunk += 1;
+
+        const from = firstChunk * analysis.chunkFrames;
+        const onsets = analysis.onsets.subarray(from, Math.min(analysis.onsets.length, (lastChunk + 1) * analysis.chunkFrames));
+        // The tempo from the first 40 seconds measured (20 can be all intro), and again once the whole
+        // song is in (in between the beats follow the music anyway)
+        const complete = chunks.indexOf(0) < 0;
+        if (!complete && onsets.length < 2 * analysis.chunkFrames) return;
+        if (!analysis.period || (complete && !analysis.periodComplete)) {
+            analysis.period = findBeatPeriod(onsets, analysis.rate);
+            analysis.periodComplete = complete;
+        }
+        const period = analysis.period;
+        const { frames, strengths } = trackBeats(onsets, period);
+        if (frames.length < 2) return;
+        // A frame is the middle of the samples it looks at, and a sound starts showing in it a little
+        // before it lands (30ms, measured with a click track), so beats are put that much later
+        const centre = ((BEAT_FFT_SIZE / 2) / analysis.sampleRate) + BEAT_ONSET_LAG;
+        analysis.beats = frames.map((frame) => ((from + frame) / analysis.rate) + centre);
+        analysis.strengths = strengths;
+        analysis.firstIndex = Math.round(analysis.beats[0] / (period / analysis.rate));
+    }
+
+    // The tempo as a beat's length in frames: the average of the onsets' autocorrelations in 8 second
+    // windows (each scaled by its own loudness), leaning towards 120 BPM
+    function findBeatPeriod(onsets, rate) {
+        const windowLength = Math.round(8 * rate);
+        const minLag = Math.max(1, Math.round((60 * rate) / 260));
+        const maxLag = Math.min(windowLength - 1, Math.round((60 * rate) / 40));
+        const hann = new Float32Array(windowLength);
+        for (let index = 0; index < windowLength; index += 1) {
+            hann[index] = 0.5 - (0.5 * Math.cos((2 * Math.PI * index) / (windowLength - 1)));
+        }
+        const sums = new Float64Array(maxLag + 1);
+        const piece = new Float32Array(windowLength);
+        let windows = 0;
+        // (a window every couple of seconds is plenty for the average)
+        for (let start = -Math.floor(windowLength / 2); start + (windowLength / 2) < onsets.length; start += Math.round(rate * 2)) {
+            let energy = 0;
+            for (let index = 0; index < windowLength; index += 1) {
+                const position = start + index;
+                piece[index] = (position >= 0 && position < onsets.length ? onsets[position] : 0) * hann[index];
+                energy += piece[index] * piece[index];
+            }
+            if (energy <= 0) continue;
+            for (let lag = minLag; lag <= maxLag; lag += 1) {
+                let sum = 0;
+                for (let index = 0; index + lag < windowLength; index += 1) {
+                    sum += piece[index] * piece[index + lag];
+                }
+                sums[lag] += sum / energy;
+            }
+            windows += 1;
+        }
+        let bestLag = Math.round((60 * rate) / 120);
+        let best = -Infinity;
+        for (let lag = minLag; lag <= maxLag; lag += 1) {
+            const bpm = (60 * rate) / lag;
+            const score = Math.log1p(1e6 * Math.max(0, sums[lag] / Math.max(1, windows))) - (0.5 * Math.pow(Math.log2(bpm / 120), 2));
+            if (score > best) {
+                best = score;
+                bestLag = lag;
+            }
+        }
+        // Between whole frames: a parabola through the autocorrelation around the best lag
+        let lag = bestLag;
+        if (bestLag > minLag && bestLag < maxLag) {
+            const before = sums[bestLag - 1];
+            const after = sums[bestLag + 1];
+            const curve = before - (2 * sums[bestLag]) + after;
+            if (curve < 0) lag += Math.max(-0.5, Math.min(0.5, (0.5 * (before - after)) / curve));
+        }
+        return lag;
+    }
+
+    // Ellis's dynamic programming: the best chain of beats, each on a strong onset and about a
+    // period after the one before. Gives the frames of the beats and how hard each one hits.
+    function trackBeats(onsets, period) {
+        const count = onsets.length;
+        let mean = 0;
+        for (let index = 0; index < count; index += 1) mean += onsets[index];
+        mean /= Math.max(1, count);
+        let spread = 0;
+        for (let index = 0; index < count; index += 1) spread += Math.pow(onsets[index] - mean, 2);
+        spread = Math.sqrt(spread / Math.max(1, count)) || 1;
+
+        // Each frame's onsets, smoothed a little (the gaussian is a 32nd of a beat wide, so it only
+        // needs to reach three of those either side)
+        const reach = Math.max(1, Math.ceil((period * 3) / 32));
+        const weights = new Float32Array((reach * 2) + 1);
+        for (let offset = -reach; offset <= reach; offset += 1) {
+            weights[offset + reach] = Math.exp(-0.5 * Math.pow((offset * 32) / period, 2));
+        }
+        const local = new Float32Array(count);
+        let localMax = 0;
+        for (let index = 0; index < count; index += 1) {
+            let sum = 0;
+            for (let offset = -reach; offset <= reach; offset += 1) {
+                const position = index + offset;
+                if (position >= 0 && position < count) sum += (onsets[position] / spread) * weights[offset + reach];
+            }
+            local[index] = sum;
+            localMax = Math.max(localMax, sum);
+        }
+
+        // The best total for a chain of beats ending at each frame, and the beat before it there
+        const score = new Float32Array(count);
+        const before = new Int32Array(count).fill(-1);
+        const nearest = Math.round(period / 2);
+        const furthest = Math.round(period * 2);
+        // What a gap between two beats costs: nothing at the tempo, more the further off it is
+        const gapCosts = new Float32Array(furthest + 1);
+        for (let gap = nearest; gap <= furthest; gap += 1) {
+            gapCosts[gap] = BEAT_TIGHTNESS * Math.pow(Math.log(gap / period), 2);
+        }
+        let started = false;
+        for (let index = 0; index < count; index += 1) {
+            let best = -Infinity;
+            let from = -1;
+            for (let gap = nearest; gap <= furthest && index - gap >= 0; gap += 1) {
+                const value = score[index - gap] - gapCosts[gap];
+                if (value > best) {
+                    best = value;
+                    from = index - gap;
+                }
+            }
+            score[index] = local[index] + (from >= 0 ? best : 0);
+            // The chain can't start on next to nothing
+            if (started || local[index] >= 0.01 * localMax) {
+                before[index] = from;
+                started = true;
+            }
+        }
+
+        // The last beat: the last peak in the totals that's at least half the typical peak
+        const peaks = [];
+        for (let index = 1; index < count - 1; index += 1) {
+            if (score[index] > score[index - 1] && score[index] >= score[index + 1]) peaks.push(score[index]);
+        }
+        peaks.sort((a, b) => a - b);
+        const typical = peaks.length ? peaks[Math.floor(peaks.length / 2)] : 0;
+        let last = count - 1;
+        for (let index = count - 2; index > 0; index -= 1) {
+            if (score[index] > score[index - 1] && score[index] >= score[index + 1] && score[index] >= 0.5 * typical) {
+                last = index;
+                break;
+            }
+        }
+        const frames = [];
+        for (let index = last; index >= 0; index = before[index]) {
+            frames.push(index);
+        }
+        frames.reverse();
+
+        // Leave off weak beats at the ends (a quiet intro or fade-out isn't danced to)
+        const hits = frames.map((frame) => local[frame]);
+        const typicalHit = Math.sqrt(hits.reduce((sum, hit) => sum + (hit * hit), 0) / Math.max(1, hits.length));
+        let firstKept = 0;
+        let lastKept = frames.length;
+        while (firstKept < lastKept && hits[firstKept] < 0.5 * typicalHit) firstKept += 1;
+        while (lastKept > firstKept && hits[lastKept - 1] < 0.5 * typicalHit) lastKept -= 1;
+        const sorted = hits.slice(firstKept, lastKept).sort((a, b) => a - b);
+        const loud = sorted[Math.floor(sorted.length * 0.9)] || 1;
+        return {
+            frames: frames.slice(firstKept, lastKept),
+            strengths: hits.slice(firstKept, lastKept).map((hit) => Math.min(1, hit / loud))
+        };
+    }
+
+    // Which beat `time` is in, and how far through it; null where there are no beats
+    function getBeatPosition(analysis, time) {
+        const beats = analysis && analysis.beats;
+        if (!beats || time < beats[0] || time >= beats[beats.length - 1]) return null;
+        let low = 0;
+        let high = beats.length - 1;
+        while (high - low > 1) {
+            const middle = (low + high) >> 1;
+            if (beats[middle] <= time) {
+                low = middle;
+            } else {
+                high = middle;
+            }
+        }
+        const length = beats[low + 1] - beats[low];
+        return {
+            index: analysis.firstIndex + low,
+            phase: (time - beats[low]) / length,
+            period: length,
+            strength: analysis.strengths[low]
+        };
+    }
+
+    // ───── The penguins' dance ─────
+    // Locked to the beats: a hop each beat, landing on it with a squash and leaning one way then
+    // the other; side steps in the third bar of every four, and a spinning jump to end the fourth.
+    // Their heads bob on the beat too (the gif's two poses, a beat each), and they dance bigger
+    // when the music hits harder.
+    const PENGUIN_GIF = "images/penguin.gif";
+    const PENGUIN_POSES = ["images/penguin-pose-a.png", "images/penguin-pose-b.png"];
+    const penguinIcons = titlePenguins.map((penguin) => penguin.querySelector(".penguin-icon")).filter(Boolean);
+    let penguinPose = null; // which pose they're in, or null when they aren't dancing
+    let danceEnergy = 0.5;
+    let danceBeat = null; // the penguins' own count of beats danced (and how far into this one)
+    let danceSongTime = null; // the song's time when it was last counted
+
+    // The penguins keep their own count, going at the song's tempo and easing towards where its
+    // beats are: when the beats are worked out again as more of the song is measured, the dance
+    // drifts over instead of jumping. (A jump in the song puts them straight back in step.)
+    function followBeat(position, time) {
+        if (!position) {
+            danceBeat = null;
+            return null;
+        }
+        const target = position.index + position.phase;
+        if (danceBeat === null || Math.abs(time - danceSongTime) > 1) {
+            danceBeat = target;
+        } else {
+            danceBeat += (time - danceSongTime) / position.period;
+            // Only how far through a beat counts: the whole beats are the dance's own
+            let behind = (target - danceBeat) % 1;
+            if (behind > 0.5) behind -= 1;
+            if (behind < -0.5) behind += 1;
+            danceBeat += behind * 0.15;
+        }
+        danceSongTime = time;
+        const index = Math.floor(danceBeat);
+        return { index, phase: danceBeat - index, period: position.period, strength: position.strength };
+    }
+
+    function dancePenguins(position, elapsed) {
+        if (!position) {
+            stopPenguinDance();
+            return;
+        }
+        if (penguinPose === null && jukeboxContainer) jukeboxContainer.classList.add("penguins-dancing");
+        const beat = position.index;
+        const phase = position.phase;
+        danceEnergy += ((0.35 + (0.65 * position.strength)) - danceEnergy) * (1 - Math.exp(-elapsed / 0.8));
+        const move = ((beat % 16) + 16) % 16;
+        const hop = 4 * phase * (1 - phase); // up between beats, landing on each one
+        const landing = Math.exp(-phase * 8);
+        let lift = hop * (0.08 + (0.1 * danceEnergy));
+        let lean = (beat % 2 === 0 ? 1 : -1) * Math.sin(Math.PI * phase) * (4 + (6 * danceEnergy));
+        let step = 0;
+        let spin = 0;
+        if (move >= 8 && move < 12) {
+            // Side steps: out, in, out, in
+            const eased = easeInOutCubic(phase);
+            step = 0.12 * (move % 2 === 0 ? eased : 1 - eased);
+            lean *= 0.5;
+        } else if (move === 15) {
+            // The big finish: a higher jump with a spin
+            lift *= 1.9;
+            spin = 360 * easeInOutCubic(phase);
+            lean = 0;
+        }
+        const squash = 0.15 * landing * danceEnergy;
+        penguinIcons.forEach((icon, index) => {
+            const side = index === 0 ? -1 : 1; // the left one leans and steps left, the right one right
+            icon.style.transform = `translate(${(side * step).toFixed(3)}em, ${(-lift).toFixed(3)}em) rotate(${(side * lean).toFixed(2)}deg) perspective(6em) rotateY(${(side * spin).toFixed(1)}deg) scale(${(1 + (squash * 0.8)).toFixed(3)}, ${(1 - squash).toFixed(3)})${index === 0 ? "" : " scaleX(-1)"}`;
+        });
+        // Their shadows shrink as they jump
+        titlePenguins.forEach((penguin) => penguin.style.setProperty("--hop", Math.min(1, lift / 0.36).toFixed(3)));
+        const pose = ((beat % 2) + 2) % 2;
+        if (pose !== penguinPose) {
+            penguinPose = pose;
+            penguinIcons.forEach((icon) => {
+                icon.src = PENGUIN_POSES[pose];
+            });
+        }
+    }
+
+    function stopPenguinDance() {
+        if (penguinPose === null) return;
+        penguinPose = null;
+        if (jukeboxContainer) jukeboxContainer.classList.remove("penguins-dancing");
+        penguinIcons.forEach((icon) => {
+            icon.style.transform = "";
+            icon.src = PENGUIN_GIF;
+        });
+        titlePenguins.forEach((penguin) => penguin.style.removeProperty("--hop"));
     }
 
     function spawnMusicNote(source, direction) {
@@ -4182,7 +4617,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Until a song's sound has been measured, the bars dance to its tempo: a new shape every beat
+    // Until a song's sound has been measured, the bars dance to its beats: a new shape every beat
     // (fuller in the bass), scaled by how hard the beat hits
     function guessLevels(level, beatIndex, out) {
         if (beatIndex !== null && beatIndex !== eqBeatIndex) {
@@ -4197,8 +4632,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         return level;
     }
 
-    function applyBeatLevel(levels, punch, beatIndex) {
+    function applyBeatLevel(levels, punch) {
         const playing = isPlayerActive();
+        calmVisualsFor = null;
         speakerCones.forEach((cone) => {
             cone.style.transform = `scale(${(1 + (punch * 0.14)).toFixed(3)})`;
         });
@@ -4210,11 +4646,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             shade.style.transform = `translateY(${(-100 * levels[SPECTRUM_BANDS + side]).toFixed(1)}%)`;
         });
         const loudness = (levels[SPECTRUM_BANDS] + levels[SPECTRUM_BANDS + 1]) / 2;
-        const sway = beatIndex === null ? 0 : (beatIndex % 2 === 0 ? 1 : -1);
-        titlePenguins.forEach((penguin, index) => {
-            const facing = index === 0 ? 1 : -1;
-            penguin.style.transform = `translateY(${(-punch * 5).toFixed(2)}px) rotate(${(sway * facing * punch * 7).toFixed(2)}deg)`;
-        });
         if (jukeboxGlow) {
             jukeboxGlow.style.opacity = playing ? (0.18 + (loudness * 0.22) + (punch * 0.3)).toFixed(3) : "0";
         }
@@ -4234,6 +4665,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // With Rhythm off: everything still, apart from a steady glow while a song plays (and the
+    // equaliser's gentle ripple, the waves and the side lights' own idle animations, in CSS)
+    let calmVisualsFor = null; // whether the calm look was last set for a song playing or not
+    function applyCalmVisuals(playing) {
+        stopPenguinDance();
+        if (calmVisualsFor === playing) return;
+        calmVisualsFor = playing;
+        speakerCones.forEach((cone) => {
+            cone.style.transform = "";
+        });
+        eqBars.forEach((bar) => {
+            bar.style.transform = "";
+        });
+        cabinetLightShades.forEach((shade) => {
+            shade.style.transform = "";
+        });
+        if (jukeboxGlow) jukeboxGlow.style.opacity = playing ? "0.3" : "0";
+        titleWaves.forEach((waves) => waves.forEach((wave) => {
+            wave.style.opacity = "";
+            wave.style.transform = "";
+        }));
+    }
+
     // How hard the beat was hitting a moment ago
     function punchAgo(now, seconds) {
         for (let back = 0; back < punchTimes.length; back += 1) {
@@ -4248,20 +4702,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         const elapsed = lastVisualTimestamp === null ? 1 / 60 : Math.min(0.1, Math.max(0, (timestamp - lastVisualTimestamp) / 1000));
         lastVisualTimestamp = timestamp;
         let beatIndex = null;
+        let position = null;
+        let songTime = null;
         let bass = 0;
 
         if (playing) {
-            const tempo = tempoCache.get(currentTrackData.file) || DEFAULT_TEMPO;
-            const time = scratch ? scratch.targetTime : player.currentTime;
-            const beats = (time - tempo.firstBeat) / tempo.period;
-            beatIndex = Math.floor(beats);
-            const phase = beats - beatIndex;
-            const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
-            const level = Math.exp(-(phase * tempo.period) / 0.12) * accent;
-            if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
-                onBeat(beatIndex);
+            // Listening for a little while (and not asked yet this visit): shall the penguins dance?
+            if (listeningSince === null) {
+                listeningSince = timestamp;
+            } else if (!rhythmOn && rhythmInviteState === "waiting" && timestamp - listeningSince >= RHYTHM_INVITE_AFTER_MS) {
+                openRhythmInvite();
             }
-            lastBeatIndex = beatIndex;
+            const time = scratch ? scratch.targetTime : player.currentTime;
+            songTime = time;
 
             // The song's wave fills smoothly (between the few time updates a second)
             updateNowPlayingProgress(scratch ? time : null);
@@ -4270,22 +4723,39 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (spectrum && !isFrontHidden()) {
                 measureSpectrumAhead(spectrum, time);
             }
-            if (spectrum && readSpectrum(spectrum, time + SPECTRUM_LEAD_SECONDS, targetLevels)) {
-                // The speakers thump when the bass jumps (a kick drum), and lean out a little with a
-                // steady bass line
-                let kick = 0;
-                let low = 0;
-                bassAverages.forEach((average, band) => {
-                    const bandLevel = targetLevels[band];
-                    bassAverages[band] = average + ((bandLevel - average) * (1 - Math.exp(-elapsed / 0.35)));
-                    kick = Math.max(kick, bandLevel - bassAverages[band]);
-                    low += bandLevel / bassAverages.length;
-                });
-                bass = Math.max(Math.min(1, kick / 0.2), low * 0.4);
-            } else {
-                bass = guessLevels(level, beatIndex, targetLevels);
+            if (rhythmOn) {
+                position = getBeatPosition(beatAnalyses.get(currentTrackData.file), time);
+                let level = 0;
+                if (position) {
+                    beatIndex = position.index;
+                    const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
+                    level = Math.exp(-(position.phase * position.period) / 0.12) * accent;
+                    if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
+                        onBeat(beatIndex);
+                    }
+                }
+                lastBeatIndex = beatIndex;
+
+                if (spectrum && readSpectrum(spectrum, time + SPECTRUM_LEAD_SECONDS, targetLevels)) {
+                    // The speakers thump when the bass jumps (a kick drum), and lean out a little with
+                    // a steady bass line
+                    let kick = 0;
+                    let low = 0;
+                    bassAverages.forEach((average, band) => {
+                        const bandLevel = targetLevels[band];
+                        bassAverages[band] = average + ((bandLevel - average) * (1 - Math.exp(-elapsed / 0.35)));
+                        kick = Math.max(kick, bandLevel - bassAverages[band]);
+                        low += bandLevel / bassAverages.length;
+                    });
+                    bass = Math.max(Math.min(1, kick / 0.2), low * 0.4);
+                } else {
+                    bass = guessLevels(level, beatIndex, targetLevels);
+                }
             }
         } else {
+            listeningSince = null;
+        }
+        if (!playing || !rhythmOn) {
             lastBeatIndex = null;
             targetLevels.fill(0);
             bassAverages.fill(0);
@@ -4301,14 +4771,24 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (shownLevels[value] > 0.01) moving = true;
         }
         beatLevel = Math.max(bass, beatLevel * Math.exp(-elapsed / 0.12));
-        applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5), beatIndex);
+        if (rhythmOn) {
+            applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5));
+            dancePenguins(followBeat(position, songTime), elapsed);
+        } else {
+            applyCalmVisuals(playing);
+        }
 
-        if (playing || moving || beatLevel > 0.01) {
+        if (playing || (rhythmOn && (moving || beatLevel > 0.01))) {
             beatFrame = requestAnimationFrame(stepBeatVisuals);
         } else {
             shownLevels.fill(0);
             beatLevel = 0;
-            applyBeatLevel(shownLevels, 0, null);
+            if (rhythmOn) {
+                applyBeatLevel(shownLevels, 0);
+                stopPenguinDance();
+            } else {
+                applyCalmVisuals(false);
+            }
             beatFrame = null;
             lastVisualTimestamp = null;
         }
@@ -4346,7 +4826,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const shownLevels = new Float32Array(SPECTRUM_VALUES);
     let lastVisualTimestamp = null;
     const bassAverages = new Float32Array(4); // the lowest bars' recent levels
-    let fftTables = null;
+    const fftTableSets = new Map(); // by FFT size
 
     function getSpectrum(track) {
         let spectrum = spectra.get(track.file);
@@ -4405,8 +4885,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { buffer } = slice;
         const left = buffer.getChannelData(0);
         const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
-        const mono = new Float32Array(buffer.length);
-        for (let index = 0; index < buffer.length; index += 1) {
+        const mono = new Float32Array(left.length);
+        for (let index = 0; index < mono.length; index += 1) {
             mono[index] = (left[index] + right[index]) / 2;
         }
 
@@ -4482,9 +4962,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         return { buffer, startTime: endTime - buffer.duration };
     }
 
-    function getFftTables() {
-        if (fftTables) return fftTables;
-        const size = SPECTRUM_FFT_SIZE;
+    function getFftTables(size = SPECTRUM_FFT_SIZE) {
+        if (fftTableSets.has(size)) return fftTableSets.get(size);
         const bits = Math.round(Math.log2(size));
         const reversed = new Uint16Array(size);
         for (let index = 0; index < size; index += 1) {
@@ -4506,7 +4985,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             window[index] = 0.5 - (0.5 * Math.cos((2 * Math.PI * index) / size));
             windowPower += window[index] * window[index];
         }
-        fftTables = {
+        const tables = {
+            size,
             reversed,
             cos,
             sin,
@@ -4516,14 +4996,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             real: new Float32Array(size),
             imag: new Float32Array(size)
         };
-        return fftTables;
+        fftTableSets.set(size, tables);
+        return tables;
     }
 
     // How loud (dB) each band is in the window of samples centred on `center`
     function measureBands(samples, center, out) {
-        const { reversed, cos, sin, window, scale, real, imag } = getFftTables();
-        const size = SPECTRUM_FFT_SIZE;
-        const start = center - (size / 2);
+        const { scale, real, imag } = transformWindow(samples, center - (SPECTRUM_FFT_SIZE / 2), getFftTables());
+        for (let band = 0; band < SPECTRUM_BANDS; band += 1) {
+            let power = 0;
+            for (let bin = SPECTRUM_BAND_BINS[band]; bin < SPECTRUM_BAND_BINS[band + 1]; bin += 1) {
+                power += (real[bin] * real[bin]) + (imag[bin] * imag[bin]);
+            }
+            out[band] = 10 * Math.log10((power * scale) + 1e-12);
+        }
+    }
+
+    // The spectrum of the (Hann-windowed) samples from `start`, left in the tables' real and imag
+    function transformWindow(samples, start, tables) {
+        const { size, reversed, cos, sin, window, real, imag } = tables;
         for (let index = 0; index < size; index += 1) {
             const position = start + index;
             const sample = position >= 0 && position < samples.length ? samples[position] : 0;
@@ -4546,13 +5037,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
         }
-        for (let band = 0; band < SPECTRUM_BANDS; band += 1) {
-            let power = 0;
-            for (let bin = SPECTRUM_BAND_BINS[band]; bin < SPECTRUM_BAND_BINS[band + 1]; bin += 1) {
-                power += (real[bin] * real[bin]) + (imag[bin] * imag[bin]);
-            }
-            out[band] = 10 * Math.log10((power * scale) + 1e-12);
-        }
+        return tables;
     }
 
     function measureLoudness(samples, from, to) {
@@ -5066,7 +5551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         startSpinning();
         startBeatVisuals();
         updateWhereBackgroundFromPlayback();
-        requestTrackTempo(entry.track);
+        requestSongBeats(entry.track);
 
         if (!document.hidden) {
             // A lazy whirl as the next record takes over, and the list follows along
@@ -5286,6 +5771,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (target) target.focus({ preventScroll: true });
         };
 
+        closeRhythmInvite(false);
         // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
         if (showBack && window.jukebot) {
             window.jukebot.prepare();
@@ -5602,6 +6088,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpJukeboxBack();
     setUpSideRail();
     setUpRecordScratching();
+    setUpRhythm();
 
     // Initial population of filter and track list.
     // Populate tags first so the dropdown has its final option set before skeleton/track content appears.
@@ -5642,7 +6129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             scheduleMobileViewportLock();
             // Songs may have advanced while the screen was off
             updateWhereBackgroundFromPlayback();
-            requestTrackTempo(currentTrackData);
+            requestSongBeats(currentTrackData);
             startBeatVisuals();
             const currentTrack = getCurrentTrackElement();
             if (currentTrack) {

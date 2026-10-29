@@ -2539,8 +2539,13 @@ html {
     }
 
     .track {
-        --cover-size: 64px;
-        padding: 10px 6px;
+        --cover-size: 52px;
+        padding: 8px 6px;
+    }
+
+    /* Short rows here too: tags only on the song that's playing */
+    .track:not(.track-modes-visible) .tags {
+        display: none;
     }
 
     .title {
@@ -2690,8 +2695,8 @@ html {
     }
 }
 
-/* On phones the flip sign is an LED sign instead of words */
-.flip-sign-led {
+/* On phones the flip sign is an LED sign instead of words (.led-sign shows it otherwise) */
+.led-sign.flip-sign-led {
     display: none;
 }
 
@@ -2701,7 +2706,7 @@ html {
         display: none;
     }
 
-    .flip-sign-led {
+    .led-sign.flip-sign-led {
         display: flex;
         height: 20px;
     }
@@ -6030,6 +6035,197 @@ h1.jukebox-title {
     }
 }
 
+/* The penguins are Rhythm's switch */
+button.title-penguin {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0.16em;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+button.title-penguin:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 3px;
+}
+
+/* Dancing, script.js moves them: the idle bob and hover hop would only get in the way. Their
+   shadows shrink as they jump (--hop). */
+#jukebox-container.penguins-dancing .title-penguin .penguin-icon {
+    animation: none;
+}
+
+#jukebox-container.penguins-dancing .title-penguin::after {
+    transform: scaleX(calc(1 - (var(--hop, 0) * 0.45)));
+    opacity: calc(1 - (var(--hop, 0) * 0.5));
+}
+
+/* Under the title, taking no room: what the bubble and the note hang from */
+.rhythm-anchor {
+    position: relative;
+    z-index: 40;
+    flex: 0 0 auto;
+    height: 0;
+}
+
+/* The penguins asking if they should dance: a speech bubble under the title. Always there but
+   hidden, so opening it is only a fade and a pop (nothing to lay out) */
+.rhythm-invite {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: min(290px, calc(100% - 44px));
+    box-sizing: border-box;
+    padding: 12px 14px 13px;
+    border: 2px solid #8b9bff;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #3b3e70, #2a2c4e);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 14px 34px rgba(8, 6, 30, 0.6), 0 0 26px rgba(255, 138, 216, 0.25);
+    color: #ffffff;
+    text-align: center;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.9);
+    transform-origin: 50% 0;
+    transition: opacity 200ms ease, transform 360ms cubic-bezier(0.34, 1.45, 0.64, 1), visibility 0s linear 360ms;
+}
+
+.rhythm-invite.is-open {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+    transition-delay: 0s;
+}
+
+/* Its tail points up at the title */
+.rhythm-invite::before {
+    content: "";
+    position: absolute;
+    top: -9px;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin-left: -8px;
+    border-top: 2px solid #8b9bff;
+    border-left: 2px solid #8b9bff;
+    border-radius: 3px 0 0;
+    background: #3b3e70;
+    transform: rotate(45deg);
+}
+
+.rhythm-invite p {
+    margin: 0;
+    text-align: center;
+}
+
+.rhythm-invite-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.rhythm-invite-text {
+    margin-top: 4px !important;
+    font-size: 0.84rem;
+    line-height: 1.35;
+    color: rgba(236, 240, 255, 0.82);
+}
+
+.rhythm-invite-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 11px;
+}
+
+.rhythm-invite-button {
+    min-height: 36px;
+    padding: 7px 14px;
+    border: 0;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #ffffff;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 120ms ease-out, background-color 160ms ease-out;
+}
+
+.rhythm-invite-button--yes {
+    background: linear-gradient(100deg, #ff86d6, #b39bff 55%, #7fe6ff);
+    color: #1d1a45;
+    box-shadow: 0 2px 10px rgba(255, 138, 216, 0.35);
+}
+
+.rhythm-invite-button--no {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.rhythm-invite-button:active {
+    transform: scale(0.96);
+}
+
+.rhythm-invite-button:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .rhythm-invite-button--no:hover {
+        background: rgba(255, 255, 255, 0.18);
+    }
+
+    .rhythm-invite-button--yes:hover {
+        filter: brightness(1.08);
+    }
+}
+
+/* "Rhythm on" / "Rhythm off" under the title for a moment when it's switched */
+.rhythm-note {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    margin: 0;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #0e1020;
+    box-shadow: 0 0 0 1px rgba(139, 155, 255, 0.45), 0 6px 16px rgba(0, 0, 0, 0.45);
+    font-family: "Courier New", ui-monospace, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #7fe6ff;
+    text-shadow: 0 0 6px currentColor;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -4px);
+    transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.rhythm-note.is-off {
+    color: #ffc46b;
+}
+
+.rhythm-note.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.rhythm-note:empty {
+    display: none;
+}
+
 /* Sound waves rolling out from the penguins: now and then on their own, and with every beat while
    a song plays (script.js sets each wave's glow then). Pink on the left and blue on the right, like
    the two ends of "Muse"; each one further out is bigger and fainter, and only whole waves show
@@ -6111,7 +6307,7 @@ h1.jukebox-title {
     }
 }
 
-#jukebox-container.is-music-playing .title-waves svg {
+#jukebox-container.is-music-playing.rhythm-on .title-waves svg {
     animation: none;
     will-change: transform, opacity;
 }
@@ -6211,7 +6407,7 @@ h1.jukebox-title {
     }
 }
 
-#jukebox-container.is-music-playing .cabinet-lights-glint {
+#jukebox-container.is-music-playing.rhythm-on .cabinet-lights-glint {
     opacity: 0;
     animation-play-state: paused;
 }
@@ -6282,6 +6478,25 @@ h1.jukebox-title {
 
 #jukebox-container.is-music-playing .speaker-eq span {
     opacity: 0.95;
+}
+
+/* With Rhythm off the bars don't follow the song, they just ripple gently while it plays */
+@media (prefers-reduced-motion: no-preference) {
+    #jukebox-container.is-music-playing:not(.rhythm-on) .speaker-eq span {
+        animation: eqIdle 2.8s ease-in-out infinite;
+        animation-delay: calc(var(--i, 0) * -0.175s);
+    }
+}
+
+@keyframes eqIdle {
+    0%,
+    100% {
+        transform: scaleY(0.14);
+    }
+
+    50% {
+        transform: scaleY(0.4);
+    }
 }
 
 /* Glow behind the cabinet; its brightness follows the beat */
@@ -6598,7 +6813,7 @@ html.viewport-shifted body {
         font-size: 0.84rem;
     }
 
-    .flip-sign-led {
+    .led-sign.flip-sign-led {
         height: 18px;
     }
 
@@ -6610,8 +6825,16 @@ html.viewport-shifted body {
         margin-top: 4px;
     }
 
+    /* Shorter rows, so more songs fit: smaller covers, and a song only shows its tags while it's
+       playing (its title and Play line are enough to pick it out) */
     .track {
-        --cover-size: 66px;
+        --cover-size: 52px;
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+
+    .track:not(.track-modes-visible) .tags {
+        display: none;
     }
 
     .title {

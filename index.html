@@ -203,12 +203,13 @@
                 <svg viewBox="0 0 19.6 66"><path d="M16.3 3.25A40.4 40.4 0 0 0 16.3 62.75"/></svg>
                 <svg viewBox="0 0 23.1 82"><path d="M19.9 3.25A51.2 51.2 0 0 0 19.9 78.75"/></svg>
             </span>
-            <span class="title-penguin title-penguin--left" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
+            <!-- Tapping a penguin switches Rhythm: the jukebox moving to the beat -->
+            <button class="title-penguin title-penguin--left" type="button" aria-pressed="false" aria-label="Rhythm: dance to the beat" title="Rhythm: dance to the beat"><img class="penguin-icon" src="images/penguin.gif" alt=""></button>
             <span class="title-wordmark">
                 <span class="title-muse">Muse</span>
                 <span class="title-jukebox">Jukebox</span>
             </span>
-            <span class="title-penguin title-penguin--right" aria-hidden="true"><img class="penguin-icon" src="images/penguin.gif" alt=""></span>
+            <button class="title-penguin title-penguin--right" type="button" tabindex="-1" aria-hidden="true" title="Rhythm: dance to the beat"><img class="penguin-icon" src="images/penguin.gif" alt=""></button>
             <span class="title-waves title-waves--right" aria-hidden="true">
                 <svg viewBox="0 0 12.6 34"><path d="M9.3 3.25A18.6 18.6 0 0 0 9.3 30.75"/></svg>
                 <svg viewBox="0 0 16.1 50"><path d="M12.8 3.25A29.5 29.5 0 0 0 12.8 46.75"/></svg>
@@ -216,6 +217,20 @@
                 <svg viewBox="0 0 23.1 82"><path d="M19.9 3.25A51.2 51.2 0 0 0 19.9 78.75"/></svg>
             </span>
         </h1>
+
+        <!-- Hangs just under the title (taking no room): once a visit, while a song plays, the
+             penguins ask if the jukebox should move to it, and say so when Rhythm is switched -->
+        <div class="rhythm-anchor">
+            <div id="rhythm-invite" class="rhythm-invite" role="dialog" aria-labelledby="rhythm-invite-title" aria-describedby="rhythm-invite-text">
+                <p id="rhythm-invite-title" class="rhythm-invite-title">Want us to dance?</p>
+                <p id="rhythm-invite-text" class="rhythm-invite-text">We'll sync the jukebox to the music you're listening to. Tap us anytime to switch it.</p>
+                <div class="rhythm-invite-actions">
+                    <button type="button" class="rhythm-invite-button rhythm-invite-button--yes">Sync to the music</button>
+                    <button type="button" class="rhythm-invite-button rhythm-invite-button--no">Not now</button>
+                </div>
+            </div>
+            <p id="rhythm-note" class="rhythm-note" aria-live="polite"></p>
+        </div>
 
         <!-- Slim sign: flips the jukebox (Jukebot) around to its rear panel -->
         <button class="flip-sign" type="button" data-flip-jukebox="back" aria-label="Flip the jukebox around">
