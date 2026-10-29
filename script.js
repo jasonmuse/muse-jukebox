@@ -837,6 +837,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let whereFadeDurationMs = 0;
     let recordSeekNudgeFrame = null;
     let viewportLockFrame = null;
+    let viewportShift = 0; // how far Safari's screen has drifted from the page's fixed layer
     let trackListScrollAnimationFrame = null;
     let trackListScrollAnimationResolve = null;
     let trackListScrollAnimationId = 0;
@@ -907,10 +908,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         return window.innerWidth > 600 ? 600 : 520;
     }
 
+    // Safari on iOS 26 and later can leave what's on screen (the visual viewport) offset from the
+    // page's fixed layer after its address bar or a dropdown's picker comes and goes, and not put it
+    // back. The whole jukebox is fixed, so it's drawn that much too high: the record cut off at the
+    // top and a gap underneath. Shift it by the same amount so it lines up with the screen again.
+    function getVisualViewportShift() {
+        const viewport = window.visualViewport;
+        if (!viewport || !Number.isFinite(viewport.offsetTop)) return 0;
+        // Zoomed in, the visual viewport is meant to pan around
+        if (Math.abs((viewport.scale || 1) - 1) > 0.01) return 0;
+        // It may also pan to keep a dropdown in sight while the dropdown's picker is up
+        const focused = document.activeElement;
+        if (focused && /^(SELECT|INPUT|TEXTAREA)$/.test(focused.tagName) && viewport.height < window.innerHeight - 80) return 0;
+        const shift = Math.round(viewport.offsetTop);
+        return Math.abs(shift) >= 1 && Math.abs(shift) < window.innerHeight / 2 ? shift : 0;
+    }
+
+    function setViewportShift(shift) {
+        if (shift === viewportShift) return;
+        viewportShift = shift;
+        document.documentElement.style.setProperty("--viewport-shift", `${shift}px`);
+        document.documentElement.classList.toggle("viewport-shifted", shift !== 0);
+    }
+
     function applyMobileViewportLock() {
         if (!isAppLayoutViewport()) {
             document.documentElement.style.removeProperty("--app-height");
             document.documentElement.classList.remove("viewport-short");
+            setViewportShift(0);
             return;
         }
 
@@ -921,6 +946,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isShort = viewportHeight < minimumHeight;
         document.documentElement.classList.toggle("viewport-short", isShort);
         document.documentElement.style.setProperty("--app-height", `${Math.max(viewportHeight, minimumHeight)}px`);
+        setViewportShift(isShort ? 0 : getVisualViewportShift());
         if (isShort) return;
 
         if (window.scrollY !== 0) {
@@ -5628,6 +5654,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.visualViewport.addEventListener("resize", scheduleMobileViewportLock, { passive: true });
         window.visualViewport.addEventListener("scroll", scheduleMobileViewportLock, { passive: true });
     }
+    window.addEventListener("scroll", scheduleMobileViewportLock, { passive: true });
+    // A dropdown's picker can leave the screen offset once it's gone (see getVisualViewportShift),
+    // and Safari may only settle after its closing animation
+    document.addEventListener("focusout", (event) => {
+        if (!(event.target instanceof Element) || !event.target.matches("select, input, textarea")) return;
+        scheduleMobileViewportLock();
+        setTimeout(scheduleMobileViewportLock, 350);
+        setTimeout(scheduleMobileViewportLock, 900);
+    });
 
     window.addEventListener("resize", () => {
         requestAnimationFrame(() => {

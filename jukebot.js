@@ -412,7 +412,9 @@
 
         function moveTool(point) {
             const rect = root.getBoundingClientRect();
-            tool.style.transform = `translate(${(rect.left + point.x).toFixed(1)}px, ${(rect.top + point.y).toFixed(1)}px)`;
+            // (the page may be shifted to line up with Safari's screen, and the tool moves with it)
+            const shift = parseFloat(document.documentElement.style.getPropertyValue("--viewport-shift")) || 0;
+            tool.style.transform = `translate(${(rect.left + point.x).toFixed(1)}px, ${(rect.top + point.y - shift).toFixed(1)}px)`;
         }
 
         function useTool(point, isTouch) {
