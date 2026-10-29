@@ -564,6 +564,77 @@ box-shadow: 0 0 0 3px #ffffff;
     align-self: flex-end;
 }
 
+/* Side A / side B: a label on a two-sided song's cover (pink for A, blue for B) that turns it
+   over. It sits across the bottom of the cover without taking any room in the row. */
+.side-switch {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 58px;
+    height: 20px;
+    margin: 0 calc((var(--cover-size) / 2) + var(--cover-gap) - 29px) -9px calc(-1 * ((var(--cover-size) / 2) + var(--cover-gap) + 29px));
+    padding: 0;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffa3dd, #ff72c4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 0 10px rgba(255, 138, 216, 0.45);
+    color: #3a0d2e;
+    font: 800 0.6rem/1 "Outfit", system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 160ms ease-out, background 300ms ease, box-shadow 300ms ease, color 300ms ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.side-switch.is-side-b {
+    background: linear-gradient(180deg, #b6f3ff, #72d8f5);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 0 10px rgba(142, 233, 255, 0.5);
+    color: #0c2733;
+}
+
+.side-switch svg {
+    width: 10px;
+    height: 10px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.side-switch:active {
+    transform: scale(0.92);
+}
+
+.side-switch:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .side-switch:hover svg {
+        transform: rotate(180deg);
+        transition: transform 400ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    }
+}
+
+/* The playing song's cover sits at the top of its row, so the label does too */
+.track.track-modes-visible .side-switch {
+    align-self: flex-start;
+    margin-top: calc(var(--cover-size) - 11px);
+    margin-bottom: 0;
+}
+
 .track img.cover-loading {
     filter: brightness(1.5);
 }
@@ -1293,22 +1364,19 @@ audio {
 .track-modes-visible .song-progress {
     flex: 0 0 calc(100% + var(--cover-size) + var(--cover-gap));
     margin: 10px 0 0 calc(-1 * (var(--cover-size) + var(--cover-gap)));
-    animation: songProgressIn 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .track.track-modes-visible img {
     align-self: flex-start;
 }
 
-.track-modes-visible .song-wave {
-    height: 26px;
+/* A row closing up after its song: the buttons fold away at once (script.js slides the wave) */
+.track.is-closing .mode-button {
+    transition: opacity 120ms ease-out, visibility 0s linear 120ms;
 }
 
-@keyframes songProgressIn {
-    from {
-        opacity: 0;
-        transform: translateY(-6px);
-    }
+.track-modes-visible .song-wave {
+    height: 26px;
 }
 
 /* Size the controls row to the space each song card actually has */
@@ -2622,6 +2690,23 @@ html {
     }
 }
 
+/* On phones the flip sign is an LED sign instead of words */
+.flip-sign-led {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .flip-sign-text,
+    .flip-sign-extra {
+        display: none;
+    }
+
+    .flip-sign-led {
+        display: flex;
+        height: 20px;
+    }
+}
+
 /* ───── FLIP ANIMATION ─────
    Keyframe animations run on the compositor, so the turn stays smooth while the page swaps sides */
 #jukebox.flip-out {
@@ -2730,7 +2815,8 @@ html {
 #jukebox.is-flipped .penguin-icon,
 #jukebox.is-flipped .title-waves svg,
 #jukebox.is-flipped .cabinet-lights-glint,
-#jukebox:not(.is-flipped) .jb-ticker-track {
+#jukebox.is-flipped .flip-sign-led .led-sign-track,
+#jukebox:not(.is-flipped) .cover-led .led-sign-track {
     animation-play-state: paused !important;
 }
 
@@ -3440,10 +3526,11 @@ html.is-standalone .edge-blend {
     background-position: center calc(100% - 6px);
 }
 
-/* The LED sign along the bottom: glowing letters scrolling past a dark window, the Muse name in
-   pink, the song that's on in blue and the rest in amber. script.js writes it twice over (so it
-   loops without a seam) and sets how long a lap takes, so it always moves at the same pace. */
-.jb-ticker {
+/* LED signs (along the bottom of Jukebot's panel, and the flip sign on phones): glowing letters
+   scrolling past a dark window, the Muse name in pink, the song that's on in blue and the rest in
+   amber. script.js writes the words twice over (so a lap loops without a seam) and sets how long a
+   lap takes, so every sign moves at the same pace; words that fit just sit still. */
+.led-sign {
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
@@ -3457,7 +3544,7 @@ html.is-standalone .edge-blend {
 }
 
 /* The LED dots: a fine dark mesh over the window that the letters slide under */
-.jb-ticker::after {
+.led-sign::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -3465,13 +3552,21 @@ html.is-standalone .edge-blend {
     background: radial-gradient(circle, transparent 0 0.55px, rgba(5, 6, 12, 0.5) 1px) 0 0 / 2px 2px;
 }
 
-.jb-ticker-track {
+.led-sign-track {
     display: flex;
     width: max-content;
-    animation: jbTicker var(--ticker-seconds, 20s) linear infinite;
+    animation: ledSignScroll var(--led-seconds, 20s) linear infinite;
 }
 
-.jb-ticker-lap {
+.led-sign.is-still {
+    justify-content: center;
+}
+
+.led-sign.is-still .led-sign-track {
+    animation: none;
+}
+
+.led-sign-lap {
     flex: 0 0 auto;
     display: flex;
     white-space: nowrap;
@@ -3482,30 +3577,39 @@ html.is-standalone .edge-blend {
     text-shadow: 0 0 3px rgba(255, 190, 80, 0.95), 0 0 9px rgba(255, 140, 40, 0.55);
 }
 
-.jb-ticker-item::after {
+.led-sign-item::after {
     content: "\266A";
     margin: 0 1.1em;
     color: #ffc861;
 }
 
-.jb-ticker-item.is-brand {
+.led-sign.is-still .led-sign-item:last-child::after {
+    content: none;
+}
+
+.led-sign-item.is-brand {
     color: #ffb3e8;
     text-shadow: 0 0 3px rgba(255, 138, 216, 0.95), 0 0 9px rgba(255, 100, 200, 0.55);
 }
 
-.jb-ticker-item.is-song {
+.led-sign-item.is-song {
     color: #b5f3ff;
     text-shadow: 0 0 3px rgba(142, 233, 255, 0.95), 0 0 9px rgba(90, 200, 255, 0.55);
 }
 
-@keyframes jbTicker {
+@keyframes ledSignScroll {
     to {
         transform: translateX(-50%);
     }
 }
 
-/* Resting while nobody can see it */
-.jb-back.cover-off .jb-ticker-track {
+/* The panel's sign sits a little up from the bottom edge, clear of its vent marks, and rests while
+   nobody can see it */
+.cover-led {
+    margin-bottom: 10px;
+}
+
+.jb-back.cover-off .cover-led .led-sign-track {
     animation-play-state: paused;
 }
 
@@ -6441,7 +6545,7 @@ html.viewport-short #jukebox-wrapper {
     .title-muse,
     .title-penguin .penguin-icon,
     .title-waves svg,
-    .jb-ticker-track,
+    .led-sign-track,
     .jb-signal {
         animation: none;
     }
@@ -6486,6 +6590,10 @@ html.viewport-short #jukebox-wrapper {
         margin: 0 0 6px;
         padding: 4px 22px;
         font-size: 0.84rem;
+    }
+
+    .flip-sign-led {
+        height: 18px;
     }
 
     #filters {

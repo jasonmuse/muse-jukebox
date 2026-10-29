@@ -225,6 +225,8 @@
             <span class="sign-bolt sign-bolt--br" aria-hidden="true"></span>
             <span class="flip-sign-text">Psst&hellip; flip me around</span>
             <span class="flip-sign-extra">about &middot; tips &middot; fix me</span>
+            <!-- On phones the sign is an LED sign: the song that's on, and the invitation round the back -->
+            <span class="led-sign flip-sign-led" aria-hidden="true"><span class="led-sign-track"><span class="led-sign-lap"><span class="led-sign-item">Psst&hellip; flip me around</span></span></span></span>
             <svg class="flip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M18.5 2.5V6.5H14.5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.5 6"/><path d="M5.5 21.5V17.5H9.5"/></svg>
         </button>
         <!--
@@ -382,7 +384,7 @@
                     <!-- LED sign along the bottom: Muse's sign-off, the song that's on, and the tips when
                          the panel's too short for their card (script.js writes it) -->
                     <div class="jb-cover-band jb-cover-band--bottom">
-                        <span class="jb-ticker" aria-hidden="true"><span class="jb-ticker-track"><span class="jb-ticker-lap"><span class="jb-ticker-item is-brand">Muse Tunes</span><span class="jb-ticker-item">Made by Muse</span><span class="jb-ticker-item is-tip">Play it loud</span></span></span></span>
+                        <span class="led-sign cover-led" aria-hidden="true"><span class="led-sign-track"><span class="led-sign-lap"><span class="led-sign-item is-brand">Muse Tunes</span><span class="led-sign-item">Made by Muse</span><span class="led-sign-item">Play it loud</span></span></span></span>
                     </div>
                     <button class="jb-screw jb-screw--tl" data-screw="0" type="button" aria-label="Unscrew the top left screw"><span class="jb-screw-head"></span></button>
                     <button class="jb-screw jb-screw--tr" data-screw="1" type="button" aria-label="Unscrew the top right screw"><span class="jb-screw-head"></span></button>

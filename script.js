@@ -9,6 +9,7 @@ const tracks = [
         "tags": ["Featured", "Game OST"],
         "date": "2026",
         "featured": true,
+        "sideB": "audio/countdownisland_pitch_0.7.mp3",
         "game": {
             "name": "Countdown Island",
             "url": "https://amused.itch.io/countdown-island",
@@ -25,6 +26,8 @@ const tracks = [
         "date": "2026",
         "featured": true,
         "grayscaleCover": true,
+        "sideA": "audio/countdownisland.mp3",
+        "spinScale": 0.7,
         "game": {
             "name": "Countdown Island",
             "url": "https://amused.itch.io/countdown-island",
@@ -413,6 +416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const LOOP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/><path class="loop-one" d="M10.7 10.2 12.6 8.7v6.7"/></svg>`;
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
     const PREV_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>`;
+    const SIDE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M18.5 2.5V6.5H14.5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.5 6"/><path d="M5.5 21.5V17.5H9.5"/></svg>`;
     const NEXT_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>`;
     const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
 
@@ -844,6 +848,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let playingRowParts = null; // the playing song's row: its wave, times and progress line
     let waveScrub = null; // a finger or mouse dragging along the playing song's wave
     let trackStartOffset = 0; // where the playing song was started (shown while it loads)
+    let songSettleAt = 0; // measuring a new song's sound waits until its row has finished opening
     const TRACK_PLAYING_FADE_OUT_MS = 220;
     // Keep in sync with the full-height layout media queries in styles.css
     const APP_LAYOUT_QUERY = "(max-width: 600px), (orientation: portrait) and (pointer: coarse) and (max-width: 1100px), (orientation: landscape) and (pointer: coarse)";
@@ -1166,7 +1171,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function getCurrentTrackElement() {
         if (!currentTrackData) return null;
-        return trackList.querySelector(`.track[data-file="${CSS.escape(currentTrackData.file)}"]`);
+        const file = CSS.escape(currentTrackData.file);
+        // (a two-sided song's row may already show its other side, mid-flip)
+        return trackList.querySelector(`.track[data-file="${file}"]`) || trackList.querySelector(`.track[data-sides~="${file}"]`);
     }
 
     function getTrackDataForElement(trackElement) {
@@ -1258,6 +1265,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // The x button: stop the song and unload it (also clears the lock screen player)
     function clearCurrentTrack() {
+        cancelSideSwitch();
         if (!currentTrackData) return;
         stopCurrentPlayback();
         setDeckSource(player, null);
@@ -1438,17 +1446,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Only the current song shows the keep-playing / shuffle buttons
-    function showModeButtonsOnTrack(trackElement) {
+    function showModeButtonsOnTrack(trackElement, animate = true) {
+        // Where the rows in sight are now, so they can slide into their new places
+        const rowsBefore = animate && !prefersReducedMotion() ? measureRowsInSight(trackElement) : null;
+
         trackList.querySelectorAll(".track.track-modes-visible").forEach((element) => {
             if (element !== trackElement) {
+                // Its buttons fold away at once, so the row is straight away the shape it's going to
+                // be and only its wave slides
+                element.classList.add("is-closing");
+                setTimeout(() => element.classList.remove("is-closing"), ROW_RESHAPE_MS);
                 element.classList.remove("track-modes-visible");
                 setRowWavePlaying(element, false);
             }
         });
         if (trackElement) {
+            trackElement.classList.remove("is-closing");
             trackElement.classList.add("track-modes-visible");
             setRowWavePlaying(trackElement, true);
         }
+        // (once the rest of the song's start has run: the playing row may stick to an edge too)
+        if (rowsBefore) queueMicrotask(() => slideRowsIntoPlace(rowsBefore));
         playingRowParts = trackElement ? {
             wave: trackElement.querySelector(".song-wave"),
             progress: trackElement.querySelector(".song-progress"),
@@ -1458,6 +1476,73 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateNowPlayingProgress();
         // The x narrows the title, so re-check which titles need to scroll
         requestAnimationFrame(syncTitleMarquees);
+    }
+
+    // A row opening up for the playing song (or closing again) changes shape smoothly: it grows or
+    // shrinks instead of jumping (the rows below glide along), and its wave slides from beside the
+    // Play button down onto its own line, or back up. Each row moves by transform from where it
+    // was, so the layout is final straight away and the sliding is left to the compositor.
+    const ROW_RESHAPE_MS = 420;
+    const ROW_RESHAPE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+    function measureRowsInSight(openingRow) {
+        const listRect = trackList.getBoundingClientRect();
+        const rows = [];
+        trackList.querySelectorAll(".track").forEach((row) => {
+            const rect = row.getBoundingClientRect();
+            if (!rect.height || rect.bottom < listRect.top - 160 || rect.top > listRect.bottom + 160) return;
+            const reshaping = row === openingRow || row.classList.contains("track-modes-visible");
+            rows.push({
+                row,
+                rect,
+                wave: reshaping ? row.querySelector(".song-wave")?.getBoundingClientRect() : null,
+                time: reshaping ? row.querySelector(".song-time")?.getBoundingClientRect() : null
+            });
+        });
+        return rows;
+    }
+
+    function slideRowsIntoPlace(rowsBefore) {
+        if (typeof Element.prototype.animate !== "function") return;
+        const timing = { duration: ROW_RESHAPE_MS, easing: ROW_RESHAPE_EASING };
+        rowsBefore.forEach((before) => {
+            const { row } = before;
+            if (!row.isConnected) return;
+            const now = row.getBoundingClientRect();
+            const wave = before.wave ? row.querySelector(".song-wave") : null;
+            const time = before.time ? row.querySelector(".song-time") : null;
+            const waveNow = wave?.getBoundingClientRect();
+            const timeNow = time?.getBoundingClientRect();
+            const moved = before.rect.top - now.top;
+            const grown = now.height - before.rect.height;
+
+            // A row that grew keeps its new part hidden until the rows below have made room
+            if (Math.abs(moved) > 0.5 || grown > 1) {
+                const keyframes = [{ transform: `translateY(${moved.toFixed(1)}px)` }, { transform: "none" }];
+                if (grown > 1) {
+                    keyframes[0].clipPath = `inset(-24px -24px ${grown.toFixed(1)}px -24px)`;
+                    keyframes[1].clipPath = "inset(-24px -24px 0px -24px)";
+                }
+                row.animate(keyframes, timing);
+            }
+
+            // Its wave (and the times) start where they were in the row, as big, then settle
+            const slide = (part, from, to, keepSize) => {
+                if (!part || !from || !to || !to.width || !to.height) return;
+                const dx = keepSize
+                    ? (from.right - before.rect.left) - (to.right - now.left)
+                    : (from.left - before.rect.left) - (to.left - now.left);
+                const dy = (from.top - before.rect.top) - (to.top - now.top);
+                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(from.width - to.width) < 0.5) return;
+                const scale = keepSize ? "" : ` scale(${(from.width / to.width).toFixed(3)}, ${(from.height / to.height).toFixed(3)})`;
+                part.animate([
+                    { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)${scale}`, transformOrigin: "0 0" },
+                    { transform: "none", transformOrigin: "0 0" }
+                ], timing);
+            };
+            slide(wave, before.wave, waveNow, false);
+            slide(time, before.time, timeNow, true);
+        });
     }
 
     // The loop button goes round: off → keep playing → repeat this song → off
@@ -1742,10 +1827,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Load a song into the shared player and start it from the beginning
     function startTrack(track, options = {}) {
+        if (!options.sideFlip) cancelSideSwitch();
         const previousTrack = getCurrentTrackElement();
-        // Switching while a song is playing gets the record whirl (like a record changer)
-        const switchingWhilePlaying = options.flourish
-            || (isPlayerActive() && Boolean(currentTrackData) && currentTrackData.file !== track.file);
+        // Switching while a song is playing gets the record whirl (like a record changer); turning
+        // a song over to its other side doesn't
+        const switchingWhilePlaying = !options.sideFlip && (options.flourish
+            || (isPlayerActive() && Boolean(currentTrackData) && currentTrackData.file !== track.file));
 
         if (volumeFadeInterval) {
             clearInterval(volumeFadeInterval);
@@ -1755,7 +1842,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // If this is the song already waiting on the spare deck, it can start straight away
         const prepared = takeUpNextFor(track);
 
-        if (previousTrack && currentTrackData.file !== track.file) {
+        if (previousTrack && currentTrackData.file !== track.file && !options.sideFlip) {
             resetTrackElementUi(previousTrack);
         }
 
@@ -1768,14 +1855,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const startingInBackground = document.hidden;
         // Hold the sound back while the record drops. Only where the page can set the volume:
         // an iPhone would play a blip of the song and then restart it.
-        const holdAudio = !startingInBackground && canFadeVolume;
+        const holdAudio = !startingInBackground && canFadeVolume && !options.sideFlip;
         // A tap on the song's wave starts it from there; a song mixed in skips its silent intro
         const startOffset = options.startAt > 0 ? options.startAt : (prepared ? prepared.startAt : 0);
         trackStartOffset = startOffset;
+        songSettleAt = performance.now() + ROW_RESHAPE_MS + 150;
         if (prepared) {
             const previousDeck = player;
             player = prepared.deck;
             previousDeck.pause();
+            resetDeckSpeed(previousDeck);
             setDeckSource(previousDeck, null);
             cueDeck(player, startOffset);
         } else {
@@ -1797,7 +1886,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             requestTrackTempo(track);
         }
 
-        if (startingInBackground) {
+        if (startingInBackground || options.sideFlip) {
             record.classList.add("up");
             startSpinning();
         } else {
@@ -1852,8 +1941,224 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // ───── Side A / side B ─────
+    // A song that comes in two versions (Countdown Island and its slowed-down pause music) is one
+    // row with a label on its cover that flips it over. Flipped while it plays, the record winds
+    // down (or up) to the other side's speed and the other side carries on from the same spot.
+    const SIDE_SWITCH_MS = 650;
+    const shownSides = new Map(); // side A's file -> the side its row was last flipped to
+    let sideSwitch = null; // a flip while playing, until the other side takes over
+
+    function getOtherSide(track) {
+        const file = track && (track.sideB || track.sideA);
+        return file ? tracks.find((other) => other.file === file) || null : null;
+    }
+
+    function getListedSide(song) {
+        const other = getOtherSide(song);
+        if (!other) return song;
+        if (currentTrackData === other || (sideSwitch && sideSwitch.to === other)) return other;
+        if (currentTrackData === song) return song;
+        // Filtered by something only the other side has (like "Slowed"): that side
+        const tag = tagFilter ? tagFilter.value : "all";
+        const has = (track) => track.tags.includes(tag) || track.date === tag;
+        if (tag !== "all" && has(other) && !has(song)) return other;
+        return shownSides.get(song.file) || song;
+    }
+
+    function updateSideSwitch(row, track) {
+        const button = row.querySelector(".side-switch");
+        if (!button) return;
+        const sideB = Boolean(track.sideA);
+        const other = getOtherSide(track);
+        button.classList.toggle("is-side-b", sideB);
+        button.querySelector(".side-switch-label").textContent = sideB ? "Side B" : "Side A";
+        button.title = `Flip to side ${sideB ? "A" : "B"}`;
+        button.setAttribute("aria-label", `Side ${sideB ? "B" : "A"}: ${track.title}. Flip to side ${sideB ? "A" : "B"}${other ? `, ${other.title}` : ""}`);
+    }
+
+    // The row shows the other side: its name, cover (turning over), length and wave
+    function showRowSide(row, track, turnCover = false) {
+        row.dataset.file = track.file;
+        const title = row.querySelector(".title-text");
+        if (title) title.textContent = track.title;
+        const cover = row.querySelector("img");
+        if (cover) {
+            cover.alt = `${track.title} Cover`;
+            const tint = () => cover.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
+            if (turnCover && !prefersReducedMotion() && typeof cover.animate === "function") {
+                cover.animate([
+                    { transform: "perspective(500px) rotateY(0deg)" },
+                    { transform: "perspective(500px) rotateY(90deg)", offset: 0.5 },
+                    { transform: "perspective(500px) rotateY(0deg)" }
+                ], { duration: 460, easing: "ease-in-out" });
+                setTimeout(tint, 230);
+            } else {
+                tint();
+            }
+        }
+        const total = row.querySelector(".song-time-total");
+        if (total) total.textContent = formatKnownDuration(track.file);
+        updateSideSwitch(row, track);
+        const wave = row.querySelector(".song-wave");
+        if (wave) drawSongWave(wave);
+        requestAnimationFrame(syncTitleMarquees);
+    }
+
+    function flipSongSide(row) {
+        const shown = getTrackDataForElement(row);
+        const other = getOtherSide(shown);
+        if (!shown || !other || sideSwitch) return;
+        shownSides.set(shown.sideA || shown.file, other);
+        const isCurrent = currentTrackData === shown;
+        const playing = isCurrent && isPlayerActive() && !scratch;
+        showRowSide(row, other, true);
+        if (!isCurrent) return;
+        if (playing) {
+            switchSidesWhilePlaying(row, shown, other);
+        } else {
+            switchSidesWhilePaused(row, other);
+        }
+    }
+
+    // Where `to` is at the same point in the song as the playing side is now
+    function getSidePosition(deck, to) {
+        const fromDuration = deck.duration;
+        const toDuration = getKnownDuration(to.file);
+        if (!Number.isFinite(fromDuration) || fromDuration <= 0 || !(toDuration > 0)) return 0;
+        return Math.min(toDuration - 0.5, (deck.currentTime / fromDuration) * toDuration);
+    }
+
+    // Paused: the other side is lined up at the same spot, ready for Play
+    function switchSidesWhilePaused(row, to) {
+        const startAt = getSidePosition(player, to);
+        finishAutoMixNow();
+        discardUpNext();
+        currentTrackData = to;
+        trackStartOffset = startAt;
+        setDeckSource(player, startAt > 0 ? `${to.file}#t=${startAt.toFixed(2)}` : to.file);
+        updateMediaSessionMetadata(to);
+        showModeButtonsOnTrack(row, false);
+        updatePlayingTrackStickyState();
+        updateNowPlaying();
+    }
+
+    function resetDeckSpeed(deck) {
+        deck.playbackRate = 1;
+        if ("preservesPitch" in deck) deck.preservesPitch = true;
+        if ("webkitPreservesPitch" in deck) deck.webkitPreservesPitch = true;
+    }
+
+    // Playing: this side winds to the other side's speed (so it already sounds like it) while the
+    // other side loads on the spare deck a moment ahead; when this side gets there, they swap
+    function switchSidesWhilePlaying(row, from, to) {
+        const deck = player;
+        const spare = getSpareDeck();
+        const fromDuration = deck.duration;
+        const toDuration = getKnownDuration(to.file);
+        if (!spare || !Number.isFinite(fromDuration) || fromDuration <= 0 || !(toDuration > 0)) {
+            startTrack(to, { startAt: getSidePosition(deck, to), sideFlip: true });
+            return;
+        }
+        finishAutoMixNow();
+        discardUpNext();
+        const rate = fromDuration / toDuration;
+        const cueAt = Math.min(toDuration - 0.5, getSidePosition(deck, to) + ((SIDE_SWITCH_MS / 1000) * Math.max(1, 1 / rate)) + 0.4);
+        const entry = { track: to, deck: spare, shuffled: shuffleEnabled, startAt: cueAt, ready: false, starting: false, controller: null };
+        const state = { row, from, to, deck, entry, wound: false, timer: null, giveUp: null };
+        sideSwitch = state;
+        upNext = entry;
+        setDeckSource(spare, `${to.file}#t=${cueAt.toFixed(2)}`);
+
+        const settle = () => {
+            if (sideSwitch !== state || !state.wound || !entry.ready) return;
+            clearTimeout(state.timer);
+            // (this side now plays at the other's pace: one second of it per second)
+            const lead = entry.startAt - getSidePosition(deck, to);
+            if (lead > 0.03) {
+                state.timer = setTimeout(settle, lead * 1000);
+            } else if (lead < -0.3) {
+                // The other side took a while to load and this one's gone past: cue it on a bit
+                entry.ready = false;
+                entry.startAt = Math.min(toDuration - 0.5, getSidePosition(deck, to) + 0.6);
+                spare.addEventListener("seeked", markReady, { once: true });
+                cueDeck(spare, entry.startAt);
+            } else {
+                finishSideSwitch(state);
+            }
+        };
+        const markReady = () => {
+            if (sideSwitch !== state) return;
+            entry.ready = true;
+            settle();
+        };
+        spare.addEventListener("canplay", markReady, { once: true });
+        // It never loaded: start it the ordinary way
+        state.giveUp = setTimeout(() => finishSideSwitch(state, true), 5000);
+
+        if ("preservesPitch" in deck) deck.preservesPitch = false;
+        if ("webkitPreservesPitch" in deck) deck.webkitPreservesPitch = false;
+        const startedAt = performance.now();
+        const wind = (now) => {
+            if (sideSwitch !== state) return;
+            if (deck.paused && !scratch) {
+                // Paused part-way: the other side waits at the same spot instead
+                cancelSideSwitch();
+                switchSidesWhilePaused(row, to);
+                return;
+            }
+            const progress = Math.min(1, (now - startedAt) / SIDE_SWITCH_MS);
+            const eased = progress < 0.5 ? 2 * progress * progress : 1 - (Math.pow((-2 * progress) + 2, 2) / 2);
+            deck.playbackRate = 1 + ((rate - 1) * eased);
+            if (progress < 1) {
+                requestAnimationFrame(wind);
+            } else {
+                state.wound = true;
+                settle();
+            }
+        };
+        requestAnimationFrame(wind);
+    }
+
+    function finishSideSwitch(state, gaveUp = false) {
+        if (sideSwitch !== state) return;
+        clearTimeout(state.timer);
+        clearTimeout(state.giveUp);
+        sideSwitch = null;
+        const startAt = gaveUp ? getSidePosition(state.deck, state.to) : state.entry.startAt;
+        if (gaveUp) {
+            discardUpNext();
+        } else {
+            upNext = state.entry;
+        }
+        startTrack(state.to, { startAt, sideFlip: true });
+        resetDeckSpeed(state.deck);
+    }
+
+    // Something else happened first (another song, a scratch, the song cleared): the flip's off
+    function cancelSideSwitch(revert = false) {
+        const state = sideSwitch;
+        if (!state) return;
+        sideSwitch = null;
+        clearTimeout(state.timer);
+        clearTimeout(state.giveUp);
+        resetDeckSpeed(state.deck);
+        if (upNext === state.entry) discardUpNext();
+        if (revert && state.row.isConnected) {
+            shownSides.set(state.from.sideA || state.from.file, state.from);
+            showRowSide(state.row, state.from, true);
+        }
+    }
+
+    // A slowed-down side turns slower (like a record at 33 instead of 45), and the record winds
+    // down or up with a flip
+    function getRecordSpinScale() {
+        const scale = (currentTrackData && currentTrackData.spinScale) || 1;
+        return sideSwitch ? scale * (player.playbackRate || 1) : scale;
+    }
+
     function handleTrackPlayButton(track) {
-        if (currentTrackData && currentTrackData.file === track.file) {
+        if (currentTrackData && (currentTrackData.file === track.file || (sideSwitch && sideSwitch.to === track))) {
             if (player.paused) {
                 resumeCurrentTrack();
             } else {
@@ -2044,9 +2349,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             npPlay.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
         }
 
+        refreshLedSigns();
         if (track !== npShownTrack) {
             npShownTrack = track;
-            refreshCoverTicker();
             if (npEyebrow) npEyebrow.textContent = track ? "Now playing" : "Muse Jukebox";
             if (npTitle) npTitle.textContent = track ? track.title : "Pick a song";
             if (npSub) {
@@ -2089,8 +2394,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const loading = Boolean(currentTrackData) && !playerDuration;
         // Until the song has loaded, its known length shows where it's about to start from
         const knownDuration = loading ? getKnownDuration(currentTrackData.file) : 0;
-        const duration = playerDuration || (knownDuration > 0 ? knownDuration : 0);
+        let duration = playerDuration || (knownDuration > 0 ? knownDuration : 0);
         let position = currentTrackData ? (playerDuration ? player.currentTime : trackStartOffset) : 0;
+        if (sideSwitch && playerDuration) {
+            // Winding round to the other side: its times, at the same point in the song
+            const otherDuration = getKnownDuration(sideSwitch.to.file);
+            if (otherDuration > 0) {
+                position = (position / duration) * otherDuration;
+                duration = otherDuration;
+            }
+        }
         if (previewTime === null && scratch) previewTime = scratch.targetTime;
         const dragging = Boolean(waveScrub && waveScrub.active);
         if (previewTime !== null) {
@@ -2217,7 +2530,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 
                 if (!scratch) {
-                    rotationAngle = (rotationAngle + (currentSpeed * steps)) % 360;
+                    rotationAngle = (rotationAngle + (currentSpeed * steps * getRecordSpinScale())) % 360;
                     updateRecordTransform();
                 }
                 currentRotationSpeed = currentSpeed; // Update tracked speed
@@ -2918,7 +3231,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // After the list is rebuilt (filter / sort), point the UI back at the song that's still playing
     function restoreCurrentTrackUi() {
         const trackElement = getCurrentTrackElement();
-        showModeButtonsOnTrack(trackElement);
+        showModeButtonsOnTrack(trackElement, false);
         if (!trackElement) return;
 
         const label = player.paused ? "Play" : "Pause";
@@ -2936,7 +3249,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         trackList.innerHTML = '';
 
-        tracks.forEach((track, index) => {
+        tracks.forEach((song, index) => {
+            // A two-sided song shows the side that's playing (or the one it was last flipped to)
+            const track = getListedSide(song);
+            const otherSide = getOtherSide(song);
             const previewCover = getTrackCoverPreview(track);
             const fullCover = getTrackCoverFull(track);
             const isTopPriority = index < 4;
@@ -2949,9 +3265,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             const trackElement = document.createElement("div");
             trackElement.classList.add("track", "track-enter");
             trackElement.dataset.file = track.file;
+            if (otherSide) trackElement.dataset.sides = `${song.file} ${otherSide.file}`;
             trackElement.style.setProperty("--track-delay", `${Math.min(index, 14) * 24}ms`);
             trackElement.innerHTML = `
             <img src="${COVER_PLACEHOLDER}" data-preview-src="${previewCover}" data-full-src="${fullCover}" alt="${track.title} Cover" loading="${isTopPriority ? "eager" : "lazy"}" fetchpriority="${isTopPriority ? "high" : "low"}" decoding="async" width="80" height="80">
+            ${otherSide ? `<button class="side-switch" type="button">${SIDE_ICON}<span class="side-switch-label"></span></button>` : ""}
             <div class="track-info">
             <p class="title"><span class="title-scroll-content"><span class="title-text">${track.title}</span><span class="release-date clickable-tag">${track.date}</span></span></p>
             <p class="tags horizontal-scroll"><span class="tags-scroll-content">${tagMarkup}${gameLinkMarkup}</span></p>
@@ -2984,6 +3302,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             trackElement.querySelector(".track-clear").addEventListener("click", clearCurrentTrack);
             watchSongWave(trackElement.querySelector(".song-wave"));
             coverImage.classList.toggle("cover-grayscale", Boolean(track.grayscaleCover));
+            if (otherSide) {
+                updateSideSwitch(trackElement, track);
+                trackElement.querySelector(".side-switch").addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    flipSongSide(trackElement);
+                });
+            }
 
             
             // Initialize button with letter spans
@@ -2993,14 +3318,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Add click handler for cover image modal
             coverImage.addEventListener("click", (e) => {
                 e.stopPropagation(); // Prevent any other click handlers
+                const shown = getTrackDataForElement(trackElement) || track;
                 if (window.openCoverModal) {
-                    window.openCoverModal(fullCover, track.title, coverImage.currentSrc || coverImage.src, Boolean(track.grayscaleCover));
+                    window.openCoverModal(fullCover, shown.title, coverImage.currentSrc || coverImage.src, Boolean(shown.grayscaleCover));
                 }
             });
             
             setUpCoverLoad(coverImage, previewCover, isTopPriority);
 
-            playButton.addEventListener("click", () => handleTrackPlayButton(track));
+            playButton.addEventListener("click", () => handleTrackPlayButton(getTrackDataForElement(trackElement) || track));
         });
 
         restoreCurrentTrackUi();
@@ -3041,10 +3367,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Each song once: a side B is in its side A's row (and found by either side's tags)
     function getFilteredTracks(selectedTag) {
+        const songs = tracks.filter((track) => !track.sideA);
+        const matches = (track) => Boolean(track) && (track.tags.includes(selectedTag) || track.date === selectedTag);
         return selectedTag === "all"
-            ? tracks
-            : tracks.filter((track) => track.tags.includes(selectedTag) || track.date === selectedTag);
+            ? songs
+            : songs.filter((track) => matches(track) || matches(getOtherSide(track)));
     }
 
     // Apply filter and sort selection together
@@ -3449,6 +3778,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function beginScratch(pending, event) {
+        cancelSideSwitch(true);
         const center = getRecordCenter(pending.element);
         const state = {
             element: pending.element,
@@ -3628,7 +3958,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Unlock scratch audio (and the spare deck) on taps that show the visitor wants music
         document.addEventListener("click", (event) => {
-            if (event.target.closest(".play-button, .np-button, .rail-button, .record, .np-record, .record-seek-button, #random-track-button")) {
+            if (event.target.closest(".play-button, .np-button, .rail-button, .record, .np-record, .record-seek-button, #random-track-button, .side-switch")) {
                 unlockScratchAudio();
                 primeDecks();
             } else if (event.target.closest(".mode-button")) {
@@ -3782,6 +4112,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function requestTrackTempo(track) {
         if (!track || document.hidden || tempoCache.has(track.file) || tempoRequests.has(track.file)) return;
+        const settling = songSettleAt - performance.now();
+        if (settling > 0) {
+            setTimeout(() => requestTrackTempo(track), settling + 20);
+            return;
+        }
         const duration = player.duration;
         if (!Number.isFinite(duration) || duration < 4) return;
 
@@ -4018,7 +4353,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Measure the next stretch of the song that hasn't been measured yet, if it's coming up soon
     function measureSpectrumAhead(spectrum, time) {
-        if (spectrum.busy || spectrum.failures >= 3 || performance.now() < spectrum.retryAt) return;
+        if (spectrum.busy || spectrum.failures >= 3 || performance.now() < Math.max(spectrum.retryAt, songSettleAt)) return;
         const from = Math.max(0, Math.floor(time * SPECTRUM_RATE));
         const to = Math.min(spectrum.frameCount - 1, Math.ceil((time + SPECTRUM_LOOKAHEAD_SECONDS) * SPECTRUM_RATE));
         let frame = from;
@@ -4783,7 +5118,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const rightInset = parseFloat(probeStyles.paddingRight) || 0;
         const inset = Math.max(leftInset, rightInset);
         const isDeckLayout = window.matchMedia(DECK_LAYOUT_QUERY).matches;
-        const enabled = inset >= RAIL_MIN_INSET && !isDeckLayout;
+        // Only where the page really leaves that strip free: some browsers report the side strip
+        // but lay the page out underneath it anyway, and then the rail would sit on the songs
+        const cabinet = jukeboxPanel ? jukeboxPanel.getBoundingClientRect() : null;
+        const room = !cabinet ? inset : (rightInset >= leftInset ? window.innerWidth - cabinet.right : cabinet.left);
+        const enabled = inset >= RAIL_MIN_INSET && room >= RAIL_MIN_INSET * 0.8 && !isDeckLayout;
 
         document.body.classList.toggle("has-side-rail", enabled);
         document.body.classList.toggle("side-rail-left", enabled && leftInset > rightInset);
@@ -4975,38 +5314,61 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
-    // The LED sign along the bottom of Jukebot's panel: Muse's sign-off and the song that's on,
-    // and the tips too when the panel's too short for their card. A lap takes as long as its
-    // words need, so it always scrolls at the same pace.
-    const TICKER_PIXELS_PER_SECOND = 40;
-    const coverTicker = document.querySelector(".jb-ticker-track");
-    let tickerShowsTips = false;
-    let tickerWords = "";
+    // ───── LED signs: along the bottom of Jukebot's panel, and the flip sign on phones ─────
+    // The words are written twice over so a lap loops without a seam (or once, sitting still, if
+    // they fit), and a lap takes as long as its words need, so every sign scrolls at the same pace
+    const LED_PIXELS_PER_SECOND = 40;
+    const coverLed = document.querySelector(".cover-led");
+    const flipSignLed = document.querySelector(".flip-sign-led");
+    const ledSignWords = new WeakMap();
+    let tickerShowsTips = false; // the panel's too short for the tips card, so they're on its sign
 
-    function refreshCoverTicker() {
-        if (!coverTicker) return;
-        const items = [
-            ["Muse Tunes", "brand"],
-            [currentTrackData ? `Now spinning: ${currentTrackData.title}` : "Pick a song, any song", "song"]
-        ];
-        if (tickerShowsTips) {
-            document.querySelectorAll(".back-tip span").forEach((tip) => items.push([`Tip: ${tip.textContent}`, "tip"]));
-        }
-        items.push(["Made by Muse", "brand"], ["Play it loud", "tip"]);
-        const words = items.map(([text]) => text).join("\n");
-        if (words === tickerWords) return;
-        tickerWords = words;
+    function writeLedSign(sign, items) {
+        const track = sign?.querySelector(".led-sign-track");
+        if (!track) return;
+        const words = `${sign.clientWidth}\n${items.map(([text, kind]) => `${kind}:${text}`).join("\n")}`;
+        if (ledSignWords.get(sign) === words) return;
+        ledSignWords.set(sign, words);
 
         const lap = document.createElement("span");
-        lap.className = "jb-ticker-lap";
+        lap.className = "led-sign-lap";
         items.forEach(([text, kind]) => {
             const item = document.createElement("span");
-            item.className = `jb-ticker-item is-${kind}`;
+            item.className = kind ? `led-sign-item is-${kind}` : "led-sign-item";
             item.textContent = text;
             lap.append(item);
         });
-        coverTicker.replaceChildren(lap, lap.cloneNode(true));
-        coverTicker.style.setProperty("--ticker-seconds", `${Math.max(8, lap.offsetWidth / TICKER_PIXELS_PER_SECOND).toFixed(1)}s`);
+        track.replaceChildren(lap);
+        const still = lap.offsetWidth <= sign.clientWidth;
+        sign.classList.toggle("is-still", still);
+        if (!still) {
+            track.append(lap.cloneNode(true));
+            track.style.setProperty("--led-seconds", `${Math.max(8, lap.offsetWidth / LED_PIXELS_PER_SECOND).toFixed(1)}s`);
+        }
+    }
+
+    function refreshLedSigns() {
+        const invitation = ["Psst\u2026 flip me around", ""];
+        const song = currentTrackData
+            ? [`${isPlayerActive() ? "Now spinning" : "Paused"}: ${currentTrackData.title}`, "song"]
+            : null;
+        writeLedSign(flipSignLed, song ? [song, invitation] : [invitation]);
+
+        const panelItems = [["Muse Tunes", "brand"], song || ["Pick a song, any song", "song"]];
+        if (tickerShowsTips) {
+            document.querySelectorAll(".back-tip span").forEach((tip) => panelItems.push([`Tip: ${tip.textContent}`, ""]));
+        }
+        panelItems.push(["Made by Muse", "brand"], ["Play it loud", ""]);
+        writeLedSign(coverLed, panelItems);
+    }
+
+    function setUpLedSigns() {
+        refreshLedSigns();
+        // A sign that changes size (a phone turned round) is written again for its new width
+        if (typeof ResizeObserver === "function") {
+            const observer = new ResizeObserver(() => refreshLedSigns());
+            [coverLed, flipSignLed].forEach((sign) => sign && observer.observe(sign));
+        }
     }
 
     // The tips on the back: as many as there's room for under Jukebot's sticker. When they don't
@@ -5113,7 +5475,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             scroller.classList.toggle("has-tip-ticker", onSign);
             if (onSign !== tickerShowsTips) {
                 tickerShowsTips = onSign;
-                refreshCoverTicker();
+                refreshLedSigns();
             }
             if (best.pageSize !== perPage) {
                 const firstShown = page * perPage;
@@ -5170,7 +5532,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setUpJukeboxBack() {
         if (!jukeboxPanel) return;
-        refreshCoverTicker();
+        setUpLedSigns();
         setUpBackTips();
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
@@ -5225,7 +5587,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         sortFilter.value = "newest";
     }
     showTrackListSkeleton();
-    const sortedTracks = sortTracks(tracks, sortFilter ? sortFilter.value : "newest");
+    const sortedTracks = sortTracks(getFilteredTracks("all"), sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
     warmUpcomingTrackCovers(sortedTracks);
     populateTrackList(sortedTracks);
