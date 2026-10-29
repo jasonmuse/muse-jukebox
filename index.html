@@ -90,7 +90,12 @@
       </filter>
     </defs>
   </svg>
-  <div id="where-background" aria-hidden="true"></div>
+  <!-- The starry sky behind the jukebox while a song plays: a looping video (as a GIF it was
+       decoded and repainted across the whole screen 33 times a second) -->
+  <video id="where-background" muted loop playsinline preload="none" poster="images/where-still.jpg" aria-hidden="true" tabindex="-1" disablepictureinpicture disableremoteplayback>
+      <source src="images/where.mp4" type="video/mp4">
+      <source src="images/where.webm" type="video/webm">
+  </video>
   <!-- Fades the page edges into the browser's toolbar colour on phones -->
   <div class="edge-blend" aria-hidden="true"></div>
   <div id="jukebox-wrapper">
@@ -212,7 +217,7 @@
             <!-- Tapping a penguin switches Rhythm: the jukebox moving to the beat -->
             <button class="title-penguin title-penguin--left" type="button" aria-pressed="false" aria-label="Rhythm: dance to the beat" title="Rhythm: dance to the beat"><img class="penguin-icon" src="images/penguin.gif" alt=""></button>
             <span class="title-wordmark">
-                <span class="title-muse">Muse</span>
+                <span class="title-muse-wrap"><span class="title-muse">Muse</span></span>
                 <span class="title-jukebox">Jukebox</span>
             </span>
             <button class="title-penguin title-penguin--right" type="button" tabindex="-1" aria-hidden="true" title="Rhythm: dance to the beat"><img class="penguin-icon" src="images/penguin.gif" alt=""></button>

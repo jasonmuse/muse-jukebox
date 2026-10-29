@@ -78,6 +78,7 @@
             done: ""
         }
     ];
+    const MEMORY_STEP = JOB_STEPS.findIndex((step) => step.id === "memory");
     const STEP_ICONS = {
         open: '<circle cx="12" cy="12" r="7.5"/><path d="M9 9l6 6M15 9l-6 6"/>',
         sweep: '<ellipse cx="12" cy="13.5" rx="4.4" ry="5.8"/><path d="M12 7.7V4.5M9.4 5.2l1.4 2.2M14.6 5.2l-1.4 2.2M7.6 12H4.5M7.8 16.2l-2.8 2M16.4 12h3.1M16.2 16.2l2.8 2"/>',
@@ -341,6 +342,8 @@
         let pointerPoint = null;
         let lookOverride = null;
         let lastLook = { x: 0, y: 0 };
+        let shownPowerLevel = "1.00"; // what the PWR LED shows
+        const shownHud = {}; // what the HUD shows, so it's only touched when something changes
         let boardDirty = false;
         let boardDrawTimer = null;
 
@@ -526,24 +529,46 @@
             }
         }
 
+        // It runs every frame, so it only touches what's changed (rewriting the same words every
+        // frame laid the page out again every frame)
+        function setHud(key, element, text) {
+            if (shownHud[key] === text) return;
+            shownHud[key] = text;
+            element.textContent = text;
+        }
+
         function updateHud() {
             const power = game ? game.power : 100;
             if (game && game.blitz) {
-                hudLevel.textContent = `Wave ${game.blitz.wave}`;
+                setHud("level", hudLevel, `Wave ${game.blitz.wave}`);
             } else {
                 const index = game ? game.stepIndex : progress.step;
-                hudLevel.textContent = `Step ${Math.min(index, JOB_STEPS.length - 1) + 1}/${JOB_STEPS.length}`;
+                setHud("level", hudLevel, `Step ${Math.min(index, JOB_STEPS.length - 1) + 1}/${JOB_STEPS.length}`);
             }
-            hudBugs.textContent = getStepCounter();
-            hudTime.textContent = `${getElapsedSeconds().toFixed(1)}s`;
-            hudPowerText.textContent = `${Math.round(power)}%`;
-            hudPowerFill.style.width = `calc((100% - 6px) * ${(power / 100).toFixed(3)})`;
+            setHud("bugs", hudBugs, getStepCounter());
+            setHud("time", hudTime, `${getElapsedSeconds().toFixed(1)}s`);
+            setHud("power", hudPowerText, `${Math.round(power)}%`);
+            // The bar's fill shrinks by transform (its width would lay the page out again)
+            const fill = (power / 100).toFixed(2);
+            if (shownHud.fill !== fill) {
+                shownHud.fill = fill;
+                hudPowerFill.style.transform = `scaleX(${fill})`;
+            }
             hudPower.classList.toggle("is-low", power < 30);
+        }
+
+        // The PWR LED on the board dims with Jukebot's power. It's set on the LED itself: set on the
+        // whole back panel, every frame of a draining battery restyled everything on the board.
+        function showPowerLevel(level) {
+            const shown = Math.max(0, Math.min(1, level)).toFixed(2);
+            if (shown === shownPowerLevel) return;
+            shownPowerLevel = shown;
+            boardLayer.querySelectorAll(".jb-led--pwr").forEach((led) => led.style.setProperty("--power-level", shown));
         }
 
         function setPower(value) {
             game.power = Math.max(0, Math.min(100, value));
-            root.style.setProperty("--power-level", (game.power / 100).toFixed(3));
+            showPowerLevel(game.power / 100);
             root.classList.toggle("power-low", game.power < 30);
             if (game.power < 30 && !game.lowPowerWarned) {
                 game.lowPowerWarned = true;
@@ -616,6 +641,27 @@
                 halfHeight: 46 * scale,
                 scale
             };
+        }
+
+        // Jukebot's four memory chips, two each side of its core chip. They're on the board from the
+        // start (just more chips, unless you look closely); in the memory step their lights come on.
+        function getMemorySpots() {
+            const scale = coreLayout.scale;
+            const side = Math.round(52 * Math.max(0.78, scale));
+            const offsetX = coreLayout.halfWidth + (side / 2) + (24 * scale);
+            const offsetY = (side / 2) + (5 * scale);
+            return [[-offsetX, -offsetY], [offsetX, -offsetY], [-offsetX, offsetY], [offsetX, offsetY]]
+                .map(([dx, dy], index) => ({ index, x: coreLayout.x + dx, y: coreLayout.y + dy, side }));
+        }
+
+        function isOnMemoryChip(point, pad) {
+            return getMemorySpots().some((spot) => Math.abs(point.x - spot.x) <= (spot.side / 2) + pad
+                && Math.abs(point.y - spot.y) <= (spot.side / 2) + pad);
+        }
+
+        // Their LEDs stay lit once the memory step's done (and when Jukebot's fixed)
+        function syncMemoryChips() {
+            root.classList.toggle("memory-restored", progress.step > MEMORY_STEP);
         }
 
         function drawCore() {
@@ -754,6 +800,26 @@
             };
             const area = width * height;
 
+            // The memory chips, on the bus each side of the core (a little dim, a faint note on top)
+            getMemorySpots().forEach((spot) => {
+                const half = spot.side / 2;
+                const chip = svgEl("g", { class: "jb-mem", transform: `translate(${spot.x.toFixed(1)} ${spot.y.toFixed(1)})` }, parts);
+                chip.style.setProperty("--pad-color", MEMORY_COLORS[spot.index]);
+                const pitch = spot.side / 5;
+                for (let pin = 1; pin <= 4; pin += 1) {
+                    const y = -half + (pin * pitch) - 1.5;
+                    svgEl("rect", { class: "jb-mem-pin", x: -half - 4, y, width: 5, height: 3, rx: 0.8 }, chip);
+                    svgEl("rect", { class: "jb-mem-pin", x: half - 1, y, width: 5, height: 3, rx: 0.8 }, chip);
+                }
+                svgEl("rect", { class: "jb-mem-body", x: -half, y: -half, width: spot.side, height: spot.side, rx: Math.round(spot.side * 0.26) }, chip);
+                const note = svgEl("text", { class: "jb-mem-note", y: Math.round(spot.side * 0.16), "text-anchor": "middle" }, chip);
+                note.textContent = MEMORY_NOTES[spot.index];
+                note.style.fontSize = `${Math.round(spot.side * 0.5)}px`;
+                svgEl("circle", { class: "jb-mem-led", cx: half - 7, cy: -half + 7, r: 2.4 }, chip);
+                addText(spot.x, spot.index < 2 ? spot.y - half - 6 : spot.y + half + 12, `M${spot.index + 1}`);
+                taken.push({ x0: spot.x - half - 12, y0: spot.y - half - 16, x1: spot.x + half + 12, y1: spot.y + half + 16 });
+            });
+
             // Mounting holes in the corners (where the panel's screws go)
             [[18, 18], [width - 18, 18], [18, height - 18], [width - 18, height - 18]].forEach(([x, y]) => {
                 svgEl("circle", { class: "jb-mount", cx: x, cy: y, r: 7.5 }, parts);
@@ -825,7 +891,8 @@
             [["jb-led--pwr", "PWR"], ["jb-led--err", "ERR"]].forEach(([variant, name]) => {
                 const spot = place(12, 7, 30);
                 if (!spot) return;
-                svgEl("rect", { class: `jb-led ${variant}`, x: spot.x, y: spot.y, width: 12, height: 7, rx: 2 }, parts);
+                const led = svgEl("rect", { class: `jb-led ${variant}`, x: spot.x, y: spot.y, width: 12, height: 7, rx: 2 }, parts);
+                if (variant === "jb-led--pwr") led.style.setProperty("--power-level", shownPowerLevel);
                 addText(spot.x + 6, spot.y + 16, name);
             });
 
@@ -948,13 +1015,14 @@
             root.classList.remove("cover-off", "is-playing", "is-running", "is-blitz", "is-screwing", "no-tool", "zap-ready", "power-low", "is-shorting", "is-zapping", "is-fixed", "is-broken", "is-loose");
             root.classList.add(fixed ? "is-fixed" : "is-broken");
             root.classList.toggle("is-loose", midJob);
+            syncMemoryChips();
             screws.forEach((screw) => {
                 if (midJob) screw.classList.add("is-out");
                 // Coming back from Bug blitz the screws go back in with a twist
                 if (fixed && wasOpen) screw.classList.add("is-screwing-in");
                 screw.disabled = midJob || fixed;
             });
-            root.style.setProperty("--power-level", "1");
+            showPowerLevel(1);
             lightUp(fixed ? 3 : 0);
             moodHoldUntil = 0;
             setMoodClass(fixed ? "happy" : "broken");
@@ -1032,7 +1100,7 @@
             resultsOverlay.hidden = true;
             root.classList.add("is-running");
             root.classList.remove("no-tool");
-            root.style.setProperty("--power-level", "1");
+            showPowerLevel(1);
             root.classList.remove("power-low");
             hideSpeech();
 
@@ -1063,6 +1131,7 @@
             game.solder = null;
             game.zapReady = false;
             progress.step = Math.max(progress.step, index + 1);
+            syncMemoryChips();
             progress.jobSeconds += getElapsedSeconds();
             progress.squashed += game.squashed;
             saveProgress(progress);
@@ -1789,7 +1858,7 @@
                     const before = trace.getPointAtLength(Math.max(0, at - 3));
                     const after = trace.getPointAtLength(Math.min(length, at + 3));
                     const clear = point.x > 26 && point.x < size.width - 26 && point.y > 56 && point.y < size.height - 72
-                        && !isOnCore(point, 30);
+                        && !isOnCore(point, 30) && !isOnMemoryChip(point, 14);
                     if (clear) {
                         spots.push({ traceIndex, x: point.x, y: point.y, angle: (Math.atan2(after.y - before.y, after.x - before.x) * 180) / Math.PI });
                     }
@@ -1935,15 +2004,12 @@
             later(nextMemoryRound, 1100);
         }
 
-        // Four memory lights, two each side of Jukebot's chip
+        // The four memory lights: right over the memory chips, which they wake up
         function placeMemoryPads() {
             const { memory } = game;
-            const scale = coreLayout.scale;
-            const padSize = Math.round(52 * Math.max(0.78, scale));
-            const offsetX = coreLayout.halfWidth + (padSize / 2) + (24 * scale);
-            const offsetY = (padSize / 2) + (5 * scale);
-            const spots = [[-offsetX, -offsetY], [offsetX, -offsetY], [-offsetX, offsetY], [offsetX, offsetY]];
-            spots.forEach(([dx, dy], index) => {
+            getMemorySpots().forEach((spot) => {
+                const { index } = spot;
+                const padSize = spot.side;
                 let pad = memory.pads[index];
                 if (!pad) {
                     const group = svgEl("g", { class: "jb-memory-pad" }, repairLayer);
@@ -1954,8 +2020,8 @@
                     pad = { element: group, key, note };
                     memory.pads[index] = pad;
                 }
-                pad.x = coreLayout.x + dx;
-                pad.y = coreLayout.y + dy;
+                pad.x = spot.x;
+                pad.y = spot.y;
                 pad.half = padSize / 2;
                 pad.element.setAttribute("transform", `translate(${pad.x.toFixed(1)} ${pad.y.toFixed(1)})`);
                 pad.key.setAttribute("x", String(-padSize / 2));
@@ -2185,7 +2251,7 @@
             game.blitz = { wave: 0, score: 0 };
             root.classList.remove("is-loose", "no-tool");
             root.classList.add("is-running", "is-blitz");
-            root.style.setProperty("--power-level", "1");
+            showPowerLevel(1);
             hideSpeech();
             // The panel pops off by itself for this one
             screws.forEach((screw, index) => later(() => {

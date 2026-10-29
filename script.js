@@ -411,11 +411,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const WHERE_FADE_IN_SECONDS = 30;
     const WHERE_FADE_OUT_SECONDS = 7;
     // Browsers paint their toolbars and side strips (like Safari's on the Duo) in the page's theme
-    // colour, so it follows the backdrop: purple with the gradient, the space gif's night sky with it
+    // colour, so it follows the backdrop: purple with the gradient, the starry sky's night with it
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     const edgeBlend = document.querySelector(".edge-blend");
     const IDLE_BACKDROP_RGB = [30, 26, 77]; // #1e1a4d
-    const SPACE_BACKDROP_RGB = [1, 5, 15]; // the sky in images/where.gif
+    const SPACE_BACKDROP_RGB = [1, 5, 15]; // the sky in images/where.mp4
     let backdropHex = "";
     const LOOP_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/><path class="loop-one" d="M10.7 10.2 12.6 8.7v6.7"/></svg>`;
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
@@ -845,10 +845,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let spinRequest; // Declare spinRequest here
     let whereCurrentOpacity = 0;
     let whereTargetOpacity = 0;
-    let whereFadeFrame = null;
-    let whereFadeStartOpacity = 0;
-    let whereFadeStartTime = null;
-    let whereFadeDurationMs = 0;
+    let whereFollowTimer = null;
     let recordSeekNudgeFrame = null;
     let viewportLockFrame = null;
     let viewportShift = 0; // how far Safari's screen has drifted from the page's fixed layer
@@ -1624,9 +1621,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         updatePlaybackModeButtons();
     }
 
+    // Straight there, no fade
     function setWhereBackgroundOpacity(opacityValue) {
         if (!whereBackground) return;
+        whereBackground.style.transition = "none";
         whereBackground.style.opacity = opacityValue.toFixed(4);
+        whereCurrentOpacity = opacityValue;
         updateBackdropColor(opacityValue);
     }
 
@@ -1662,6 +1662,62 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ───── The record's steady spin ─────
+    // Up to speed, the record turns by an animation on the compositor: smooth while the page is busy,
+    // with nothing to do each frame (turning it from here every frame had the browser redo the page's
+    // layers every frame a song played). Speeding up, slowing down, a whirl, a scratch or the other
+    // side's speed hand it back to the frame-by-frame spin for the moment, from exactly where it was.
+    let steadySpin = null; // { animations, from, duration, scale }
+
+    function startSteadySpin(speed, scale, aheadMs = 0) {
+        stopSteadySpin();
+        const degreesPerSecond = speed * 60 * scale; // (spin speeds are degrees per 60th of a second)
+        if (!(degreesPerSecond > 0)) return false;
+        const targets = [];
+        [recordDisc, npRecordDisc].forEach((disc) => {
+            if (!disc) return;
+            targets.push([disc, false]);
+            disc.querySelectorAll(".record-edge").forEach((edge) => targets.push([edge, true]));
+        });
+        if (!targets.length || targets.some(([element]) => typeof element.animate !== "function")) return false;
+        const from = rotationAngle;
+        const duration = (360 / degreesPerSecond) * 1000;
+        const animations = targets.map(([element, isEdge]) => element.animate(isEdge
+            ? [{ transform: `rotate(${-from}deg) rotateY(90deg)` }, { transform: `rotate(${-(from + 360)}deg) rotateY(90deg)` }]
+            : [{ transform: `rotate(${from}deg)` }, { transform: `rotate(${from + 360}deg)` }],
+        { duration, iterations: Infinity, easing: "linear" }));
+        if (aheadMs > 0) {
+            animations.forEach((animation) => {
+                animation.currentTime = aheadMs;
+            });
+        }
+        steadySpin = { animations, from, duration, scale };
+        return true;
+    }
+
+    // The compositor hands the spin back, from where it had got to
+    function stopSteadySpin() {
+        const spin = steadySpin;
+        if (!spin) return;
+        steadySpin = null;
+        const time = Number(spin.animations[0].currentTime) || 0;
+        rotationAngle = (spin.from + (((time % spin.duration) / spin.duration) * 360)) % 360;
+        updateRecordTransform();
+        spin.animations.forEach((animation) => animation.cancel());
+        recordSpinScaleAt = performance.now();
+    }
+
+    // Something's about to turn the record from here: the frame-by-frame spin takes over again (from
+    // the next frame, once whatever it is has got going)
+    function wakeSpinLoop() {
+        if (!steadySpin) return;
+        stopSteadySpin();
+        if (isSpinning) {
+            isSpinning = false;
+            startSpinning();
+        }
+    }
+
     function getRecordTurnTransform(angle) {
         return `perspective(900px) rotateY(${angle}deg)`;
     }
@@ -1691,52 +1747,49 @@ document.addEventListener("DOMContentLoaded", async () => {
         recordSeekControls.setAttribute("aria-hidden", isVisible ? "false" : "true");
     }
 
-    function stepWhereBackgroundFade(timestamp) {
-        if (whereFadeStartTime === null) {
-            whereFadeStartTime = timestamp;
-        }
-
-        const increasing = whereTargetOpacity > whereFadeStartOpacity;
-        const totalDelta = whereTargetOpacity - whereFadeStartOpacity;
-        const elapsedMs = Math.max(0, timestamp - whereFadeStartTime);
-        const progress = whereFadeDurationMs <= 0 ? 1 : Math.min(elapsedMs / whereFadeDurationMs, 1);
-        const easedProgress = increasing ? (progress * progress) : progress;
-        whereCurrentOpacity = whereFadeStartOpacity + (totalDelta * easedProgress);
-
-        setWhereBackgroundOpacity(whereCurrentOpacity);
-
-        if (progress >= 1 || Math.abs(whereCurrentOpacity - whereTargetOpacity) <= 0.0001) {
-            whereCurrentOpacity = whereTargetOpacity;
-            setWhereBackgroundOpacity(whereCurrentOpacity);
-            whereFadeFrame = null;
-            whereFadeStartTime = null;
-            return;
-        }
-
-        whereFadeFrame = requestAnimationFrame(stepWhereBackgroundFade);
+    // The starry sky fades in over half a minute once a song's playing, and out when it stops. The
+    // fade is a CSS transition, so it runs on the compositor with nothing to do each frame (a loop
+    // setting it every frame for 30 seconds kept the whole page busy); the backdrop colour round
+    // the jukebox follows it a few steps a second, and the sky's video only plays while it shows.
+    function getWhereOpacity() {
+        return whereBackground ? Number(window.getComputedStyle(whereBackground).opacity) || 0 : 0;
     }
 
     function setWhereBackgroundTargetOpacity(nextTarget) {
-        whereTargetOpacity = Math.max(0, Math.min(1, nextTarget));
-        const distance = Math.abs(whereTargetOpacity - whereCurrentOpacity);
-        if (distance <= 0.0001) {
-            whereCurrentOpacity = whereTargetOpacity;
-            setWhereBackgroundOpacity(whereCurrentOpacity);
-            return;
-        }
+        if (!whereBackground) return;
+        const target = Math.max(0, Math.min(1, nextTarget));
+        if (target === whereTargetOpacity && whereFollowTimer !== null) return; // on its way already
+        whereTargetOpacity = target;
+        const current = getWhereOpacity();
+        const distance = Math.abs(target - current);
+        const fadingIn = target > current;
+        if (target > 0) playWhereVideo();
+        whereBackground.style.transition = distance > 0.0001
+            ? `opacity ${(distance * (fadingIn ? WHERE_FADE_IN_SECONDS : WHERE_FADE_OUT_SECONDS)).toFixed(2)}s ${fadingIn ? "cubic-bezier(0.55, 0.085, 0.68, 0.53)" : "linear"}`
+            : "none";
+        whereBackground.style.opacity = target.toFixed(4);
+        clearInterval(whereFollowTimer);
+        whereFollowTimer = setInterval(followWhereFade, 250);
+        followWhereFade();
+    }
 
-        whereFadeStartOpacity = whereCurrentOpacity;
-        whereFadeStartTime = null;
+    function followWhereFade() {
+        whereCurrentOpacity = getWhereOpacity();
+        updateBackdropColor(whereCurrentOpacity);
+        if (Math.abs(whereCurrentOpacity - whereTargetOpacity) > 0.002) return;
+        clearInterval(whereFollowTimer);
+        whereFollowTimer = null;
+        whereCurrentOpacity = whereTargetOpacity;
+        updateBackdropColor(whereTargetOpacity);
+        if (whereTargetOpacity === 0 && typeof whereBackground.pause === "function") whereBackground.pause();
+    }
 
-        if (whereTargetOpacity > whereFadeStartOpacity) {
-            whereFadeDurationMs = distance * WHERE_FADE_IN_SECONDS * 1000;
-        } else {
-            whereFadeDurationMs = distance * WHERE_FADE_OUT_SECONDS * 1000;
-        }
-
-        if (whereFadeFrame === null) {
-            whereFadeFrame = requestAnimationFrame(stepWhereBackgroundFade);
-        }
+    // (with reduced motion it's a still sky; an iPhone in Low Power Mode won't start it either)
+    function playWhereVideo() {
+        if (!whereBackground || typeof whereBackground.play !== "function" || !whereBackground.paused || prefersReducedMotion()) return;
+        whereBackground.preload = "auto";
+        const playing = whereBackground.play();
+        if (playing && typeof playing.catch === "function") playing.catch(() => {});
     }
 
     function updateWhereBackgroundFromPlayback() {
@@ -1776,6 +1829,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Extra spin on top of any playback spin (seeking, flipping the jukebox, fixing Jukebot)
     function spinRecordBy(totalDegrees, durationMs) {
+        wakeSpinLoop();
         if (recordSeekNudgeFrame !== null) {
             cancelAnimationFrame(recordSeekNudgeFrame);
             recordSeekNudgeFrame = null;
@@ -2472,6 +2526,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         refreshLedSigns();
         if (!track) closeNowPlayingView();
+        // (the other side, or a song at another speed: the record winds over to it)
+        if (steadySpin && Math.abs(steadySpin.scale - getTrackRate(track)) > 0.001) wakeSpinLoop();
         if (track !== npShownTrack) {
             npShownTrack = track;
             if (npEyebrow) npEyebrow.textContent = track ? "Now playing" : "Muse Jukebox";
@@ -2705,18 +2761,28 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (currentSpeed < targetSpeed) {
                     currentSpeed = Math.min(currentSpeed + (accelerationRate * steps), targetSpeed);
                 }
-                
+                currentRotationSpeed = currentSpeed; // Update tracked speed
+
                 if (!scratch) {
-                    rotationAngle = (rotationAngle + (currentSpeed * steps * getRecordSpinScale())) % 360;
+                    const scale = getRecordSpinScale();
+                    // Up to speed, and nothing else turning it: the compositor takes it from here
+                    // (including this frame's turn)
+                    const sideRate = getTrackRate(currentTrackData);
+                    if (currentSpeed >= targetSpeed && Math.abs(scale - sideRate) < 0.002 && recordSeekNudgeFrame === null
+                        && startSteadySpin(currentSpeed, sideRate, steps * (1000 / 60))) {
+                        accelerationRequest = null;
+                        return;
+                    }
+                    rotationAngle = (rotationAngle + (currentSpeed * steps * scale)) % 360;
                     updateRecordTransform();
                 }
-                currentRotationSpeed = currentSpeed; // Update tracked speed
 
                 accelerationRequest = requestAnimationFrame(accelerate);
             }
         }
 
-        accelerate();
+        // (from the next frame: whatever started it has a moment to set itself up first)
+        accelerationRequest = requestAnimationFrame(accelerate);
     }
 
     let decelerateRequest; // New variable to track deceleration frame
@@ -2805,6 +2871,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Modify stopSpinning to implement smooth deceleration (like a record slowing down)
     function stopSpinning() {
+        stopSteadySpin();
+        cancelAnimationFrame(accelerationRequest);
         isSpinning = false;
         let deceleration = currentRotationSpeed || 0.5; // Start from current speed
         let lastTimestamp = null;
@@ -2814,7 +2882,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const steps = getSpinSteps(timestamp, lastTimestamp);
                 lastTimestamp = timestamp;
                 if (!scratch) {
-                    rotationAngle = (rotationAngle + (deceleration * steps)) % 360;
+                    // (at the side's speed: side B's slower)
+                    rotationAngle = (rotationAngle + (deceleration * steps * getRecordSpinScale())) % 360;
                     updateRecordTransform();
                 }
                 deceleration -= 0.015 * steps; // More subtle deceleration
@@ -3097,10 +3166,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         const shown = shownWaveProgress.get(wave) || {};
         const progress = fraction.toFixed(4);
         if (shown.progress !== progress) {
-            wave.style.setProperty("--wave-progress", progress);
-            // The playhead moves by transform, so following the song never re-lays out the page
+            const width = waveWidths.get(wave) || 0;
+            const edge = fraction * width;
+            // The playhead moves by transform, so following the song never re-lays out the page (and
+            // only once it's gone a quarter of a pixel: at a song's own pace that's a few times a
+            // second, not every frame)
             const thumb = wave.querySelector(".song-wave-thumb");
-            if (thumb) thumb.style.transform = `translateX(${(fraction * (waveWidths.get(wave) || 0)).toFixed(1)}px)`;
+            if (thumb && (!width || shown.thumb === undefined || Math.abs(edge - shown.thumb) >= 0.25)) {
+                thumb.style.transform = `translateX(${edge.toFixed(1)}px)`;
+                shown.thumb = edge;
+            }
+            // The played part is cut off at the playhead, redrawn once that's moved half a pixel or
+            // so (redrawing it every frame repainted the page every frame)
+            if (!width || shown.edge === undefined || Math.abs(edge - shown.edge) >= 0.5) {
+                wave.style.setProperty("--wave-progress", progress);
+                shown.edge = edge;
+            }
             shown.progress = progress;
         }
         const seconds = Math.round(position);
@@ -3628,7 +3709,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const context = new AudioContextClass();
-        scratchAudio = { context, fallback: buildScratchFallbackSample(context) };
+        // (the stand-in "ahh" sample is only made if a scratch ever needs it: making it up front cost
+        // the first tap on Play a moment)
+        scratchAudio = {
+            context,
+            fallbackSample: null,
+            get fallback() {
+                if (!this.fallbackSample) this.fallbackSample = buildScratchFallbackSample(context);
+                return this.fallbackSample;
+            }
+        };
         return scratchAudio;
     }
 
@@ -3968,6 +4058,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function beginScratch(pending, event) {
         cancelSideSwitch();
+        wakeSpinLoop();
         const center = getRecordCenter(pending.element);
         const state = {
             element: pending.element,
@@ -4917,8 +5008,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         beatLevel = Math.max(bass, beatLevel * Math.exp(-elapsed / 0.12));
         if (rhythmOn) {
-            applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5));
-            dancePenguins(followBeat(position, songTime), elapsed);
+            // (the dance keeps time either way; it's only moved while the front's in sight, not
+            // behind the back panel or the now playing view)
+            const dance = followBeat(position, songTime);
+            if (!isFrontHidden() && !nowPlayingOpen) {
+                applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5));
+                dancePenguins(dance, elapsed);
+            }
         } else {
             applyCalmVisuals(playing);
         }

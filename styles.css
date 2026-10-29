@@ -49,14 +49,21 @@ body {
 #where-background {
     position: fixed;
     inset: 0;
-    background-image: url("images/where.gif");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #01050f;
     opacity: 0;
     pointer-events: none;
     z-index: 0;
     will-change: opacity;
+}
+
+/* Never a play button over the sky (an iPhone in Low Power Mode won't play it: it's a still sky) */
+#where-background::-webkit-media-controls,
+#where-background::-webkit-media-controls-start-playback-button {
+    display: none !important;
+    -webkit-appearance: none;
 }
 
 /* Outer wrapper */
@@ -383,8 +390,12 @@ box-shadow: 0 0 0 3px #ffffff;
     transform: translateY(8px);
 }
 
+/* Each row rises in, then the animation's over and done with (held at its end it would keep the
+   row on a layer of its own forever: dozens of them, slowing every frame) */
 #track-list.tracks-ready .track.track-enter {
-    animation: trackFadeInUp 260ms ease-out forwards;
+    opacity: 1;
+    transform: none;
+    animation: trackFadeInUp 260ms ease-out backwards;
     animation-delay: var(--track-delay, 0ms);
 }
 
@@ -671,13 +682,15 @@ box-shadow: 0 0 0 3px #ffffff;
 
 
 
+/* (clipped, not scrollable: a title a pixel or two too long was a scroller of its own, with a
+   layer of its own, on every such row. One that's really too long scrolls by itself, below.) */
 .title {
     font-weight: bold;
     margin: 0;
     font-size: 1.5rem;
     display: block;
     line-height: 1.1;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     white-space: nowrap;
     width: 100%;
@@ -692,6 +705,8 @@ box-shadow: 0 0 0 3px #ffffff;
     user-select: none;
 }
 
+/* (no will-change: a layer for every row's title made every frame slower. The marquee's own
+   animation gets a layer while it runs.) */
 .title-scroll-content {
     display: inline-flex;
     align-items: center;
@@ -699,7 +714,6 @@ box-shadow: 0 0 0 3px #ffffff;
     min-width: max-content;
     box-sizing: border-box;
     transform: translateX(0);
-    will-change: transform;
 }
 
 .title.title-overflowing {
@@ -709,7 +723,7 @@ box-shadow: 0 0 0 3px #ffffff;
     cursor: default;
     -webkit-mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
     mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
-    animation: titleEdgeVisibility var(--title-scroll-duration, 12s) linear infinite;
+    animation: titleEdgeVisibility var(--title-scroll-duration, 12s) step-end infinite;
 }
 
 .title.title-overflowing .title-scroll-content {
@@ -730,6 +744,7 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
+/* (in steps: an edge fading in or out repainted the title every frame for it) */
 @keyframes titleEdgeVisibility {
     0%, 20% {
         --title-left-edge-opacity: 1;
@@ -781,7 +796,7 @@ box-shadow: 0 0 0 3px #ffffff;
     display: flex;
     gap: 5px;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     white-space: nowrap;
     width: 100%;
@@ -802,7 +817,6 @@ box-shadow: 0 0 0 3px #ffffff;
     gap: 5px;
     min-width: max-content;
     transform: translateX(0);
-    will-change: transform;
 }
 
 .tags.tags-overflowing {
@@ -812,7 +826,7 @@ box-shadow: 0 0 0 3px #ffffff;
     cursor: default;
     -webkit-mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
     mask-image: linear-gradient(to right, rgb(0 0 0 / var(--title-left-edge-opacity)) 0, #000 7px, #000 calc(100% - 7px), rgb(0 0 0 / var(--title-right-edge-opacity)) 100%);
-    animation: titleEdgeVisibility var(--tag-scroll-duration, 12s) linear infinite;
+    animation: titleEdgeVisibility var(--tag-scroll-duration, 12s) step-end infinite;
 }
 
 .tags.tags-overflowing .tags-scroll-content {
@@ -1259,7 +1273,8 @@ audio {
     clip-path: inset(0 calc(100% - (var(--wave-progress) * 100%)) 0 0);
 }
 
-/* The playhead: script.js slides it along (by transform); the dot inside grows while dragging */
+/* The playhead: script.js slides it along (by transform); the dot inside grows while dragging.
+   Only the moving ones get a layer of their own (one for every row slowed every frame down). */
 .song-wave-thumb {
     position: absolute;
     top: 50%;
@@ -1267,6 +1282,10 @@ audio {
     width: 0;
     height: 0;
     pointer-events: none;
+}
+
+.track-modes-visible .song-wave-thumb,
+.np-wave .song-wave-thumb {
     will-change: transform;
 }
 
@@ -2986,11 +3005,14 @@ html {
 
 /* What keeps moving on the back rests while it's out of sight, and the front's lights rest while
    the back is out (named one by one for the same reason as above) */
+#jukebox:not(.is-flipped) .jb-screw::after,
+#jukebox:not(.is-flipped) .jb-step.is-current::after,
+#jukebox:not(.is-flipped) .jb-smoke span,
 #jukebox:not(.is-flipped) .jb-face--sticker,
 #jukebox:not(.is-flipped) .jb-eye--open,
 #jukebox:not(.is-flipped) .jb-fan-blades,
 #jukebox:not(.is-flipped) .jb-antenna-led,
-#jukebox.is-flipped .title-muse,
+#jukebox.is-flipped .title-muse-wrap::after,
 #jukebox.is-flipped .penguin-icon,
 #jukebox.is-flipped .title-waves svg,
 #jukebox.is-flipped .cabinet-lights-glint,
@@ -4023,29 +4045,41 @@ html.is-standalone .edge-blend {
     transform: rotate(90deg);
 }
 
-.jb-back.is-broken:not(.is-running) .jb-screw {
+/* The screws glint now and then to say "hold me". The glint is a ring of its own fading in and
+   out, so it runs on the compositor (animating the screw's shadow repainted it every frame) */
+.jb-screw::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(255, 224, 102, 0.75), 0 0 12px rgba(255, 224, 102, 0.6);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.jb-back.is-broken:not(.is-running) .jb-screw::after {
     animation: jbScrewHint 2.6s ease-in-out infinite;
 }
 
-.jb-back.is-broken:not(.is-running) .jb-screw--tr {
+.jb-back.is-broken:not(.is-running) .jb-screw--tr::after {
     animation-delay: 0.15s;
 }
 
-.jb-back.is-broken:not(.is-running) .jb-screw--bl {
+.jb-back.is-broken:not(.is-running) .jb-screw--bl::after {
     animation-delay: 0.3s;
 }
 
-.jb-back.is-broken:not(.is-running) .jb-screw--br {
+.jb-back.is-broken:not(.is-running) .jb-screw--br::after {
     animation-delay: 0.45s;
 }
 
 @keyframes jbScrewHint {
     0%, 80%, 100% {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.55), inset 0 -1px 2px rgba(0, 0, 0, 0.3);
+        opacity: 0;
     }
 
     90% {
-        box-shadow: 0 0 0 3px rgba(255, 224, 102, 0.75), 0 0 12px rgba(255, 224, 102, 0.6);
+        opacity: 1;
     }
 }
 
@@ -4258,6 +4292,7 @@ html.is-standalone .edge-blend {
     background: rgba(255, 255, 255, 0.75);
 }
 
+/* (script.js shrinks it by transform: a changing width laid the page out again every frame) */
 .jb-power-fill {
     position: absolute;
     left: 2px;
@@ -4266,7 +4301,8 @@ html.is-standalone .edge-blend {
     width: calc(100% - 6px);
     border-radius: 1.5px;
     background: #7ef9ff;
-    transition: width 200ms linear, background-color 300ms ease;
+    transform-origin: 0 50%;
+    transition: transform 200ms linear, background-color 300ms ease;
 }
 
 .jb-hud-power.is-low .jb-power-fill {
@@ -5737,12 +5773,23 @@ html.is-standalone .edge-blend {
 .jb-step.is-current {
     background: #3b3016;
     color: #ffe58a;
+}
+
+/* The step that's on pulses: a ring fading in and out (on the compositor) */
+.jb-step.is-current::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(59, 48, 22, 0.16);
+    opacity: 0;
+    pointer-events: none;
     animation: jbStepPulse 1.8s ease-in-out infinite;
 }
 
 @keyframes jbStepPulse {
     50% {
-        box-shadow: 0 0 0 4px rgba(59, 48, 22, 0.16);
+        opacity: 1;
     }
 }
 
@@ -5777,13 +5824,10 @@ html.is-standalone .edge-blend {
 .jb-steps--big .jb-step.is-current {
     background: #ffd23f;
     color: #3b3016;
-    animation: jbStepGlow 1.8s ease-in-out infinite;
 }
 
-@keyframes jbStepGlow {
-    50% {
-        box-shadow: 0 0 0 5px rgba(255, 210, 63, 0.22);
-    }
+.jb-steps--big .jb-step.is-current::after {
+    box-shadow: 0 0 0 5px rgba(255, 210, 63, 0.22);
 }
 
 .jb-sticker-note {
@@ -6030,8 +6074,76 @@ html.is-standalone .edge-blend {
 }
 
 /* Reboot my memory: four lights to remember */
+/* Jukebot's memory chips: on the board from the very start, just more chips if you don't look
+   closely (a faint note on each, and a dim LED in its colour). In the memory step their lights come
+   on right over them; once its memory's back the LEDs stay lit. */
+.jb-mem-body {
+    fill: #17122e;
+    stroke: #3a2f6e;
+    stroke-width: 1;
+}
+
+.jb-mem-pin {
+    fill: #c9cdd8;
+}
+
+.jb-mem-note {
+    fill: var(--pad-color);
+    fill-opacity: 0.12;
+    font-family: system-ui, -apple-system, "Segoe UI Symbol", sans-serif;
+    font-weight: 900;
+    transition: fill-opacity 600ms ease;
+}
+
+.jb-mem-led {
+    fill: var(--pad-color);
+    fill-opacity: 0.2;
+    transition: fill-opacity 600ms ease;
+}
+
+.jb-back.memory-restored .jb-mem-led {
+    fill-opacity: 0.95;
+    filter: url(#jb-led-glow);
+}
+
+.jb-back.memory-restored .jb-mem-note {
+    fill-opacity: 0.24;
+}
+
+/* The lights flicker on over their chips (they were there all along) */
 .jb-memory-pad {
     transition: opacity 400ms ease;
+    animation: jbMemoryWake 900ms ease-out both;
+}
+
+.jb-memory-pad:nth-child(4n + 2) {
+    animation-delay: 120ms;
+}
+
+.jb-memory-pad:nth-child(4n + 3) {
+    animation-delay: 240ms;
+}
+
+.jb-memory-pad:nth-child(4n + 4) {
+    animation-delay: 360ms;
+}
+
+@keyframes jbMemoryWake {
+    0% {
+        opacity: 0;
+    }
+
+    25% {
+        opacity: 0.7;
+    }
+
+    38% {
+        opacity: 0.15;
+    }
+
+    100% {
+        opacity: 1;
+    }
 }
 
 .jb-memory-key {
@@ -6079,6 +6191,7 @@ html.is-standalone .edge-blend {
 
 .jb-memory-pad.is-done {
     opacity: 0;
+    animation: none;
 }
 
 /* No tool to hold for the memory lights: just tap them */
@@ -6111,7 +6224,7 @@ html.is-standalone .edge-blend {
 }
 
 /* Last step: the screws are back, sticking out, waiting to be tightened */
-.jb-back.is-screwing .jb-screw:not(.is-in) {
+.jb-back.is-screwing .jb-screw:not(.is-in)::after {
     animation: jbScrewHint 2s ease-in-out infinite;
 }
 
@@ -6229,10 +6342,21 @@ h1.jukebox-title {
     min-width: 0;
 }
 
-.title-muse {
+/* "Muse" in a neon gradient that drifts from one end to the other. The drift is a second coat of
+   the gradient, shifted along, fading in and out over the first: only its opacity changes, so it
+   runs on the compositor (moving the gradient itself repainted the title every frame, and with it
+   a good part of the page) */
+.title-muse-wrap {
+    position: relative;
+    display: block;
+    margin-bottom: -0.07em;
+    transform: rotate(-3deg);
+}
+
+.title-muse,
+.title-muse-wrap::after {
     display: block;
     padding: 0 0.14em 0.06em;
-    margin-bottom: -0.07em;
     font-family: "Pacifico", "Brush Script MT", cursive;
     font-size: 1em;
     line-height: 1.12;
@@ -6242,14 +6366,25 @@ h1.jukebox-title {
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
+}
+
+.title-muse {
     filter: drop-shadow(0 0 0.09em rgba(255, 138, 216, 0.55)) drop-shadow(0 0.05em 0 rgba(18, 10, 58, 0.7));
-    transform: rotate(-3deg);
+}
+
+.title-muse-wrap::after {
+    content: "Muse";
+    position: absolute;
+    inset: 0;
+    background-position: 100% 0;
+    opacity: 0;
+    pointer-events: none;
     animation: neonShift 9s ease-in-out infinite alternate;
 }
 
 @keyframes neonShift {
     to {
-        background-position: 100% 0;
+        opacity: 1;
     }
 }
 
@@ -6358,11 +6493,13 @@ button.title-penguin:focus-visible {
    shadows shrink as they jump (--hop). */
 #jukebox-container.penguins-dancing .title-penguin .penguin-icon {
     animation: none;
+    will-change: transform;
 }
 
 #jukebox-container.penguins-dancing .title-penguin::after {
     transform: scaleX(calc(1 - (var(--hop, 0) * 0.45)));
     opacity: calc(1 - (var(--hop, 0) * 0.5));
+    will-change: transform, opacity;
 }
 
 /* Under the title, taking no room: what the note hangs from */
@@ -6698,6 +6835,12 @@ button.title-penguin:focus-visible {
     opacity: 0;
     pointer-events: none;
     transition: opacity 500ms ease;
+    will-change: opacity;
+}
+
+/* With Rhythm on script.js sets the glow every frame: no transition to start over each time */
+#jukebox-container.rhythm-on.is-music-playing .jukebox-glow {
+    transition: none;
 }
 
 /* Music notes drifting out of the speakers */
@@ -6758,6 +6901,14 @@ button.title-penguin:focus-visible {
 
 .record-turn {
     transform: perspective(900px) rotateY(0deg);
+}
+
+/* script.js turns the discs (and counter-turns the rim) every frame while a song plays: said so up
+   front, the browser just moves them instead of redoing the page's layers every frame */
+.record-disc,
+.np-record-disc,
+.record-edge {
+    will-change: transform;
 }
 
 .record-face,
@@ -6948,8 +7099,10 @@ html.viewport-shifted body {
     .jb-break-glow,
     .jb-break-sparks,
     .jb-break-core,
-    .jb-step.is-current,
-    .title-muse,
+    .jb-step.is-current::after,
+    .jb-screw::after,
+    .jb-memory-pad,
+    .title-muse-wrap::after,
     .title-penguin .penguin-icon,
     .title-waves svg,
     .led-sign-track,
