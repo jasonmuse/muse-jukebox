@@ -823,6 +823,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         probe.volume = 0.5;
         return Math.abs(probe.volume - 0.5) < 0.01;
     })();
+    // Safari, and every browser on an iPhone or iPad, stops the sound for a moment whenever a playing
+    // song's speed changes (WebKit bug 163433), so there a deck's speed is only set while it's stopped
+    const speedChangesStutter = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent);
     let upNext = null; // the song waiting on the spare deck for keep-playing
     let mixOut = null; // the last song, playing out its final moment as the new one starts
     let autoMixBlocked = false;
@@ -1822,6 +1825,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function resumeCurrentTrack() {
         if (!currentTrackData) return;
+        // (flipped while it was stopped: it starts at that side's speed)
+        if (player.paused) applyTrackSpeed(player, currentTrackData);
 
         const currentButton = getCurrentTrackElement()?.querySelector(".play-button");
         updateNowPlayingProgress();
@@ -1844,6 +1849,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function pauseCurrentTrack() {
         if (!currentTrackData) return;
+        cancelSideSwitch();
         finishAutoMixNow();
 
         if (document.hidden) {
@@ -1904,6 +1910,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         applyTrackSpeed(player, track);
         const deck = player;
         syncDeckLooping();
+        deck.muted = false; // (a deck the other side of a song was waiting on)
         deck.volume = holdAudio ? 0 : 1;
         const playbackStartTime = performance.now() + 300;
         const playPromise = deck.play();
@@ -1974,13 +1981,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ───── Side A / side B ─────
     // A song with two sides (Countdown Island, and Countdown Paused: the same recording at 0.7 speed)
-    // is one row with a label on its cover that flips it over. Both sides play the same file, so a
-    // flip while it plays just winds the record down (or back up) to the other side's speed, like a
-    // turntable switched between 45 and 33: nothing to load, no gap, and it can go back and forth
-    // as often as you like.
-    const SIDE_WIND_MS = 900;
+    // is one row with a label on its cover that flips it over. Both sides play the same file, just
+    // at different speeds (the pitch goes with it, like a record at 33 instead of 45).
+    //
+    // A flip while it plays never touches the speed of the deck that's playing: Safari, and every
+    // browser on an iPhone, stops the sound for a moment whenever a playing song's speed changes. So
+    // the spare deck starts the same song silently at the other side's speed, a little ahead of the
+    // playing deck when that side is slower (or behind when it's faster), and the moment the two
+    // reach the same spot in the song the sound moves over to it: no gap, no repeat, and it can go
+    // back and forth as often as you like.
+    const SIDE_SWAP_LEAD = 0.3; // s: about how long the other side runs (silently) before they meet
+    const SIDE_SWAP_GIVE_UP_MS = 4000;
     const shownSides = new Map(); // side A's file -> the side its row was last flipped to
-    let sideWind = null; // the record winding to its new speed
+    let sideSwap = null; // the other side, running silently until it meets the playing deck
+    let sideSwapDelay = 0.25; // s: how long a deck takes to get going (learnt as it goes)
+    let sideDeck = null; // { deck, src }: the spare deck, still holding the song from the last flip
+    let sideDeckRest = null; // the deck that just handed over, about to stop
 
     // The file a song plays, and how fast
     function getTrackAudio(track) {
@@ -2067,70 +2083,187 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (isCurrent) currentTrackData = other;
         showRowSide(row, other, true);
         if (!isCurrent) return;
-        // The other side carries on from right here: the record winds to its speed (at once if
-        // the song's paused), and everything shows the other side
-        windDeckTo(player, getTrackRate(other), isPlayerActive() && !scratch);
+        if (isPlayerActive() && !scratch) {
+            startSideSwap(other);
+        } else {
+            // Paused: the deck just takes the other side's speed, ready for Play
+            cancelSideSwitch();
+            applyTrackSpeed(player, other);
+        }
         updateMediaSessionMetadata(other);
         updateMediaSessionPosition();
         updateNowPlaying();
     }
 
-    // The playing deck eases to `rate` (straight there when it isn't playing). A flip part-way
-    // through just turns the wind round from wherever the speed has got to.
-    function windDeckTo(deck, rate, smoothly) {
-        if (sideWind) {
-            cancelAnimationFrame(sideWind.frame);
-            clearTimeout(sideWind.fallback);
-            sideWind = null;
-        }
-        deck.defaultPlaybackRate = rate;
-        const from = deck.playbackRate || 1;
-        if (!smoothly || prefersReducedMotion() || Math.abs(from - rate) < 0.001) {
-            deck.playbackRate = rate;
+    // The other side gets going on the spare deck, silently, where it'll meet the playing deck
+    function startSideSwap(track) {
+        cancelSideSwitch();
+        const from = player;
+        const rate = getTrackRate(track);
+        // Flipped back before the other side took over: the playing deck's already right
+        if (Math.abs(from.playbackRate - rate) < 0.001) return;
+        const to = getSpareDeck();
+        // (no spare deck, or the song's only just starting and can't be heard yet: just change speed)
+        if (!to || !(from.duration > 0) || isSwitchingTrack || from.volume < 0.99) {
+            applyTrackSpeed(from, track);
             return;
         }
-        const state = { deck, to: rate, frame: null, fallback: null };
-        sideWind = state;
-        const startedAt = performance.now();
-        const finish = () => {
-            if (sideWind !== state) return;
-            cancelAnimationFrame(state.frame);
-            clearTimeout(state.fallback);
-            sideWind = null;
-            deck.playbackRate = rate;
-            updateMediaSessionPosition();
+        finishAutoMixNow();
+        discardUpNext();
+        clearTimeout(sideDeckRest);
+        if (!sideDeck || sideDeck.deck !== to || to.getAttribute("src") !== sideDeck.src) {
+            const file = getTrackAudio(track);
+            const source = songSources.get(file);
+            setDeckSource(to, source ? URL.createObjectURL(source.blob) : file, { blob: Boolean(source) });
+            sideDeck = { deck: to, src: to.getAttribute("src") };
+        }
+        to.muted = true;
+        to.volume = 1;
+        applyTrackSpeed(to, track);
+        const swap = {
+            from, to, rate, fromRate: from.playbackRate, began: performance.now(), cue: 0, cuedAt: 0, loaded: false,
+            going: false, goingAt: 0, lastSeen: null, readings: [], timer: null
         };
-        const step = (now) => {
-            if (sideWind !== state) return;
-            const progress = Math.min(1, (now - startedAt) / SIDE_WIND_MS);
-            if (progress >= 1 || deck.paused) {
-                finish();
+        sideSwap = swap;
+        cueSideSwap(swap);
+        const playPromise = to.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+            playPromise.catch(() => {
+                // It won't start: the playing deck changes speed instead
+                if (sideSwap !== swap) return;
+                cancelSideSwitch();
+                applyTrackSpeed(player, currentTrackData);
+            });
+        }
+        swap.timer = setInterval(() => stepSideSwap(swap), 10);
+    }
+
+    // Where the other side starts: about where the playing deck will be once it gets going, plus a
+    // moment's lead (ahead if it's slower, so the playing deck catches it up; behind if it's faster)
+    function cueSideSwap(swap) {
+        const { from, to, rate, fromRate } = swap;
+        const at = from.currentTime + (fromRate * sideSwapDelay) + ((fromRate - rate) * SIDE_SWAP_LEAD);
+        swap.cue = Math.max(0, Math.min(at, from.duration - 1));
+        swap.cuedAt = performance.now();
+        swap.loaded = to.readyState >= 3;
+        swap.going = false;
+        swap.lastSeen = null;
+        swap.readings = [];
+        try {
+            to.currentTime = swap.cue;
+        } catch (error) {
+            // Not loaded yet (older Safari): it's tried again once it is
+        }
+    }
+
+    // Every 10ms until they meet
+    function stepSideSwap(swap) {
+        if (sideSwap !== swap) return;
+        const { from, to } = swap;
+        const now = performance.now();
+        if (from !== player || from.paused || scratch || getTrackRate(currentTrackData) !== swap.rate) {
+            cancelSideSwitch();
+            return;
+        }
+        if (now - swap.began > SIDE_SWAP_GIVE_UP_MS) {
+            // It never got going: the playing deck changes speed instead (a moment's stutter on an iPhone)
+            cancelSideSwitch();
+            applyTrackSpeed(player, currentTrackData);
+            return;
+        }
+        if (!swap.going) {
+            if (to.readyState >= 1 && !to.seeking && Math.abs(to.currentTime - swap.cue) > 1) {
+                // (the cue didn't take before it loaded)
+                cueSideSwap(swap);
                 return;
             }
-            const eased = progress < 0.5 ? 2 * progress * progress : 1 - (Math.pow((-2 * progress) + 2, 2) / 2);
-            deck.playbackRate = from + ((rate - from) * eased);
-            state.frame = requestAnimationFrame(step);
-        };
-        state.frame = requestAnimationFrame(step);
-        // (frames stop while the page is hidden: it gets there anyway)
-        state.fallback = setTimeout(finish, SIDE_WIND_MS + 250);
+            if (to.paused || to.seeking || to.readyState < 3) return;
+            // (going once it's moving: one reading on from the last)
+            const seen = swap.lastSeen;
+            swap.lastSeen = to.currentTime;
+            if (seen === null || to.currentTime < seen + 0.001) return;
+            swap.going = true;
+            swap.goingAt = now;
+            // How long it took to get going, for next time (when it didn't have to load the song first)
+            if (swap.loaded) {
+                const delay = (now - swap.cuedAt) / 1000;
+                sideSwapDelay = Math.min(0.6, Math.max(0.05, (sideSwapDelay + delay) / 2));
+            }
+        }
+        if (from.seeking || to.seeking) {
+            swap.readings = [];
+            return;
+        }
+        // A deck's reading of where it is is only good to 10ms or so (and rougher still just after it
+        // starts), so each deck's place is where its last few readings put it, going at its speed
+        if (now - swap.goingAt < 120 && !document.hidden) return;
+        swap.readings.push({ at: now / 1000, from: from.currentTime, to: to.currentTime });
+        while (swap.readings.length > 20) swap.readings.shift();
+        if (swap.readings.length < 8 && !document.hidden) return;
+        const placeNow = (key, rate) => swap.readings.reduce((sum, reading) => sum + reading[key] - (rate * reading.at), 0)
+            / swap.readings.length + (rate * now / 1000);
+        // How far the other side still has to go to meet the playing deck (in the song's time)
+        const apart = (placeNow("to", swap.rate) - placeNow("from", swap.fromRate)) * Math.sign(swap.fromRate - swap.rate);
+        if (apart > 0.6) {
+            // A long way off (the song was skipped back meanwhile): line it up again
+            cueSideSwap(swap);
+            return;
+        }
+        // (in the background the checks come too far apart to wait for the moment)
+        if (apart > 0 && !document.hidden) return;
+        if (apart > -0.04 || document.hidden) {
+            finishSideSwap(swap);
+            return;
+        }
+        // It got going too late and they'd already passed: line it up again
+        cueSideSwap(swap);
     }
 
-    // Something else happened first (another song, a scratch, the song cleared): the record goes
-    // straight to the speed it was winding to
+    // They meet: the sound moves over to the other side's deck, which carries on as the player
+    function finishSideSwap(swap) {
+        sideSwap = null;
+        clearInterval(swap.timer);
+        const { from, to } = swap;
+        to.muted = false;
+        from.muted = true;
+        player = to;
+        syncDeckLooping();
+        sideDeck = { deck: from, src: from.getAttribute("src") };
+        // The old deck stops once it's surely quiet (stopping it at once could cut it off early)
+        sideDeckRest = setTimeout(() => {
+            if (from === player) return;
+            from.pause();
+            from.muted = false;
+        }, 150);
+        updateMediaSessionPosition();
+        updateNowPlayingProgress();
+    }
+
+    // Something else happened first (another song, a pause, a scratch, a flip back): the other side
+    // stops and the playing deck carries on
     function cancelSideSwitch() {
-        const state = sideWind;
-        if (!state) return;
-        sideWind = null;
-        cancelAnimationFrame(state.frame);
-        clearTimeout(state.fallback);
-        state.deck.playbackRate = state.to;
+        const swap = sideSwap;
+        if (!swap) return;
+        sideSwap = null;
+        clearInterval(swap.timer);
+        swap.to.pause();
+        swap.to.muted = false;
+        // Stopped on the other side: ready to play at its speed
+        if (player.paused && currentTrackData) applyTrackSpeed(player, currentTrackData);
     }
 
-    // The record turns at the speed the song plays: slower on the slow side (like a record at 33
-    // instead of 45), winding between the two with a flip
+    // The record turns at the speed of the side that's on (slower on the slow side, like a record at
+    // 33 instead of 45), winding over to it with a flip
+    let recordSpinScale = 1;
+    let recordSpinScaleAt = 0;
+
     function getRecordSpinScale() {
-        return player.playbackRate > 0 ? player.playbackRate : 1;
+        const now = performance.now();
+        const target = getTrackRate(currentTrackData);
+        const seconds = (now - recordSpinScaleAt) / 1000;
+        recordSpinScaleAt = now;
+        recordSpinScale = seconds > 0.5 ? target : target + ((recordSpinScale - target) * Math.exp(-seconds / 0.25));
+        return recordSpinScale;
     }
 
     function handleTrackPlayButton(track) {
@@ -3724,13 +3857,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         if ("webkitPreservesPitch" in player) player.webkitPreservesPitch = value;
     }
 
-    // Turntable start-up "wow" as the platter gets back up to speed
+    // Turntable start-up "wow" as the platter gets back up to speed (not where changing a playing
+    // song's speed stops the sound for a moment: there it just starts at its speed)
     function spinUpPlayback() {
-        const canBendPitch = "preservesPitch" in player || "webkitPreservesPitch" in player;
+        const canBendPitch = !speedChangesStutter && ("preservesPitch" in player || "webkitPreservesPitch" in player);
         const rate = getTrackRate(currentTrackData);
         if (canBendPitch) {
             setPreservesPitch(false);
             player.playbackRate = 0.55 * rate;
+        } else {
+            applyTrackSpeed(player, currentTrackData);
         }
         const playPromise = player.play();
         if (playPromise && typeof playPromise.catch === "function") {
@@ -3761,7 +3897,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function beginScratch(pending, event) {
-        cancelSideSwitch(true);
+        cancelSideSwitch();
         const center = getRecordCenter(pending.element);
         const state = {
             element: pending.element,
@@ -5345,7 +5481,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Runs on every timeupdate of the playing deck
     function checkAutoMix() {
-        if (!currentTrackData || scratch || player.paused || player.seeking) return;
+        if (!currentTrackData || scratch || sideSwap || player.paused || player.seeking) return;
         const time = player.currentTime;
         const duration = player.duration;
         if (!Number.isFinite(time) || !Number.isFinite(duration)) return;
