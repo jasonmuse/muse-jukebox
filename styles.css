@@ -2869,6 +2869,132 @@ html {
     transform: scale(0.95);
 }
 
+/* Settings: a slim plate of switches on the back, like an amp's */
+.back-settings {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px 5px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.back-settings h3 {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #aebcff;
+}
+
+.back-settings-icon {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+/* On a phone the gear says it (the word's still there for screen readers) */
+@media (max-width: 600px) {
+    .back-settings-name {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+.back-setting {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.back-setting-text {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.86rem;
+    line-height: 1.25;
+    text-align: right;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: rgba(236, 240, 255, 0.92);
+}
+
+.back-setting-text span {
+    color: rgba(236, 240, 255, 0.55);
+}
+
+/* A toggle switch: lit up pink to blue when it's on */
+.back-switch {
+    flex: 0 0 auto;
+    position: relative;
+    width: 44px;
+    height: 26px;
+    margin: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: #2a2c45;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    transition: background-color 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    touch-action: manipulation;
+}
+
+.back-switch::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #c9cde6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    transition: transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 220ms ease;
+}
+
+.back-switch:checked {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: linear-gradient(100deg, #ff86d6, #b39bff 55%, #7fe6ff);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 10px rgba(255, 138, 216, 0.35);
+}
+
+.back-switch:checked::after {
+    transform: translateX(18px);
+    background: #ffffff;
+}
+
+.back-switch:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .back-switch,
+    .back-switch::after {
+        transition: none;
+    }
+}
+
 /* The tips card takes whatever room is left on the panel (script.js spreads the tips over it) */
 .back-tips {
     flex: 1 0 auto;
@@ -3532,9 +3658,9 @@ html.is-standalone .edge-blend {
 }
 
 /* LED signs (along the bottom of Jukebot's panel, and the flip sign on phones): glowing letters
-   scrolling past a dark window, the Muse name in pink, the song that's on in blue and the rest in
-   amber. script.js writes the words twice over (so a lap loops without a seam) and sets how long a
-   lap takes, so every sign moves at the same pace; words that fit just sit still. */
+   scrolling past a dark window for good, the Muse name in pink, the song that's on in blue and the
+   rest in amber. The track goes round and round and script.js lays the words down on it just ahead
+   of the window, so they can change without the sign stopping. */
 .led-sign {
     position: relative;
     flex: 1 1 auto;
@@ -3557,39 +3683,46 @@ html.is-standalone .edge-blend {
     background: radial-gradient(circle, transparent 0 0.55px, rgba(5, 6, 12, 0.5) 1px) 0 0 / 2px 2px;
 }
 
+/* A track no wider than a line, with the words placed along it (they spill out past its end and
+   the window shows them going by). One turn is 6000px at 40px a second: keep in step with
+   LED_PIXELS_PER_SECOND and LED_TURN_PIXELS in script.js. */
 .led-sign-track {
-    display: flex;
-    width: max-content;
-    animation: ledSignScroll var(--led-seconds, 20s) linear infinite;
-}
-
-.led-sign.is-still {
-    justify-content: center;
-}
-
-.led-sign.is-still .led-sign-track {
-    animation: none;
-}
-
-.led-sign-lap {
+    position: relative;
     flex: 0 0 auto;
-    display: flex;
-    white-space: nowrap;
+    align-self: stretch;
+    width: 0;
     font: 800 0.72rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #ffc861;
     text-shadow: 0 0 3px rgba(255, 190, 80, 0.95), 0 0 9px rgba(255, 140, 40, 0.55);
+    animation: ledTickerRun 150s linear infinite;
+}
+
+/* What the words sit on: script.js pushes it along for a moment when the words change */
+.led-sign-lane {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    will-change: transform;
+}
+
+.led-sign-item {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: max-content;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
 }
 
 .led-sign-item::after {
     content: "\266A";
     margin: 0 1.1em;
     color: #ffc861;
-}
-
-.led-sign.is-still .led-sign-item:last-child::after {
-    content: none;
 }
 
 .led-sign-item.is-brand {
@@ -3602,9 +3735,9 @@ html.is-standalone .edge-blend {
     text-shadow: 0 0 3px rgba(142, 233, 255, 0.95), 0 0 9px rgba(90, 200, 255, 0.55);
 }
 
-@keyframes ledSignScroll {
+@keyframes ledTickerRun {
     to {
-        transform: translateX(-50%);
+        transform: translateX(-6000px);
     }
 }
 
@@ -6065,126 +6198,12 @@ button.title-penguin:focus-visible {
     opacity: calc(1 - (var(--hop, 0) * 0.5));
 }
 
-/* Under the title, taking no room: what the bubble and the note hang from */
+/* Under the title, taking no room: what the note hangs from */
 .rhythm-anchor {
     position: relative;
     z-index: 40;
     flex: 0 0 auto;
     height: 0;
-}
-
-/* The penguins asking if they should dance: a speech bubble under the title. Always there but
-   hidden, so opening it is only a fade and a pop (nothing to lay out) */
-.rhythm-invite {
-    position: absolute;
-    top: 2px;
-    left: 50%;
-    width: min(290px, calc(100% - 44px));
-    box-sizing: border-box;
-    padding: 12px 14px 13px;
-    border: 2px solid #8b9bff;
-    border-radius: 16px;
-    background: linear-gradient(180deg, #3b3e70, #2a2c4e);
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 14px 34px rgba(8, 6, 30, 0.6), 0 0 26px rgba(255, 138, 216, 0.25);
-    color: #ffffff;
-    text-align: center;
-    visibility: hidden;
-    opacity: 0;
-    transform: translate(-50%, -8px) scale(0.9);
-    transform-origin: 50% 0;
-    transition: opacity 200ms ease, transform 360ms cubic-bezier(0.34, 1.45, 0.64, 1), visibility 0s linear 360ms;
-}
-
-.rhythm-invite.is-open {
-    visibility: visible;
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-    transition-delay: 0s;
-}
-
-/* Its tail points up at the title */
-.rhythm-invite::before {
-    content: "";
-    position: absolute;
-    top: -9px;
-    left: 50%;
-    width: 14px;
-    height: 14px;
-    margin-left: -8px;
-    border-top: 2px solid #8b9bff;
-    border-left: 2px solid #8b9bff;
-    border-radius: 3px 0 0;
-    background: #3b3e70;
-    transform: rotate(45deg);
-}
-
-.rhythm-invite p {
-    margin: 0;
-    text-align: center;
-}
-
-.rhythm-invite-title {
-    font-size: 1.05rem;
-    font-weight: 800;
-    line-height: 1.25;
-}
-
-.rhythm-invite-text {
-    margin-top: 4px !important;
-    font-size: 0.84rem;
-    line-height: 1.35;
-    color: rgba(236, 240, 255, 0.82);
-}
-
-.rhythm-invite-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 11px;
-}
-
-.rhythm-invite-button {
-    min-height: 36px;
-    padding: 7px 14px;
-    border: 0;
-    border-radius: 10px;
-    font: inherit;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #ffffff;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: transform 120ms ease-out, background-color 160ms ease-out;
-}
-
-.rhythm-invite-button--yes {
-    background: linear-gradient(100deg, #ff86d6, #b39bff 55%, #7fe6ff);
-    color: #1d1a45;
-    box-shadow: 0 2px 10px rgba(255, 138, 216, 0.35);
-}
-
-.rhythm-invite-button--no {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.rhythm-invite-button:active {
-    transform: scale(0.96);
-}
-
-.rhythm-invite-button:focus-visible {
-    outline: 2px solid #d6e6ff;
-    outline-offset: 2px;
-}
-
-@media (hover: hover) {
-    .rhythm-invite-button--no:hover {
-        background: rgba(255, 255, 255, 0.18);
-    }
-
-    .rhythm-invite-button--yes:hover {
-        filter: brightness(1.08);
-    }
 }
 
 /* "Rhythm on" / "Rhythm off" under the title for a moment when it's switched */

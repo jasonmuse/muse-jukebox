@@ -18,8 +18,12 @@ const tracks = [
         }
     },
     {
+        // Countdown Island's pause music: the same recording at 0.7 speed (Godot's pitch_scale,
+        // slower and lower), so it plays Countdown Island's file at that rate. "file" just names it.
         "title": "Countdown Paused",
         "file": "audio/countdownisland_pitch_0.7.mp3",
+        "audio": "audio/countdownisland.mp3",
+        "rate": 0.7,
         "cover": "images/countdownisland.png",
         "thumbnail": "images/countdownisland-thumb.webp",
         "tags": ["Featured", "Game OST", "Slowed"],
@@ -27,7 +31,6 @@ const tracks = [
         "featured": true,
         "grayscaleCover": true,
         "sideA": "audio/countdownisland.mp3",
-        "spinScale": 0.7,
         "game": {
             "name": "Countdown Island",
             "url": "https://amused.itch.io/countdown-island",
@@ -1293,7 +1296,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The x button: stop the song and unload it (also clears the lock screen player)
     function clearCurrentTrack() {
         cancelSideSwitch();
-        closeRhythmInvite(false);
         if (!currentTrackData) return;
         stopCurrentPlayback();
         setDeckSource(player, null);
@@ -1744,7 +1746,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const duration = player.duration;
         const previousTime = player.currentTime;
         const maxSeekTime = Number.isFinite(duration) ? duration : Math.max(player.currentTime, 0);
-        const nextTime = Math.min(Math.max(player.currentTime + offsetSeconds, 0), maxSeekTime);
+        const nextTime = Math.min(Math.max(player.currentTime + (offsetSeconds * getTrackRate(currentTrackData)), 0), maxSeekTime);
         player.currentTime = nextTime;
         const appliedSeekOffset = nextTime - previousTime;
 
@@ -1855,12 +1857,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Load a song into the shared player and start it from the beginning
     function startTrack(track, options = {}) {
-        if (!options.sideFlip) cancelSideSwitch();
+        cancelSideSwitch();
         const previousTrack = getCurrentTrackElement();
-        // Switching while a song is playing gets the record whirl (like a record changer); turning
-        // a song over to its other side doesn't
-        const switchingWhilePlaying = !options.sideFlip && (options.flourish
-            || (isPlayerActive() && Boolean(currentTrackData) && currentTrackData.file !== track.file));
+        // Switching while a song is playing gets the record whirl (like a record changer)
+        const switchingWhilePlaying = options.flourish
+            || (isPlayerActive() && Boolean(currentTrackData) && currentTrackData.file !== track.file);
 
         if (volumeFadeInterval) {
             clearInterval(volumeFadeInterval);
@@ -1870,7 +1871,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // If this is the song already waiting on the spare deck, it can start straight away
         const prepared = takeUpNextFor(track);
 
-        if (previousTrack && currentTrackData.file !== track.file && !options.sideFlip) {
+        if (previousTrack && currentTrackData.file !== track.file) {
             resetTrackElementUi(previousTrack);
         }
 
@@ -1883,7 +1884,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const startingInBackground = document.hidden;
         // Hold the sound back while the record drops. Only where the page can set the volume:
         // an iPhone would play a blip of the song and then restart it.
-        const holdAudio = !startingInBackground && canFadeVolume && !options.sideFlip;
+        const holdAudio = !startingInBackground && canFadeVolume;
         // A tap on the song's wave starts it from there; a song mixed in skips its silent intro
         const startOffset = options.startAt > 0 ? options.startAt : (prepared ? prepared.startAt : 0);
         trackStartOffset = startOffset;
@@ -1892,13 +1893,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             const previousDeck = player;
             player = prepared.deck;
             previousDeck.pause();
-            resetDeckSpeed(previousDeck);
+            applyTrackSpeed(previousDeck, null);
             setDeckSource(previousDeck, null);
             cueDeck(player, startOffset);
         } else {
             // (#t= asks the browser to start there, so not a moment of the beginning is heard)
-            setDeckSource(player, startOffset > 0 ? `${track.file}#t=${startOffset.toFixed(2)}` : track.file);
+            const audio = getTrackAudio(track);
+            setDeckSource(player, startOffset > 0 ? `${audio}#t=${startOffset.toFixed(2)}` : audio);
         }
+        applyTrackSpeed(player, track);
         const deck = player;
         syncDeckLooping();
         deck.volume = holdAudio ? 0 : 1;
@@ -1914,7 +1917,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             requestSongBeats(track);
         }
 
-        if (startingInBackground || options.sideFlip) {
+        if (startingInBackground) {
             record.classList.add("up");
             startSpinning();
         } else {
@@ -1970,12 +1973,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── Side A / side B ─────
-    // A song that comes in two versions (Countdown Island and its slowed-down pause music) is one
-    // row with a label on its cover that flips it over. Flipped while it plays, the record winds
-    // down (or up) to the other side's speed and the other side carries on from the same spot.
-    const SIDE_SWITCH_MS = 650;
+    // A song with two sides (Countdown Island, and Countdown Paused: the same recording at 0.7 speed)
+    // is one row with a label on its cover that flips it over. Both sides play the same file, so a
+    // flip while it plays just winds the record down (or back up) to the other side's speed, like a
+    // turntable switched between 45 and 33: nothing to load, no gap, and it can go back and forth
+    // as often as you like.
+    const SIDE_WIND_MS = 900;
     const shownSides = new Map(); // side A's file -> the side its row was last flipped to
-    let sideSwitch = null; // a flip while playing, until the other side takes over
+    let sideWind = null; // the record winding to its new speed
+
+    // The file a song plays, and how fast
+    function getTrackAudio(track) {
+        return track ? track.audio || track.file : "";
+    }
+
+    function getTrackRate(track) {
+        return (track && track.rate) || 1;
+    }
+
+    // A deck set up to play `track` at its speed. On a two-sided song the pitch goes with the speed
+    // (that's what makes the slow side sound slowed down rather than stretched).
+    function applyTrackSpeed(deck, track) {
+        const rate = getTrackRate(track);
+        const varispeed = Boolean(track && (track.sideA || track.sideB));
+        if ("preservesPitch" in deck) deck.preservesPitch = !varispeed;
+        if ("webkitPreservesPitch" in deck) deck.webkitPreservesPitch = !varispeed;
+        deck.defaultPlaybackRate = rate;
+        deck.playbackRate = rate;
+    }
 
     function getOtherSide(track) {
         const file = track && (track.sideB || track.sideA);
@@ -1985,7 +2010,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function getListedSide(song) {
         const other = getOtherSide(song);
         if (!other) return song;
-        if (currentTrackData === other || (sideSwitch && sideSwitch.to === other)) return other;
+        if (currentTrackData === other) return other;
         if (currentTrackData === song) return song;
         // Filtered by something only the other side has (like "Slowed"): that side
         const tag = tagFilter ? tagFilter.value : "all";
@@ -2026,7 +2051,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
         const total = row.querySelector(".song-time-total");
-        if (total) total.textContent = formatKnownDuration(track.file);
+        if (total && currentTrackData !== track) total.textContent = formatSongLength(track);
         updateSideSwitch(row, track);
         const wave = row.querySelector(".song-wave");
         if (wave) drawSongWave(wave);
@@ -2036,157 +2061,80 @@ document.addEventListener("DOMContentLoaded", async () => {
     function flipSongSide(row) {
         const shown = getTrackDataForElement(row);
         const other = getOtherSide(shown);
-        if (!shown || !other || sideSwitch) return;
+        if (!shown || !other) return;
         shownSides.set(shown.sideA || shown.file, other);
         const isCurrent = currentTrackData === shown;
-        const playing = isCurrent && isPlayerActive() && !scratch;
+        if (isCurrent) currentTrackData = other;
         showRowSide(row, other, true);
         if (!isCurrent) return;
-        if (playing) {
-            switchSidesWhilePlaying(row, shown, other);
-        } else {
-            switchSidesWhilePaused(row, other);
-        }
-    }
-
-    // Where `to` is at the same point in the song as the playing side is now
-    function getSidePosition(deck, to) {
-        const fromDuration = deck.duration;
-        const toDuration = getKnownDuration(to.file);
-        if (!Number.isFinite(fromDuration) || fromDuration <= 0 || !(toDuration > 0)) return 0;
-        return Math.min(toDuration - 0.5, (deck.currentTime / fromDuration) * toDuration);
-    }
-
-    // Paused: the other side is lined up at the same spot, ready for Play
-    function switchSidesWhilePaused(row, to) {
-        const startAt = getSidePosition(player, to);
-        finishAutoMixNow();
-        discardUpNext();
-        currentTrackData = to;
-        trackStartOffset = startAt;
-        setDeckSource(player, startAt > 0 ? `${to.file}#t=${startAt.toFixed(2)}` : to.file);
-        updateMediaSessionMetadata(to);
-        showModeButtonsOnTrack(row, false);
-        updatePlayingTrackStickyState();
+        // The other side carries on from right here: the record winds to its speed (at once if
+        // the song's paused), and everything shows the other side
+        windDeckTo(player, getTrackRate(other), isPlayerActive() && !scratch);
+        updateMediaSessionMetadata(other);
+        updateMediaSessionPosition();
         updateNowPlaying();
     }
 
-    function resetDeckSpeed(deck) {
-        deck.playbackRate = 1;
-        if ("preservesPitch" in deck) deck.preservesPitch = true;
-        if ("webkitPreservesPitch" in deck) deck.webkitPreservesPitch = true;
-    }
-
-    // Playing: this side winds to the other side's speed (so it already sounds like it) while the
-    // other side loads on the spare deck a moment ahead; when this side gets there, they swap
-    function switchSidesWhilePlaying(row, from, to) {
-        const deck = player;
-        const spare = getSpareDeck();
-        const fromDuration = deck.duration;
-        const toDuration = getKnownDuration(to.file);
-        if (!spare || !Number.isFinite(fromDuration) || fromDuration <= 0 || !(toDuration > 0)) {
-            startTrack(to, { startAt: getSidePosition(deck, to), sideFlip: true });
+    // The playing deck eases to `rate` (straight there when it isn't playing). A flip part-way
+    // through just turns the wind round from wherever the speed has got to.
+    function windDeckTo(deck, rate, smoothly) {
+        if (sideWind) {
+            cancelAnimationFrame(sideWind.frame);
+            clearTimeout(sideWind.fallback);
+            sideWind = null;
+        }
+        deck.defaultPlaybackRate = rate;
+        const from = deck.playbackRate || 1;
+        if (!smoothly || prefersReducedMotion() || Math.abs(from - rate) < 0.001) {
+            deck.playbackRate = rate;
             return;
         }
-        finishAutoMixNow();
-        discardUpNext();
-        const rate = fromDuration / toDuration;
-        const cueAt = Math.min(toDuration - 0.5, getSidePosition(deck, to) + ((SIDE_SWITCH_MS / 1000) * Math.max(1, 1 / rate)) + 0.4);
-        const entry = { track: to, deck: spare, shuffled: shuffleEnabled, startAt: cueAt, ready: false, starting: false, controller: null };
-        const state = { row, from, to, deck, entry, wound: false, timer: null, giveUp: null };
-        sideSwitch = state;
-        upNext = entry;
-        setDeckSource(spare, `${to.file}#t=${cueAt.toFixed(2)}`);
-
-        const settle = () => {
-            if (sideSwitch !== state || !state.wound || !entry.ready) return;
-            clearTimeout(state.timer);
-            // (this side now plays at the other's pace: one second of it per second)
-            const lead = entry.startAt - getSidePosition(deck, to);
-            if (lead > 0.03) {
-                state.timer = setTimeout(settle, lead * 1000);
-            } else if (lead < -0.3) {
-                // The other side took a while to load and this one's gone past: cue it on a bit
-                entry.ready = false;
-                entry.startAt = Math.min(toDuration - 0.5, getSidePosition(deck, to) + 0.6);
-                spare.addEventListener("seeked", markReady, { once: true });
-                cueDeck(spare, entry.startAt);
-            } else {
-                finishSideSwitch(state);
-            }
-        };
-        const markReady = () => {
-            if (sideSwitch !== state) return;
-            entry.ready = true;
-            settle();
-        };
-        spare.addEventListener("canplay", markReady, { once: true });
-        // It never loaded: start it the ordinary way
-        state.giveUp = setTimeout(() => finishSideSwitch(state, true), 5000);
-
-        if ("preservesPitch" in deck) deck.preservesPitch = false;
-        if ("webkitPreservesPitch" in deck) deck.webkitPreservesPitch = false;
+        const state = { deck, to: rate, frame: null, fallback: null };
+        sideWind = state;
         const startedAt = performance.now();
-        const wind = (now) => {
-            if (sideSwitch !== state) return;
-            if (deck.paused && !scratch) {
-                // Paused part-way: the other side waits at the same spot instead
-                cancelSideSwitch();
-                switchSidesWhilePaused(row, to);
+        const finish = () => {
+            if (sideWind !== state) return;
+            cancelAnimationFrame(state.frame);
+            clearTimeout(state.fallback);
+            sideWind = null;
+            deck.playbackRate = rate;
+            updateMediaSessionPosition();
+        };
+        const step = (now) => {
+            if (sideWind !== state) return;
+            const progress = Math.min(1, (now - startedAt) / SIDE_WIND_MS);
+            if (progress >= 1 || deck.paused) {
+                finish();
                 return;
             }
-            const progress = Math.min(1, (now - startedAt) / SIDE_SWITCH_MS);
             const eased = progress < 0.5 ? 2 * progress * progress : 1 - (Math.pow((-2 * progress) + 2, 2) / 2);
-            deck.playbackRate = 1 + ((rate - 1) * eased);
-            if (progress < 1) {
-                requestAnimationFrame(wind);
-            } else {
-                state.wound = true;
-                settle();
-            }
+            deck.playbackRate = from + ((rate - from) * eased);
+            state.frame = requestAnimationFrame(step);
         };
-        requestAnimationFrame(wind);
+        state.frame = requestAnimationFrame(step);
+        // (frames stop while the page is hidden: it gets there anyway)
+        state.fallback = setTimeout(finish, SIDE_WIND_MS + 250);
     }
 
-    function finishSideSwitch(state, gaveUp = false) {
-        if (sideSwitch !== state) return;
-        clearTimeout(state.timer);
-        clearTimeout(state.giveUp);
-        sideSwitch = null;
-        const startAt = gaveUp ? getSidePosition(state.deck, state.to) : state.entry.startAt;
-        if (gaveUp) {
-            discardUpNext();
-        } else {
-            upNext = state.entry;
-        }
-        startTrack(state.to, { startAt, sideFlip: true });
-        resetDeckSpeed(state.deck);
-    }
-
-    // Something else happened first (another song, a scratch, the song cleared): the flip's off
-    function cancelSideSwitch(revert = false) {
-        const state = sideSwitch;
+    // Something else happened first (another song, a scratch, the song cleared): the record goes
+    // straight to the speed it was winding to
+    function cancelSideSwitch() {
+        const state = sideWind;
         if (!state) return;
-        sideSwitch = null;
-        clearTimeout(state.timer);
-        clearTimeout(state.giveUp);
-        resetDeckSpeed(state.deck);
-        if (upNext === state.entry) discardUpNext();
-        if (revert && state.row.isConnected) {
-            shownSides.set(state.from.sideA || state.from.file, state.from);
-            showRowSide(state.row, state.from, true);
-        }
+        sideWind = null;
+        cancelAnimationFrame(state.frame);
+        clearTimeout(state.fallback);
+        state.deck.playbackRate = state.to;
     }
 
-    // A slowed-down side turns slower (like a record at 33 instead of 45), and the record winds
-    // down or up with a flip
+    // The record turns at the speed the song plays: slower on the slow side (like a record at 33
+    // instead of 45), winding between the two with a flip
     function getRecordSpinScale() {
-        const scale = (currentTrackData && currentTrackData.spinScale) || 1;
-        return sideSwitch ? scale * (player.playbackRate || 1) : scale;
+        return player.playbackRate > 0 ? player.playbackRate : 1;
     }
 
     function handleTrackPlayButton(track) {
-        if (currentTrackData && (currentTrackData.file === track.file || (sideSwitch && sideSwitch.to === track))) {
+        if (currentTrackData && currentTrackData.file === track.file) {
             if (player.paused) {
                 resumeCurrentTrack();
             } else {
@@ -2275,6 +2223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 navigator.mediaSession.playbackState = "playing";
             }
             updateWhereBackgroundFromPlayback();
+            updateNowPlaying();
         });
 
         onPlayingDeck("pause", () => {
@@ -2287,6 +2236,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if ("mediaSession" in navigator) {
                     navigator.mediaSession.playbackState = currentTrackData ? "paused" : "none";
                 }
+                // (the deck's button and the LED signs too, when it's paused from outside)
+                updateNowPlaying();
             }
             updateMediaSessionPosition();
             updateWhereBackgroundFromPlayback();
@@ -2323,7 +2274,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             seekto: (details) => {
                 if (!currentTrackData || !Number.isFinite(details.seekTime)) return;
                 finishAutoMixNow();
-                player.currentTime = details.seekTime;
+                player.currentTime = details.seekTime * getTrackRate(currentTrackData);
                 updateNowPlayingProgress();
             }
         };
@@ -2352,11 +2303,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") return;
         if (!currentTrackData || !Number.isFinite(player.duration)) return;
 
+        const rate = getTrackRate(currentTrackData);
         try {
             navigator.mediaSession.setPositionState({
-                duration: player.duration,
-                playbackRate: player.playbackRate || 1,
-                position: Math.min(player.currentTime, player.duration)
+                duration: player.duration / rate,
+                playbackRate: (player.playbackRate || rate) / rate,
+                position: Math.min(player.currentTime, player.duration) / rate
             });
         } catch (error) {
             // Ignore out-of-range positions while a song is loading
@@ -2421,17 +2373,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playerDuration = currentTrackData && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
         const loading = Boolean(currentTrackData) && !playerDuration;
         // Until the song has loaded, its known length shows where it's about to start from
-        const knownDuration = loading ? getKnownDuration(currentTrackData.file) : 0;
-        let duration = playerDuration || (knownDuration > 0 ? knownDuration : 0);
+        const knownDuration = loading ? getAudioLength(currentTrackData) : 0;
+        const duration = playerDuration || (knownDuration > 0 ? knownDuration : 0);
         let position = currentTrackData ? (playerDuration ? player.currentTime : trackStartOffset) : 0;
-        if (sideSwitch && playerDuration) {
-            // Winding round to the other side: its times, at the same point in the song
-            const otherDuration = getKnownDuration(sideSwitch.to.file);
-            if (otherDuration > 0) {
-                position = (position / duration) * otherDuration;
-                duration = otherDuration;
-            }
-        }
+        // (all in the file's time; a slowed side shows its own, which is that stretched out)
+        const shownScale = 1 / getTrackRate(currentTrackData);
         if (previewTime === null && scratch) previewTime = scratch.targetTime;
         const dragging = Boolean(waveScrub && waveScrub.active);
         if (previewTime !== null) {
@@ -2454,19 +2400,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (playingRowParts && playingRowParts.wave) {
             const shown = glide(playingRowParts.wave);
-            setWaveProgress(playingRowParts.wave, shown, position, duration);
+            setWaveProgress(playingRowParts.wave, shown, position * shownScale, duration * shownScale);
             playingRowParts.progress?.classList.toggle("is-loading", loading);
-            if (playingRowParts.elapsed) setTextIfChanged(playingRowParts.elapsed, formatTime(duration ? shown * duration : position));
-            if (playingRowParts.total && duration) setTextIfChanged(playingRowParts.total, formatTime(duration));
+            if (playingRowParts.elapsed) setTextIfChanged(playingRowParts.elapsed, formatTime((duration ? shown * duration : position) * shownScale));
+            if (playingRowParts.total && duration) setTextIfChanged(playingRowParts.total, formatTime(duration * shownScale));
         }
         if (npWave) {
             const shown = glide(npWave);
-            setWaveProgress(npWave, shown, position, duration);
+            setWaveProgress(npWave, shown, position * shownScale, duration * shownScale);
             npWave.parentElement?.classList.toggle("is-loading", loading);
             const cantSeek = String(!playerDuration);
             if (npWave.getAttribute("aria-disabled") !== cantSeek) npWave.setAttribute("aria-disabled", cantSeek);
-            if (npElapsed) setTextIfChanged(npElapsed, formatTime(duration ? shown * duration : position));
-            if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration) : "--:--");
+            if (npElapsed) setTextIfChanged(npElapsed, formatTime((duration ? shown * duration : position) * shownScale));
+            if (npDuration) setTextIfChanged(npDuration, duration ? formatTime(duration * shownScale) : "--:--");
         }
 
         // Keep drawing while it glides, and while the song plays if nothing else is drawing frames
@@ -2816,30 +2762,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         trackList.querySelectorAll(".track").forEach((trackElement) => {
             const total = trackElement.querySelector(".song-time-total");
-            if (total && !total.textContent) total.textContent = formatKnownDuration(trackElement.dataset.file);
+            if (total && !total.textContent) total.textContent = formatSongLength(getTrackDataForElement(trackElement));
             const wave = trackElement.querySelector(".song-wave");
             if (wave) drawSongWave(wave);
         });
         if (npWave) drawSongWave(npWave);
     }
 
-    function getKnownDuration(file) {
-        if (currentTrackData && currentTrackData.file === file && Number.isFinite(player.duration)) return player.duration;
-        const wave = songWaves.get(file);
+    // How long the file a song plays is (what's playing now, or from waves.json)
+    function getAudioLength(track) {
+        const audio = getTrackAudio(track);
+        if (currentTrackData && getTrackAudio(currentTrackData) === audio && Number.isFinite(player.duration)) return player.duration;
+        const wave = songWaves.get(audio);
         return wave ? wave.duration : NaN;
     }
 
-    function formatKnownDuration(file) {
-        const duration = getKnownDuration(file);
+    // How long it is to listen to (a slowed side is longer than its file)
+    function formatSongLength(track) {
+        const duration = getAudioLength(track) / getTrackRate(track);
         return Number.isFinite(duration) ? formatTime(duration) : "";
     }
 
     // A song that isn't in waves.json yet: at least its length shows from now on
     function rememberSongDuration(track, duration) {
-        if (!track || !Number.isFinite(duration) || songWaves.has(track.file)) return;
-        songWaves.set(track.file, { duration, levels: null });
-        const total = trackList.querySelector(`.track[data-file="${CSS.escape(track.file)}"] .song-time-total`);
-        if (total) total.textContent = formatTime(duration);
+        const audio = getTrackAudio(track);
+        if (!track || !Number.isFinite(duration) || songWaves.has(audio)) return;
+        songWaves.set(audio, { duration, levels: null });
+        trackList.querySelectorAll(".track").forEach((row) => {
+            const rowTrack = getTrackDataForElement(row);
+            const total = row.querySelector(".song-time-total");
+            if (total && rowTrack && getTrackAudio(rowTrack) === audio) total.textContent = formatSongLength(rowTrack);
+        });
     }
 
     // Once a song without a wave has been measured all the way through (the spectrum's left and
@@ -2875,8 +2828,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (error) {
             // Storage full or blocked: it's just not remembered
         }
-        const wave = trackList.querySelector(`.track[data-file="${CSS.escape(spectrum.file)}"] .song-wave`);
-        if (wave) drawSongWave(wave);
+        trackList.querySelectorAll(".track").forEach((row) => {
+            const wave = row.querySelector(".song-wave");
+            if (wave && getTrackAudio(getTrackDataForElement(row)) === spectrum.file) drawSongWave(wave);
+        });
         if (npWave) drawSongWave(npWave);
     }
 
@@ -2916,9 +2871,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function drawSongWave(wave) {
         const width = wave.clientWidth;
         const height = wave.clientHeight;
-        const file = wave === npWave
-            ? (currentTrackData ? currentTrackData.file : "")
-            : wave.closest(".track")?.dataset.file;
+        const file = getTrackAudio(wave === npWave ? currentTrackData : getTrackDataForElement(wave.closest(".track")));
         const levels = file && songWaves.has(file) ? songWaves.get(file).levels : null;
         const key = `${file}|${width}|${height}|${levels ? "shape" : "plain"}`;
         waveWidths.set(wave, width);
@@ -3058,7 +3011,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!wave || isPlayingWave(wave)) return;
             const track = getTrackDataForElement(wave.closest(".track"));
             if (!track) return;
-            const duration = getKnownDuration(track.file);
+            const duration = getAudioLength(track);
             const fraction = getWaveFraction(wave, event.clientX);
             startTrack(track, { startAt: Number.isFinite(duration) ? fraction * duration : 0 });
         });
@@ -3313,7 +3266,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <svg class="song-wave-bars song-wave-played" aria-hidden="true"><path></path></svg>
             <span class="song-wave-thumb" aria-hidden="true"></span>
             </div>
-            <span class="song-time"><span class="song-time-elapsed">0:00</span><span class="song-time-total">${formatKnownDuration(track.file)}</span></span>
+            <span class="song-time"><span class="song-time-elapsed">0:00</span><span class="song-time-total">${formatSongLength(track)}</span></span>
             </div>
             </div>
             </div>
@@ -3628,14 +3581,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const duration = player.duration;
         if (!audio || !Number.isFinite(duration) || duration <= 0) throw new Error("Nothing to scratch");
 
-        const info = await fetchAudioFileInfo(track.file);
+        const file = getTrackAudio(track);
+        const info = await fetchAudioFileInfo(file);
         const bytesPerSecond = (info.total - info.audioStart) / duration;
         const startTime = Math.max(0, centerTime - SCRATCH_SNIPPET_SECONDS);
         const endTime = Math.min(duration, centerTime + SCRATCH_SNIPPET_SECONDS);
         const startByte = info.audioStart + Math.floor(startTime * bytesPerSecond);
         const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil(endTime * bytesPerSecond));
 
-        const response = await fetch(track.file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
+        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
         if (response.status !== 206) {
             if (response.body) response.body.cancel();
             throw new Error("Range requests not supported");
@@ -3654,7 +3608,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const sliceStart = startTime + (frameStart / bytesPerSecond);
         return {
-            file: track.file,
+            file,
             data,
             sampleRate: decoded.sampleRate,
             startTime: sliceStart,
@@ -3663,10 +3617,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function requestScratchSnippet(track, centerTime) {
-        const covers = (snippet) => snippet && snippet.file === track.file
+        const file = getTrackAudio(track);
+        const covers = (snippet) => snippet && snippet.file === file
             && centerTime > snippet.startTime + 1.5 && centerTime < snippet.endTime - 1.5;
         if (covers(scratchSnippet)) return Promise.resolve(scratchSnippet);
-        if (scratchSnippetRequest && scratchSnippetRequest.file === track.file
+        if (scratchSnippetRequest && scratchSnippetRequest.file === file
             && Math.abs(scratchSnippetRequest.centerTime - centerTime) < 1.5) {
             return scratchSnippetRequest.promise;
         }
@@ -3675,7 +3630,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             scratchSnippet = snippet;
             return snippet;
         });
-        scratchSnippetRequest = { file: track.file, centerTime, promise };
+        scratchSnippetRequest = { file, centerTime, promise };
         promise.catch(() => {}).finally(() => {
             if (scratchSnippetRequest && scratchSnippetRequest.promise === promise) scratchSnippetRequest = null;
         });
@@ -3772,9 +3727,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Turntable start-up "wow" as the platter gets back up to speed
     function spinUpPlayback() {
         const canBendPitch = "preservesPitch" in player || "webkitPreservesPitch" in player;
+        const rate = getTrackRate(currentTrackData);
         if (canBendPitch) {
             setPreservesPitch(false);
-            player.playbackRate = 0.55;
+            player.playbackRate = 0.55 * rate;
         }
         const playPromise = player.play();
         if (playPromise && typeof playPromise.catch === "function") {
@@ -3789,12 +3745,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const ramp = () => {
             const progress = Math.min(1, (performance.now() - startedAt) / 300);
             if (scratch) return;
-            player.playbackRate = 0.55 + (0.45 * (1 - Math.pow(1 - progress, 2)));
+            player.playbackRate = rate * (0.55 + (0.45 * (1 - Math.pow(1 - progress, 2))));
             if (progress < 1) {
                 requestAnimationFrame(ramp);
             } else {
-                player.playbackRate = 1;
-                setPreservesPitch(true);
+                applyTrackSpeed(player, currentTrackData);
             }
         };
         requestAnimationFrame(ramp);
@@ -4010,8 +3965,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── Beat visuals: speakers, penguins, glow and notes move with the music ─────
-    // Only with Rhythm on (below): then the penguins dance to the song's beats, the speakers thump
-    // with its bass, the glow pulses and notes float out. With it off the jukebox stays calm.
+    // With Rhythm on (below) the penguins dance to the song's beats, the speakers thump with its
+    // bass, the glow pulses and notes float out. With it off the jukebox stays calm.
     const NOTE_COLORS = ["#ffd1f4", "#c7f9ff", "#fff3b0", "#d9dcff", "#ffd8b0"];
     const NOTE_SHAPES = [
         `<svg viewBox="0 0 24 24"><ellipse cx="9.5" cy="18" rx="4" ry="3" transform="rotate(-20 9.5 18)"/><path d="M13.2 18V3.5c1.2 3.2 6 3.8 6 9.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
@@ -4029,38 +3984,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     let punchSlot = 0;
 
     // ───── Rhythm: the jukebox moving to the beat ─────
-    // Off at the start of every visit: things bouncing to a beat nobody asked for just look like a
-    // glitch. Once a song has been playing for a few seconds the penguins ask (once a visit) if they
-    // should dance to it, and tapping them switches it on or off any time.
-    const RHYTHM_INVITE_AFTER_MS = 4000;
-    const RHYTHM_INVITE_LINGER_MS = 14000;
-    const rhythmInvite = document.getElementById("rhythm-invite");
+    // On unless it's been switched off (in the settings on the back, or by tapping the penguins),
+    // and remembered either way
+    const RHYTHM_STORAGE_KEY = "museJukeboxRhythm";
     const rhythmNote = document.getElementById("rhythm-note");
-    let rhythmOn = false;
-    let rhythmInviteState = "waiting"; // then "open", then "answered" (not asked again this visit)
-    let rhythmInviteTimer = null;
+    const rhythmSwitch = document.getElementById("setting-rhythm");
+    let rhythmOn = readRhythmSetting();
     let rhythmNoteTimer = null;
-    let listeningSince = null; // when the song that's playing started (or carried on) playing
 
-    function setRhythm(on) {
+    function readRhythmSetting() {
+        try {
+            return localStorage.getItem(RHYTHM_STORAGE_KEY) !== "off";
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function setRhythm(on, announce = false) {
         rhythmOn = on;
-        if (jukeboxContainer) jukeboxContainer.classList.toggle("rhythm-on", on);
-        titlePenguins.forEach((penguin) => {
-            if (penguin.hasAttribute("aria-pressed")) penguin.setAttribute("aria-pressed", String(on));
-            penguin.title = on ? "Rhythm is on: tap to stop the dancing" : "Rhythm: dance to the beat";
-        });
-        showRhythmNote(on);
+        try {
+            localStorage.setItem(RHYTHM_STORAGE_KEY, on ? "on" : "off");
+        } catch (error) {
+            // Storage blocked: it's just not remembered
+        }
+        showRhythmSetting();
+        if (announce) showRhythmNote(on);
         if (on) {
-            PENGUIN_POSES.forEach((source) => {
-                const image = new Image();
-                image.src = source;
-            });
             requestSongBeats(currentTrackData);
         } else {
             calmVisualsFor = null;
             applyCalmVisuals(isPlayerActive());
         }
         startBeatVisuals();
+    }
+
+    // The penguins, the switch on the back and the jukebox all showing whether it's on
+    function showRhythmSetting() {
+        if (jukeboxContainer) jukeboxContainer.classList.toggle("rhythm-on", rhythmOn);
+        titlePenguins.forEach((penguin) => {
+            if (penguin.hasAttribute("aria-pressed")) penguin.setAttribute("aria-pressed", String(rhythmOn));
+            penguin.title = rhythmOn ? "Rhythm is on: tap to stop the dancing" : "Rhythm: dance to the beat";
+        });
+        if (rhythmSwitch) rhythmSwitch.checked = rhythmOn;
+        if (rhythmOn) {
+            PENGUIN_POSES.forEach((source) => {
+                const image = new Image();
+                image.src = source;
+            });
+        }
     }
 
     function showRhythmNote(on) {
@@ -4072,38 +4043,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         rhythmNoteTimer = setTimeout(() => rhythmNote.classList.remove("is-visible"), 1500);
     }
 
-    function openRhythmInvite() {
-        if (!rhythmInvite || rhythmInviteState !== "waiting" || rhythmOn) return;
-        if (isFrontHidden() || isJukeboxFlipping || scratch || (coverModal && coverModal.classList.contains("active"))) return;
-        rhythmInviteState = "open";
-        rhythmInvite.classList.add("is-open");
-        clearTimeout(rhythmInviteTimer);
-        rhythmInviteTimer = setTimeout(() => closeRhythmInvite(true), RHYTHM_INVITE_LINGER_MS);
-    }
-
-    // Answered (or left to time out), it isn't asked again this visit; put away for another reason
-    // (the jukebox turned around, the song cleared away) it can ask next time
-    function closeRhythmInvite(answered) {
-        if (!rhythmInvite || rhythmInviteState !== "open") return;
-        rhythmInviteState = answered ? "answered" : "waiting";
-        listeningSince = null;
-        clearTimeout(rhythmInviteTimer);
-        rhythmInvite.classList.remove("is-open");
-    }
-
     function setUpRhythm() {
+        showRhythmSetting();
         titlePenguins.forEach((penguin) => {
-            penguin.addEventListener("click", () => {
-                closeRhythmInvite(true);
-                setRhythm(!rhythmOn);
-            });
+            penguin.addEventListener("click", () => setRhythm(!rhythmOn, true));
         });
-        if (rhythmInvite) {
-            rhythmInvite.querySelector(".rhythm-invite-button--yes").addEventListener("click", () => {
-                closeRhythmInvite(true);
-                setRhythm(true);
-            });
-            rhythmInvite.querySelector(".rhythm-invite-button--no").addEventListener("click", () => closeRhythmInvite(true));
+        if (rhythmSwitch) {
+            rhythmSwitch.addEventListener("change", () => setRhythm(rhythmSwitch.checked));
         }
         // Each equaliser bar's place, for the gentle ripple when Rhythm is off
         eqBars.forEach((bar, index) => bar.style.setProperty("--i", index));
@@ -4148,7 +4094,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const duration = player.duration;
         if (!Number.isFinite(duration) || duration < 8) return;
 
-        let analysis = beatAnalyses.get(track.file);
+        const file = getTrackAudio(track);
+        let analysis = beatAnalyses.get(file);
         if (!analysis) {
             let sampleRate;
             try {
@@ -4160,7 +4107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const frameCount = Math.floor((duration * sampleRate) / BEAT_HOP) + 1;
             const chunkFrames = Math.round(BEAT_CHUNK_SECONDS * rate);
             analysis = {
-                file: track.file,
+                file,
                 duration,
                 sampleRate,
                 rate,
@@ -4175,7 +4122,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 busy: false,
                 failures: 0
             };
-            beatAnalyses.set(track.file, analysis);
+            beatAnalyses.set(file, analysis);
             while (beatAnalyses.size > 6) {
                 beatAnalyses.delete(beatAnalyses.keys().next().value);
             }
@@ -4191,7 +4138,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Measure the next stretch: from the one that's playing onwards, then from the top
     function continueSongBeats(analysis) {
         if (analysis.busy || analysis.failures >= 3 || !rhythmOn || document.hidden) return;
-        if (!currentTrackData || currentTrackData.file !== analysis.file) return;
+        if (!currentTrackData || getTrackAudio(currentTrackData) !== analysis.file) return;
         const chunkCount = analysis.chunksDone.length;
         const playingChunk = getPlayingBeatChunk(analysis);
         let chunk = -1;
@@ -4707,12 +4654,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         let bass = 0;
 
         if (playing) {
-            // Listening for a little while (and not asked yet this visit): shall the penguins dance?
-            if (listeningSince === null) {
-                listeningSince = timestamp;
-            } else if (!rhythmOn && rhythmInviteState === "waiting" && timestamp - listeningSince >= RHYTHM_INVITE_AFTER_MS) {
-                openRhythmInvite();
-            }
             const time = scratch ? scratch.targetTime : player.currentTime;
             songTime = time;
 
@@ -4724,7 +4665,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 measureSpectrumAhead(spectrum, time);
             }
             if (rhythmOn) {
-                position = getBeatPosition(beatAnalyses.get(currentTrackData.file), time);
+                position = getBeatPosition(beatAnalyses.get(getTrackAudio(currentTrackData)), time);
                 let level = 0;
                 if (position) {
                     beatIndex = position.index;
@@ -4752,8 +4693,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     bass = guessLevels(level, beatIndex, targetLevels);
                 }
             }
-        } else {
-            listeningSince = null;
         }
         if (!playing || !rhythmOn) {
             lastBeatIndex = null;
@@ -4829,14 +4768,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const fftTableSets = new Map(); // by FFT size
 
     function getSpectrum(track) {
-        let spectrum = spectra.get(track.file);
+        const file = getTrackAudio(track);
+        let spectrum = spectra.get(file);
         if (spectrum) return spectrum;
         const duration = player.duration;
         if (!Number.isFinite(duration) || duration < 1) return null;
 
         const frameCount = Math.floor(duration * SPECTRUM_RATE) + 1;
         spectrum = {
-            file: track.file,
+            file,
             duration,
             frameCount,
             levels: new Uint8Array(frameCount * SPECTRUM_VALUES), // dB, in half-dB steps from -100
@@ -5204,11 +5144,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Songs started from the list stream straight from the file, so fetch just their ending
     async function analyzeMixFromUrl(track, duration) {
-        const info = await fetchAudioFileInfo(track.file);
+        const file = getTrackAudio(track);
+        const info = await fetchAudioFileInfo(file);
         const bytesPerSecond = (info.total - info.audioStart) / duration;
         const sliceBytes = Math.ceil(Math.min(MIX_ANALYSIS_SECONDS, duration) * bytesPerSecond);
         const startByte = Math.max(info.audioStart, info.total - sliceBytes);
-        const response = await fetch(track.file, { headers: { Range: `bytes=${startByte}-${info.total - 1}` } });
+        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${info.total - 1}` } });
         if (response.status !== 206) {
             if (response.body) response.body.cancel();
             throw new Error("Range requests not supported");
@@ -5219,15 +5160,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function requestMixInfo(track) {
-        if (!track || mixInfoCache.has(track.file) || mixInfoRequests.has(track.file)) return;
+        const file = getTrackAudio(track);
+        if (!track || mixInfoCache.has(file) || mixInfoRequests.has(file)) return;
         const duration = player.duration;
         if (!Number.isFinite(duration) || duration < 1) return;
 
-        mixInfoRequests.add(track.file);
+        mixInfoRequests.add(file);
         analyzeMixFromUrl(track, duration)
-            .then((info) => mixInfoCache.set(track.file, info))
-            .catch(() => mixInfoCache.set(track.file, null))
-            .finally(() => mixInfoRequests.delete(track.file));
+            .then((info) => mixInfoCache.set(file, info))
+            .catch(() => mixInfoCache.set(file, null))
+            .finally(() => mixInfoRequests.delete(file));
     }
 
     // Where this song is over and the next one comes in: the very end, unless it ends in a long
@@ -5331,7 +5273,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadUpNext(entry).catch(() => {
             if (upNext !== entry) return;
             // Couldn't fetch it whole: stream it on the spare deck instead
-            setDeckSource(deck, track.file);
+            setDeckSource(deck, getTrackAudio(track));
+            applyTrackSpeed(deck, track);
             entry.startAt = 0;
             entry.ready = true;
         });
@@ -5339,7 +5282,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function loadUpNext(entry) {
         entry.controller = typeof AbortController === "function" ? new AbortController() : null;
-        const response = await fetch(entry.track.file, entry.controller ? { signal: entry.controller.signal } : undefined);
+        const file = getTrackAudio(entry.track);
+        const response = await fetch(file, entry.controller ? { signal: entry.controller.signal } : undefined);
         if (!response.ok) throw new Error("Couldn't load the song");
         const bytes = new Uint8Array(await response.arrayBuffer());
         if (upNext !== entry) return;
@@ -5348,7 +5292,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             frames = parseMp3Frames(bytes);
             const info = await analyzeMixFromBytes(bytes, frames);
-            mixInfoCache.set(entry.track.file, info);
+            mixInfoCache.set(file, info);
             entry.startAt = info.audibleStart;
         } catch (error) {
             // Couldn't measure it: it still plays, just from the very start and right to the end
@@ -5357,9 +5301,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const blob = new Blob([bytes], { type: "audio/mpeg" });
         if (frames) {
-            rememberSongSource(entry.track.file, blob, frames);
+            rememberSongSource(file, blob, frames);
         }
         setDeckSource(entry.deck, URL.createObjectURL(blob), { blob: true });
+        applyTrackSpeed(entry.deck, entry.track);
         cueDeck(entry.deck, entry.startAt);
         entry.ready = true;
     }
@@ -5405,7 +5350,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const duration = player.duration;
         if (!Number.isFinite(time) || !Number.isFinite(duration)) return;
 
-        const info = mixInfoCache.get(currentTrackData.file);
+        const info = mixInfoCache.get(getTrackAudio(currentTrackData));
         if (info === undefined && time > 1) {
             requestMixInfo(currentTrackData);
         }
@@ -5466,7 +5411,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Repeat-one: back to the top of the song
     function restartCurrentTrack() {
         clearTimeout(autoMixTimer);
-        const info = mixInfoCache.get(currentTrackData.file);
+        const info = mixInfoCache.get(getTrackAudio(currentTrackData));
         player.currentTime = info ? info.audibleStart : 0;
         if (player.paused) {
             const playPromise = player.play();
@@ -5771,7 +5716,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (target) target.focus({ preventScroll: true });
         };
 
-        closeRhythmInvite(false);
         // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
         if (showBack && window.jukebot) {
             window.jukebot.prepare();
@@ -5827,35 +5771,201 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── LED signs: along the bottom of Jukebot's panel, and the flip sign on phones ─────
-    // The words are written twice over so a lap loops without a seam (or once, sitting still, if
-    // they fit), and a lap takes as long as its words need, so every sign scrolls at the same pace
-    const LED_PIXELS_PER_SECOND = 40;
+    // A sign is a ticker: its words scroll through for good, one after another and round again. The
+    // scrolling is one CSS animation that goes round and round (on the compositor, so it stays
+    // smooth while the page is busy, and it rests while the sign's out of sight) and the words are
+    // laid down just ahead of it, with a copy one turn along wherever they cross where it comes
+    // round. When what a sign says changes, whatever's in view carries on across and the new words
+    // come in right behind it, with a quick push (one eased animation on top of the scroll) that
+    // sweeps them up to the front.
+    const LED_PIXELS_PER_SECOND = 40; // keep in step with ledTickerRun in styles.css
+    const LED_TURN_PIXELS = 6000; // one turn of ledTickerRun
     const coverLed = document.querySelector(".cover-led");
     const flipSignLed = document.querySelector(".flip-sign-led");
-    const ledSignWords = new WeakMap();
+    const ledTickers = new Map(); // sign -> its words and what's been laid down
     let tickerShowsTips = false; // the panel's too short for the tips card, so they're on its sign
 
-    function writeLedSign(sign, items) {
-        const track = sign?.querySelector(".led-sign-track");
-        if (!track) return;
-        const words = `${sign.clientWidth}\n${items.map(([text, kind]) => `${kind}:${text}`).join("\n")}`;
-        if (ledSignWords.get(sign) === words) return;
-        ledSignWords.set(sign, words);
+    // Where the words are kept: `left`/`right` are along the whole scroll (px), so a word at `left`
+    // is at the sign's front once the scroll and any push have gone that far
+    function getLedTicker(sign) {
+        let ticker = ledTickers.get(sign);
+        if (!ticker) {
+            const track = sign.querySelector(".led-sign-track");
+            const lane = document.createElement("span");
+            lane.className = "led-sign-lane";
+            track.replaceChildren(lane);
+            ticker = {
+                sign, track, lane, width: null, key: "", items: [], next: 0, pieces: [], laidTo: 0, lastOffset: 0,
+                push: null, newWordsAt: 0, pushAgain: false
+            };
+            ledTickers.set(sign, ticker);
+        }
+        return ticker;
+    }
 
-        const lap = document.createElement("span");
-        lap.className = "led-sign-lap";
-        items.forEach(([text, kind]) => {
-            const item = document.createElement("span");
-            item.className = kind ? `led-sign-item is-${kind}` : "led-sign-item";
-            item.textContent = text;
-            lap.append(item);
+    // The scroll's animation (there's none while the sign's hidden, or with reduced motion)
+    function getLedRun(ticker) {
+        if (typeof ticker.track.getAnimations !== "function") return null;
+        return ticker.track.getAnimations().find((run) => run.animationName === "ledTickerRun") || null;
+    }
+
+    // How far the sign has scrolled, all told (px)
+    function getLedOffset(ticker) {
+        const run = getLedRun(ticker);
+        return run ? ((Number(run.currentTime) || 0) / 1000) * LED_PIXELS_PER_SECOND : 0;
+    }
+
+    // ...and how far a push has taken it on top of that
+    function getLedPushed(ticker) {
+        if (!ticker.push) return 0;
+        const transform = getComputedStyle(ticker.lane).transform;
+        if (!transform || transform === "none" || typeof DOMMatrixReadOnly !== "function") return 0;
+        return -new DOMMatrixReadOnly(transform).m41;
+    }
+
+    function getLedWidth(ticker) {
+        return ticker.width === null ? ticker.sign.clientWidth : ticker.width;
+    }
+
+    function setLedSign(sign, items) {
+        if (!sign || !items.length) return;
+        const ticker = getLedTicker(sign);
+        const key = items.map(([text, kind]) => `${kind}:${text}`).join("\n");
+        if (ticker.key === key) return;
+        const changed = Boolean(ticker.key);
+        ticker.key = key;
+        ticker.items = items;
+        ticker.next = 0;
+        if (changed && ticker.pieces.length) {
+            const run = getLedRun(ticker);
+            if (run && run.playState === "running" && !document.hidden) {
+                // What's in view carries on; the words laid beyond it make way for the new ones
+                const shownTo = getLedOffset(ticker) + getLedPushed(ticker) + getLedWidth(ticker);
+                ticker.pieces = ticker.pieces.filter((piece) => {
+                    if (piece.left < shownTo) return true;
+                    removeLedPiece(piece);
+                    return false;
+                });
+                if (ticker.pieces.length) {
+                    ticker.newWordsAt = ticker.pieces[ticker.pieces.length - 1].right;
+                    ticker.laidTo = ticker.newWordsAt;
+                    pushLedSign(ticker);
+                    layLedSign(ticker);
+                    return;
+                }
+            }
+            // Nobody's watching it scroll: the new words just show
+            clearLedSign(ticker);
+        }
+        layLedSign(ticker);
+    }
+
+    function removeLedPiece(piece) {
+        piece.elements.forEach((element) => element.remove());
+    }
+
+    function clearLedSign(ticker) {
+        if (ticker.push) {
+            ticker.push.animation.cancel();
+            ticker.push = null;
+        }
+        ticker.pushAgain = false;
+        ticker.pieces.forEach(removeLedPiece);
+        ticker.pieces = [];
+        ticker.laidTo = getLedOffset(ticker) + 10;
+    }
+
+    // Put a piece's words where they go on the track: at their spot in the turn, and again a turn
+    // along if they run over its end or are among the first of the next one (so the scroll comes
+    // round without a seam)
+    function placeLedPiece(ticker, piece) {
+        const [element] = piece.elements;
+        const length = piece.right - piece.left;
+        const at = ((piece.left % LED_TURN_PIXELS) + LED_TURN_PIXELS) % LED_TURN_PIXELS;
+        element.style.left = `${at}px`;
+        let copyAt = null;
+        if (at + length > LED_TURN_PIXELS) copyAt = at - LED_TURN_PIXELS;
+        else if (at < (getLedWidth(ticker) * 2) + 200) copyAt = at + LED_TURN_PIXELS;
+        if (copyAt === null) {
+            piece.elements.splice(1).forEach((copy) => copy.remove());
+            return;
+        }
+        if (piece.elements.length < 2) {
+            piece.elements.push(element.cloneNode(true));
+            ticker.lane.append(piece.elements[1]);
+        }
+        piece.elements[1].style.left = `${copyAt}px`;
+    }
+
+    // Lay words down ahead of the scroll (and take away the ones that have gone past)
+    function layLedSign(ticker) {
+        const width = getLedWidth(ticker);
+        if (!width || !ticker.items.length) return;
+        const offset = getLedOffset(ticker);
+        const shownFrom = offset + getLedPushed(ticker);
+        while (ticker.pieces.length && ticker.pieces[0].right < shownFrom) {
+            removeLedPiece(ticker.pieces.shift());
+        }
+        // Nothing left in view (it's just been shown, it started again, or the page was put away
+        // for a while): lay it all down fresh
+        if (!ticker.pieces.length || offset + 50 < ticker.lastOffset) clearLedSign(ticker);
+        ticker.lastOffset = offset;
+        // Far enough ahead for the next second or so, and for where a push is taking it
+        const push = ticker.push;
+        const reach = offset + (push ? push.distance + (push.seconds * LED_PIXELS_PER_SECOND) : 0) + (width * 2) + 60;
+        while (ticker.laidTo < reach) {
+            const [text, kind] = ticker.items[ticker.next % ticker.items.length];
+            ticker.next += 1;
+            const element = document.createElement("span");
+            element.className = kind ? `led-sign-item is-${kind}` : "led-sign-item";
+            element.textContent = text;
+            ticker.lane.append(element);
+            const piece = { elements: [element], left: ticker.laidTo, right: ticker.laidTo + element.offsetWidth };
+            placeLedPiece(ticker, piece);
+            ticker.pieces.push(piece);
+            ticker.laidTo = piece.right;
+        }
+    }
+
+    // New words on their way: a push on top of the scroll sweeps what's in view off and brings them
+    // up to the front, easing in and out so nothing jumps. The words then sit back where the push
+    // left them and the push goes, ready for the next one.
+    function pushLedSign(ticker) {
+        if (ticker.push) {
+            ticker.pushAgain = true; // once this one's done
+            return;
+        }
+        const run = getLedRun(ticker);
+        if (!run || run.playState !== "running" || document.hidden || typeof ticker.lane.animate !== "function" || prefersReducedMotion()) return;
+        const ahead = ticker.newWordsAt - 12 - getLedOffset(ticker);
+        const seconds = Math.min(2.2, Math.max(0.8, 0.4 + (ahead / 350)));
+        const distance = Math.round(ahead - (seconds * LED_PIXELS_PER_SECOND));
+        if (distance < 40) return;
+        const animation = ticker.lane.animate(
+            [{ transform: "translateX(0)" }, { transform: `translateX(${-distance}px)` }],
+            { duration: seconds * 1000, easing: "cubic-bezier(0.45, 0, 0.25, 1)", fill: "forwards" }
+        );
+        const push = { animation, distance, seconds };
+        ticker.push = push;
+        animation.onfinish = () => settleLedPush(ticker, push);
+    }
+
+    function settleLedPush(ticker, push) {
+        if (ticker.push !== push) return;
+        ticker.push = null;
+        ticker.pieces.forEach((piece) => {
+            piece.left -= push.distance;
+            piece.right -= push.distance;
+            placeLedPiece(ticker, piece);
         });
-        track.replaceChildren(lap);
-        const still = lap.offsetWidth <= sign.clientWidth;
-        sign.classList.toggle("is-still", still);
-        if (!still) {
-            track.append(lap.cloneNode(true));
-            track.style.setProperty("--led-seconds", `${Math.max(8, lap.offsetWidth / LED_PIXELS_PER_SECOND).toFixed(1)}s`);
+        ticker.laidTo -= push.distance;
+        ticker.newWordsAt -= push.distance;
+        push.animation.cancel();
+        layLedSign(ticker);
+        if (ticker.pushAgain) {
+            ticker.pushAgain = false;
+            pushLedSign(ticker);
+            layLedSign(ticker);
         }
     }
 
@@ -5864,21 +5974,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         const song = currentTrackData
             ? [`${isPlayerActive() ? "Now spinning" : "Paused"}: ${currentTrackData.title}`, "song"]
             : null;
-        writeLedSign(flipSignLed, song ? [song, invitation] : [invitation]);
+        setLedSign(flipSignLed, song ? [song, invitation] : [invitation]);
 
         const panelItems = [["Muse Tunes", "brand"], song || ["Pick a song, any song", "song"]];
         if (tickerShowsTips) {
             document.querySelectorAll(".back-tip span").forEach((tip) => panelItems.push([`Tip: ${tip.textContent}`, ""]));
         }
         panelItems.push(["Made by Muse", "brand"], ["Play it loud", ""]);
-        writeLedSign(coverLed, panelItems);
+        setLedSign(coverLed, panelItems);
     }
 
     function setUpLedSigns() {
         refreshLedSigns();
-        // A sign that changes size (a phone turned round) is written again for its new width
+        // Words go down ahead of the scroll as it goes, and again for a sign's new width
+        const layAll = () => {
+            if (!document.hidden) ledTickers.forEach(layLedSign);
+        };
+        setInterval(layAll, 1000);
+        document.addEventListener("visibilitychange", layAll);
         if (typeof ResizeObserver === "function") {
-            const observer = new ResizeObserver(() => refreshLedSigns());
+            const observer = new ResizeObserver((entries) => entries.forEach((entry) => {
+                const ticker = ledTickers.get(entry.target);
+                if (!ticker) return;
+                ticker.width = entry.contentRect.width;
+                layLedSign(ticker);
+            }));
             [coverLed, flipSignLed].forEach((sign) => sign && observer.observe(sign));
         }
     }
@@ -5887,7 +6007,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // all fit they come a page at a time: tap for the next page, and they move on by themselves
     // while the back is out (unless a pointer or focus is on them)
     const TIP_PAGE_SECONDS = 8;
-    const MIN_TIPS_PER_PAGE = 3;
+    const MIN_TIPS_PER_PAGE = 2;
     const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
     const TIP_MAX_SPREAD = 18; // px: the most extra room between two tips when there's space to fill
     let syncBackTips = () => {};
@@ -5954,11 +6074,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             const rowGap = parseFloat(listStyle.rowGap) || 0;
             const maxColumns = list.clientWidth >= (2 * TIP_COLUMN_MIN_WIDTH) + (parseFloat(listStyle.columnGap) || 0) ? 2 : 1;
             let best = null;
-            let threeTips = 0;
+            let smallestPage = 0;
             for (let columns = 1; columns <= maxColumns; columns += 1) {
                 list.style.gridTemplateColumns = columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : "";
                 const heights = tips.map((tip) => tip.offsetHeight);
-                if (columns === 1) threeTips = tallestPage(heights, MIN_TIPS_PER_PAGE, 1, rowGap);
+                if (columns === 1) smallestPage = tallestPage(heights, MIN_TIPS_PER_PAGE, 1, rowGap);
                 for (let pages = 1; pages <= tips.length; pages += 1) {
                     // Pages as even as they can be (not a last page with one tip on it)
                     const pageSize = Math.ceil(tips.length / pages);
@@ -5970,9 +6090,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             }
-            // Not even a page of three fits (a short screen): they go along the LED sign instead, and
+            // Not even a page of two fits (a short screen): they go along the LED sign instead, and
             // the card's only kept for screen readers
-            const onSign = room + 1 < threeTips && !prefersReducedMotion();
+            const onSign = room + 1 < smallestPage && !prefersReducedMotion();
             if (onSign) best = { columns: 1, pages: 1, pageSize: tips.length, height: 0 };
 
             // The card fills the rest of the panel, and the tips spread out over it (up to a point) so
