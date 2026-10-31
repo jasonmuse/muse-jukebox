@@ -2713,6 +2713,54 @@ html {
     }
 }
 
+/* Shorter rows beside the Now playing panel (tablets on their side, desktop windows), so more
+   songs fit, as on phones: smaller covers, and only the playing song shows its tags (the panel
+   next to the list has the rest). Phones on their side get their own, smaller sizes below. */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
+    .track {
+        --cover-size: 60px;
+        --cover-gap: 12px;
+        padding: 9px 8px;
+    }
+
+    .track:not(.track-modes-visible) .tags {
+        display: none;
+    }
+
+    .title {
+        font-size: 1.2rem;
+    }
+
+    .tag-bubble {
+        font-size: 0.8em;
+        padding: 2px 7px;
+    }
+
+    .play-button {
+        min-height: 32px;
+        min-width: 66px;
+        padding: 0 16px;
+        font-size: 0.9em;
+    }
+
+    .mode-button {
+        --mode-size: 32px;
+    }
+
+    /* The Side A / B label across the bottom of the smaller cover, inside the row. The playing
+       song's cover sits at the bottom of its row here, so its label does too. */
+    .track.track-modes-visible .side-switch {
+        align-self: flex-end;
+        margin-top: 0;
+    }
+
+    .side-switch,
+    .track.track-modes-visible .side-switch {
+        height: 18px;
+        margin-bottom: -3px;
+    }
+}
+
 @media (orientation: landscape) and (pointer: coarse) and (max-width: 720px) {
     #jukebox-container {
         grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
