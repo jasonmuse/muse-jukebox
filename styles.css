@@ -3182,6 +3182,21 @@ html {
     animation-play-state: paused !important;
 }
 
+/* Safari can keep drawing a moving part's layer for a moment after the side it's on has hidden,
+   over the other side (an LED sign's words worst of all: they reach out past the sign's own box,
+   so it doesn't see them to redraw). So the moment the jukebox is edge-on, the side going away has
+   its signs (and the flip key) faded right out, which Safari applies to the layer itself, and the
+   back keeps a layer of its own for as long as it's out, over anything of the front's left behind. */
+#jukebox.is-flipped .flip-sign-led .led-sign-track,
+#jukebox.is-flipped .flip-key,
+#jukebox:not(.is-flipped) .cover-led .led-sign-track {
+    opacity: 0;
+}
+
+#jukebox.is-flipped > .jukebox-back {
+    will-change: opacity;
+}
+
 .back-header {
     display: flex;
     align-items: center;
