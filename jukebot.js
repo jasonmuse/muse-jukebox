@@ -1214,13 +1214,105 @@
             later(() => showMission(progress.step), 520);
         }
 
+        // ───── "Fix me again": Jukebot gets messed up all over again ─────
+        // A little show first: it hears something, a few bugs scuttle in over its panel, it jolts and
+        // a crack runs across with sparks and a puff of smoke, the bugs dive in through the cracks,
+        // and its lights flicker out. Then it's glitching away, ready for the job again.
+        let breakingDown = false;
+
         function restartJob() {
-            progress.step = 0;
-            progress.jobSeconds = 0;
-            progress.squashed = 0;
-            saveProgress(progress);
-            rest();
-            say("Uh oh... glitching again!", 1600, true);
+            if (breakingDown) return;
+            const resetJob = () => {
+                progress.step = 0;
+                progress.jobSeconds = 0;
+                progress.squashed = 0;
+                saveProgress(progress);
+                rest();
+                say("Uh oh... glitching again!", 1600, true);
+            };
+            if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                resetJob();
+                return;
+            }
+            breakingDown = true;
+            stickerActions.hidden = true;
+            react("worried", 1600);
+            say("Huh? What's that noise?", 1100, true);
+            root.classList.remove("is-breaking-down");
+            void root.offsetWidth;
+            root.classList.add("is-breaking-down");
+            lights.forEach((light) => light.classList.add("is-flickering"));
+            sendInIntruders();
+            setTimeout(crackPanel, 450);
+            setTimeout(() => {
+                lights.forEach((light) => light.classList.remove("is-flickering"));
+                root.classList.remove("is-breaking-down");
+                breakingDown = false;
+                resetJob();
+            }, 1550);
+        }
+
+        // A few bugs scuttle in from the edges, wiggling, and dive into the panel
+        function sendInIntruders() {
+            const { width, height } = size;
+            if (!width || !height) return;
+            ["fly", "beetle", "fly", "hopper", "fly"].forEach((type, index) => {
+                const to = { x: width * randomBetween(0.25, 0.75), y: height * randomBetween(0.2, 0.62) };
+                const side = index % 3;
+                const from = side === 0
+                    ? { x: -26, y: to.y + randomBetween(-70, 70) }
+                    : side === 1 ? { x: width + 26, y: to.y + randomBetween(-70, 70) } : { x: to.x + randomBetween(-90, 90), y: height + 26 };
+                const intruder = document.createElementNS(SVG_NS, "svg");
+                intruder.setAttribute("class", "jb-intruder");
+                intruder.setAttribute("viewBox", "-20 -20 40 40");
+                drawBugArt(type, svgEl("g", { class: "jb-bug-art" }, intruder));
+                intruder.style.left = `${to.x.toFixed(1)}px`;
+                intruder.style.top = `${to.y.toFixed(1)}px`;
+                intruder.style.setProperty("--from-x", `${(from.x - to.x).toFixed(1)}px`);
+                intruder.style.setProperty("--from-y", `${(from.y - to.y).toFixed(1)}px`);
+                intruder.style.setProperty("--turn", `${((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 90).toFixed(1)}deg`);
+                intruder.style.setProperty("--wiggle", `${(randomBetween(7, 15) * (Math.random() < 0.5 ? -1 : 1)).toFixed(1)}px`);
+                intruder.style.animationDelay = `${index * 110}ms`;
+                fxLayer.appendChild(intruder);
+                setTimeout(() => intruder.remove(), 1450 + (index * 110));
+            });
+        }
+
+        // The jolt: a crack across the panel, sparks along it, smoke out of the vents
+        function crackPanel() {
+            const { width, height } = size;
+            if (!width || !height || !breakingDown) return;
+            react("ouch", 1000);
+            say("Bugs?! Not again!", 1000, true);
+            let x = width * randomBetween(0.32, 0.68);
+            let y = height * 0.06;
+            const points = [[x, y]];
+            for (let index = 0; index < 7; index += 1) {
+                x = Math.max(16, Math.min(width - 16, x + randomBetween(-34, 34)));
+                y += height * randomBetween(0.06, 0.1);
+                points.push([x, y]);
+            }
+            const branchFrom = points[3];
+            const branch = [branchFrom, [branchFrom[0] + randomBetween(26, 44) * (Math.random() < 0.5 ? -1 : 1), branchFrom[1] + randomBetween(18, 34)]];
+            const toPath = (list) => `M${list.map(([px, py]) => `${px.toFixed(1)} ${py.toFixed(1)}`).join("L")}`;
+            const crack = document.createElementNS(SVG_NS, "svg");
+            crack.setAttribute("class", "jb-crack");
+            crack.setAttribute("viewBox", `0 0 ${width} ${height}`);
+            [[points, ""], [branch, " jb-crack--branch"]].forEach(([list, extra]) => {
+                svgEl("path", { class: `jb-crack-light${extra}`, d: toPath(list), pathLength: 100 }, crack);
+                svgEl("path", { class: `jb-crack-line${extra}`, d: toPath(list), pathLength: 100 }, crack);
+            });
+            fxLayer.appendChild(crack);
+            setTimeout(() => crack.remove(), 1150);
+            points.slice(1, 6).forEach(([px, py], index) => {
+                setTimeout(() => spawnFx("jb-break-spark", { x: px, y: py }, "", 600), index * 60);
+            });
+            for (let index = 0; index < 3; index += 1) {
+                setTimeout(() => {
+                    const puff = spawnFx("jb-break-puff", { x: (width / 2) + randomBetween(-16, 16), y: 12 }, "", 1100);
+                    puff.style.setProperty("--drift", `${randomBetween(-12, 12).toFixed(1)}px`);
+                }, index * 130);
+            }
         }
 
         // ───── Step 1: unscrew the rear panel (hold to keep turning, or tap) ─────
@@ -2070,8 +2162,11 @@
             svgEl("circle", { class: "jb-break-core", r: 3.4 }, group);
             brk.ring = svgEl("circle", { class: "jb-break-ring", r: 18, pathLength: 100 }, group);
             brk.ring.style.strokeDashoffset = String(100 - (brk.progress * 100));
+            svgEl("path", { class: "jb-break-flow", d: "M3 0h44", pathLength: 100 }, group);
+            svgEl("path", { class: "jb-break-flow", d: "M-3 0h-44", pathLength: 100 }, group);
             svgEl("ellipse", { class: "jb-solder", rx: 6.5, ry: 4.6 }, group);
             svgEl("ellipse", { class: "jb-solder-shine", cx: -1.8, cy: -1.4, rx: 2.2, ry: 1.2 }, group);
+            svgEl("circle", { class: "jb-break-ok", cx: 0, cy: -10, r: 2.6 }, group);
             brk.element = group;
         }
 
@@ -2101,6 +2196,25 @@
             useTool({ x: brk.spot.x, y: brk.spot.y }, false);
             tool.classList.add("is-soldering");
             lookOverride = { x: brk.spot.x, y: brk.spot.y, until: performance.now() + 1200 };
+            showSolderGauge(brk);
+        }
+
+        // How hot the joint's got, up above it where a finger on the joint doesn't hide it (below it
+        // near the top of the board)
+        function showSolderGauge(brk) {
+            if (!brk.gauge || !brk.gauge.isConnected) {
+                brk.gauge = document.createElement("span");
+                brk.gauge.className = "jb-solder-gauge";
+                brk.gaugeFill = document.createElement("span");
+                brk.gaugeFill.className = "jb-solder-gauge-fill";
+                brk.gauge.appendChild(brk.gaugeFill);
+                fxLayer.appendChild(brk.gauge);
+            }
+            // (kept clear of the board's sides, so its "Fixed!" badge fits)
+            brk.gauge.style.left = `${Math.max(42, Math.min(size.width - 42, brk.spot.x)).toFixed(1)}px`;
+            brk.gauge.style.top = `${(brk.spot.y + (brk.spot.y < 84 ? 58 : -58)).toFixed(1)}px`;
+            brk.gaugeFill.style.transform = `scaleX(${brk.progress.toFixed(3)})`;
+            brk.gauge.classList.add("is-visible");
         }
 
         function endSolder(event) {
@@ -2108,6 +2222,7 @@
             if (!solder || (event && event.pointerId !== solder.pointerId)) return;
             game.solder = null;
             if (solder.brk.element) solder.brk.element.classList.remove("is-soldering");
+            if (solder.brk.gauge && !solder.brk.fixed) solder.brk.gauge.classList.remove("is-visible");
             tool.classList.remove("is-soldering");
             if (event && event.pointerType !== "mouse") {
                 clearTimeout(toolHideTimer);
@@ -2125,6 +2240,7 @@
             if (Math.hypot(solder.point.x - brk.spot.x, solder.point.y - brk.spot.y) > 40) return;
             brk.progress = Math.min(1, brk.progress + (deltaSeconds / SOLDER_SECONDS));
             brk.ring.style.strokeDashoffset = String(100 - (brk.progress * 100));
+            if (brk.gaugeFill) brk.gaugeFill.style.transform = `scaleX(${brk.progress.toFixed(3)})`;
             if (Math.random() < deltaSeconds * 7) {
                 spawnFx("jb-solder-smoke", { x: brk.spot.x + randomBetween(-5, 5), y: brk.spot.y - 6 }, "", 900);
             }
@@ -2134,9 +2250,20 @@
         function fixBreak(brk) {
             brk.fixed = true;
             endSolder();
-            brk.element.classList.add("is-fixed");
+            brk.element.classList.add("is-fixed", "just-fixed");
+            later(() => brk.element && brk.element.classList.remove("just-fixed"), 1100);
             sparkle({ x: brk.spot.x, y: brk.spot.y });
-            popText({ x: brk.spot.x, y: brk.spot.y - 20 }, "fixed!");
+            // So it's plain even with a finger on the joint: a green ring bursts out past it, the
+            // current runs off along the mended wire, and the heat gauge turns into a "Fixed!" badge
+            spawnFx("jb-fix-wave", { x: brk.spot.x, y: brk.spot.y }, "", 800);
+            if (brk.gauge) {
+                const badge = brk.gauge;
+                brk.gauge = null;
+                badge.classList.add("is-visible", "is-done");
+                setTimeout(() => badge.remove(), 1000);
+            } else {
+                popText({ x: brk.spot.x, y: brk.spot.y - 58 }, "Fixed!", "jb-pop--fixed");
+            }
             setPower(game.power + 8);
             react("happy", 600);
             if (typeof navigator.vibrate === "function") navigator.vibrate(12);

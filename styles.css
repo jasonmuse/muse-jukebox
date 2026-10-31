@@ -4504,6 +4504,174 @@ html.is-standalone .edge-blend {
     }
 }
 
+/* ───── "Fix me again": Jukebot getting messed up all over again ───── */
+/* Its face glitches hard, its panel jolts as the crack goes across, its lights flicker out */
+.jb-back.is-breaking-down .jb-face--sticker {
+    animation: jbGlitch 0.45s steps(1) infinite;
+}
+
+.jb-back.is-breaking-down .jb-cover {
+    animation: jbBreakJolt 560ms cubic-bezier(0.3, 0, 0.3, 1) 450ms;
+}
+
+@keyframes jbBreakJolt {
+    10% {
+        transform: translate(-4px, 3px) rotate(-1.4deg);
+    }
+
+    25% {
+        transform: translate(4px, -2px) rotate(1deg);
+    }
+
+    40% {
+        transform: translate(-3px, 1px) rotate(-0.6deg);
+    }
+
+    60% {
+        transform: translate(2px, 0) rotate(0.3deg);
+    }
+}
+
+.jb-light.is-flickering {
+    animation: jbLightFlicker 240ms steps(1) infinite;
+}
+
+@keyframes jbLightFlicker {
+    50% {
+        opacity: 0.25;
+    }
+}
+
+/* The bugs scuttling in (wiggling as they go) and diving into the panel */
+.jb-intruder {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    overflow: visible;
+    pointer-events: none;
+    opacity: 0;
+    animation: jbIntrude 1300ms cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+}
+
+@keyframes jbIntrude {
+    0% {
+        opacity: 1;
+        transform: translate(var(--from-x), var(--from-y)) rotate(var(--turn)) translateX(0) scale(1);
+    }
+
+    35% {
+        transform: translate(calc(var(--from-x) * 0.62), calc(var(--from-y) * 0.62)) rotate(var(--turn)) translateX(var(--wiggle)) scale(1);
+    }
+
+    65% {
+        transform: translate(calc(var(--from-x) * 0.25), calc(var(--from-y) * 0.25)) rotate(var(--turn)) translateX(calc(var(--wiggle) * -1)) scale(1);
+    }
+
+    82% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(var(--turn)) translateX(0) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(0, 0) rotate(calc(var(--turn) + 200deg)) translateX(0) scale(0.15);
+    }
+}
+
+/* The crack: drawn across in a blink, a pale edge under a dark line, then gone with the reset */
+.jb-crack {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    animation: jbCrackFade 1150ms ease-in forwards;
+}
+
+.jb-crack-line,
+.jb-crack-light {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    animation: jbCrackDraw 240ms ease-out forwards;
+}
+
+.jb-crack-line {
+    stroke: #120b24;
+    stroke-width: 2.8;
+}
+
+.jb-crack-light {
+    stroke: rgba(255, 255, 255, 0.4);
+    stroke-width: 5;
+}
+
+.jb-crack--branch {
+    stroke-width: 1.8;
+    animation-delay: 140ms;
+}
+
+.jb-crack-light.jb-crack--branch {
+    stroke-width: 3.4;
+}
+
+@keyframes jbCrackDraw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes jbCrackFade {
+    0%,
+    78% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+.jb-break-spark,
+.jb-break-puff {
+    position: absolute;
+    pointer-events: none;
+}
+
+.jb-break-spark {
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    background: #ffd36b;
+    clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+    animation: jbSparkle 600ms ease-out forwards;
+}
+
+.jb-break-puff {
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 50%;
+    background: rgba(30, 30, 44, 0.85);
+    animation: jbBreakPuff 1100ms ease-out forwards;
+}
+
+@keyframes jbBreakPuff {
+    0% {
+        opacity: 0.9;
+        transform: scale(0.4);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(var(--drift, 6px), -40px) scale(2.2);
+    }
+}
+
 /* Inside: a purple circuit board (gold pads, white silkscreen) with Jukebot's core chip */
 .jb-board {
     fill: #241a4d;
@@ -6507,6 +6675,167 @@ html.is-standalone .edge-blend {
     }
 }
 
+/* While soldering: how hot the joint's got, above it, where a finger on the joint can't hide it */
+.jb-solder-gauge {
+    position: absolute;
+    width: 64px;
+    height: 14px;
+    margin: -7px 0 0 -32px;
+    border-radius: 999px;
+    background: rgba(14, 16, 28, 0.88);
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.8), 0 3px 10px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(6px) scale(0.85);
+    transition: opacity 160ms ease-out, transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    pointer-events: none;
+}
+
+.jb-solder-gauge.is-visible {
+    opacity: 1;
+    transform: none;
+}
+
+.jb-solder-gauge-fill {
+    position: absolute;
+    inset: 2px;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff7a3d, #ffd23f);
+    transform-origin: left center;
+    transform: scaleX(0);
+}
+
+/* ...which turns into a "Fixed!" badge when it's done */
+.jb-solder-gauge.is-done {
+    width: 78px;
+    height: 24px;
+    margin: -12px 0 0 -39px;
+    background: #2fbf71;
+    box-shadow: 0 0 0 2px #ffffff, 0 0 16px rgba(92, 255, 157, 0.8);
+    animation: jbGaugeDone 1000ms ease-out forwards;
+}
+
+.jb-solder-gauge.is-done .jb-solder-gauge-fill {
+    display: none;
+}
+
+.jb-solder-gauge.is-done::after {
+    content: "\2713  Fixed!";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font: 900 0.78rem system-ui, -apple-system, Arial, sans-serif;
+    white-space: pre;
+}
+
+@keyframes jbGaugeDone {
+    0% {
+        transform: scale(0.8);
+    }
+
+    15% {
+        transform: scale(1.2);
+    }
+
+    30% {
+        transform: scale(1);
+    }
+
+    75% {
+        opacity: 1;
+        transform: translateY(-6px);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-16px);
+    }
+}
+
+.jb-pop.jb-pop--fixed {
+    color: #7dffb0;
+    font-size: 1rem;
+}
+
+/* Fixed: a green ring bursts out, well past a fingertip */
+.jb-fix-wave {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    border: 3px solid #5cff9d;
+    border-radius: 50%;
+    box-sizing: border-box;
+    box-shadow: 0 0 12px rgba(92, 255, 157, 0.8), inset 0 0 10px rgba(92, 255, 157, 0.5);
+    pointer-events: none;
+    animation: jbFixWave 750ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes jbFixWave {
+    from {
+        opacity: 1;
+        transform: scale(0.4);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(3.6);
+    }
+}
+
+/* ...the current runs off both ways along the mended wire... */
+.jb-break-flow {
+    fill: none;
+    stroke: #8dffbe;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 30 100;
+    stroke-dashoffset: 30;
+    opacity: 0;
+}
+
+.jb-break.just-fixed .jb-break-flow {
+    animation: jbBreakFlow 700ms ease-out forwards;
+}
+
+@keyframes jbBreakFlow {
+    0% {
+        opacity: 1;
+        stroke-dashoffset: 30;
+    }
+
+    100% {
+        opacity: 0;
+        stroke-dashoffset: -100;
+    }
+}
+
+/* ...and a mended joint keeps a little green light */
+.jb-break-ok {
+    fill: #5cff9d;
+    opacity: 0;
+}
+
+.jb-break.is-fixed .jb-break-ok {
+    opacity: 1;
+    filter: url(#jb-led-glow);
+}
+
+.jb-break.just-fixed .jb-break-ok {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbOkPop 600ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+@keyframes jbOkPop {
+    from {
+        transform: scale(0);
+    }
+}
+
 .jb-solder-smoke {
     position: absolute;
     width: 8px;
@@ -7630,7 +7959,8 @@ html.viewport-shifted body {
     .jb-queen-wings--up,
     .jb-queen-wings--down,
     .jb-queen-pupils,
-    .jb-back.is-quaking .jb-internals {
+    .jb-back.is-quaking .jb-internals,
+    .jb-break.just-fixed .jb-break-flow {
         animation: none;
     }
 
