@@ -2863,6 +2863,21 @@ html {
     right: 6px;
 }
 
+/* A phone's sign is too short for a bolt in every corner: one in the middle of each end instead */
+@media (max-width: 600px) {
+    .flip-sign .sign-bolt--bl,
+    .flip-sign .sign-bolt--br {
+        display: none;
+    }
+
+    .flip-sign .sign-bolt--tl,
+    .flip-sign .sign-bolt--tr {
+        top: calc(50% - 5px);
+        width: 8px;
+        height: 8px;
+    }
+}
+
 .flip-sign-text {
     font-weight: 700;
     white-space: nowrap;
@@ -2890,6 +2905,109 @@ html {
     transform: scale(0.98);
 }
 
+/* The flip key: a chrome-rimmed jukebox button with an LED tile in it. Every few seconds the tile
+   turns around (music on the front, Jukebot round the back), the way the jukebox does when it's
+   pressed. Only its transform moves, so it turns without the page redrawing anything. */
+.flip-key {
+    --key-size: 26px;
+    --key-dot: 2px;
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--key-size);
+    height: var(--key-size);
+    padding: 2px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #dde2ea, #9099aa 45%, #5f6879);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(20, 24, 34, 0.55), 0 0 7px rgba(255, 180, 70, 0.22);
+    perspective: 80px;
+    transition: transform 140ms ease-out, box-shadow 200ms ease-out;
+}
+
+/* The dark well the tile turns in (so mid-turn there's no chrome showing behind it) */
+.flip-key::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 6px;
+    background: #05060c;
+}
+
+.flip-key-tile {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    animation: flipKeyTurn 7s cubic-bezier(0.5, 0, 0.25, 1.15) infinite;
+}
+
+/* Each side: dark glass with the dim dots of an LED matrix, the picture lit up on it */
+.flip-key-face {
+    --dot-off: rgba(255, 200, 97, 0.13);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 6px;
+    background:
+        radial-gradient(circle, var(--dot-off) 0 calc(var(--key-dot) * 0.3), transparent calc(var(--key-dot) * 0.3 + 0.6px)) 50% 50% / var(--key-dot) var(--key-dot),
+        linear-gradient(180deg, #05060c, #11142a);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.95);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.flip-key-face--back {
+    --dot-off: rgba(181, 243, 255, 0.12);
+    transform: rotateY(180deg);
+}
+
+/* The glass over the LEDs */
+.flip-key-face::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 45%;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+    pointer-events: none;
+}
+
+.flip-key-face svg {
+    position: relative;
+    width: calc(var(--key-dot) * 7);
+    height: calc(var(--key-dot) * 7);
+    overflow: visible;
+    fill: #ffc861;
+    filter: drop-shadow(0 0 1.5px rgba(255, 190, 80, 1)) drop-shadow(0 0 4px rgba(255, 140, 40, 0.7));
+}
+
+.flip-key-face--back svg {
+    fill: #b5f3ff;
+    filter: drop-shadow(0 0 1.5px rgba(142, 233, 255, 1)) drop-shadow(0 0 4px rgba(90, 200, 255, 0.7));
+}
+
+/* Music for three and a half seconds, a turn, Jukebot for two, and on round to the front again */
+@keyframes flipKeyTurn {
+    0%, 50% {
+        transform: rotateY(0deg);
+    }
+
+    58%, 88% {
+        transform: rotateY(180deg);
+    }
+
+    96%, 100% {
+        transform: rotateY(360deg);
+    }
+}
+
+.flip-sign:active .flip-key {
+    transform: translateY(1px) scale(0.94);
+}
+
 .flip-sign:focus-visible,
 .back-flip-button:focus-visible,
 .track-clear:focus-visible,
@@ -2903,7 +3021,10 @@ html {
         background-color: #3c4252;
     }
 
-    .flip-sign:hover .flip-icon,
+    .flip-sign:hover .flip-key {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(20, 24, 34, 0.55), 0 0 12px rgba(255, 190, 80, 0.6);
+    }
+
     .back-flip-button:hover .flip-icon {
         transform: rotate(180deg);
     }
@@ -2931,6 +3052,16 @@ html {
 
     .flip-sign-led .led-sign-track {
         font-size: 0.72rem;
+    }
+
+    /* (the key stands a little taller than the window; the sign stays the height it was) */
+    .flip-sign {
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    .flip-key {
+        --key-size: 24px;
     }
 }
 
@@ -3046,6 +3177,7 @@ html {
 #jukebox.is-flipped .title-waves svg,
 #jukebox.is-flipped .cabinet-lights-glint,
 #jukebox.is-flipped .flip-sign-led .led-sign-track,
+#jukebox.is-flipped .flip-key-tile,
 #jukebox:not(.is-flipped) .cover-led .led-sign-track {
     animation-play-state: paused !important;
 }
@@ -7135,6 +7267,7 @@ html.viewport-shifted body {
     .title-penguin .penguin-icon,
     .title-waves svg,
     .led-sign-track,
+    .flip-key-tile,
     .jb-signal {
         animation: none;
     }
@@ -7184,12 +7317,22 @@ html.viewport-shifted body {
 
     .flip-sign {
         margin: 0 0 6px;
-        padding: 4px 22px;
+        padding: 3px 22px;
         font-size: 0.84rem;
     }
 
     .led-sign.flip-sign-led {
         height: 18px;
+    }
+
+    .flip-key {
+        --key-size: 20px;
+        --key-dot: 2px;
+        padding: 1.5px;
+    }
+
+    .flip-key::before {
+        inset: 1.5px;
     }
 
     #filters {
