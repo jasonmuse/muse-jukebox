@@ -5475,6 +5475,29 @@ html.is-standalone .edge-blend {
     }
 }
 
+/* Goo that's been hiding from the sponge: a pulsing ring shows where it is */
+.jb-splat-ring {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: jbGooHint 900ms ease-in-out infinite alternate;
+}
+
+@keyframes jbGooHint {
+    from {
+        opacity: 0.4;
+        transform: scale(0.85);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1.15);
+    }
+}
+
 /* Effects (HTML, so they show above the panel too) */
 .jb-pop,
 .jb-sparkle,

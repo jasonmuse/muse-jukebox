@@ -1000,6 +1000,7 @@
                     renderBug(bug);
                 });
             }
+            bringSplatsIntoView();
         }
 
         // ───── Between repairs ─────
@@ -1684,11 +1685,67 @@
                 const distance = randomBetween(7, 12);
                 svgEl("circle", { cx: (Math.cos(angle) * distance).toFixed(1), cy: (Math.sin(angle) * distance).toFixed(1), r: randomBetween(1.4, 3.4).toFixed(1) }, group);
             }
-            boardSplats.push({ element: group, x, y, radius: 13 * scale, dirt: 1 });
+            boardSplats.push({ element: group, x, y, scale, radius: 13 * scale, dirt: 1 });
             // Old goo dries up, so there's never a huge mess to clean at the end
             if (boardSplats.length > MAX_SPLATS) {
                 boardSplats.shift().element.remove();
             }
+        }
+
+        function moveSplat(splat, x, y) {
+            splat.x = x;
+            splat.y = y;
+            splat.element.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${splat.scale})`);
+        }
+
+        // Goo can end up where it can't be seen (or scrubbed): under the HUD at the top or the
+        // message along the bottom, or off the board after it's changed size (a phone turned, a
+        // window resized). Any like that slides out into the open.
+        function bringSplatsIntoView() {
+            if (!boardSplats.length || !size.width) return;
+            const rootRect = root.getBoundingClientRect();
+            const blockers = [root.querySelector(".jb-hud"), statusText].filter(Boolean).map((element) => {
+                const rect = element.getBoundingClientRect();
+                if (!rect.width || !rect.height) return null;
+                return { x0: rect.left - rootRect.left, y0: rect.top - rootRect.top, x1: rect.right - rootRect.left, y1: rect.bottom - rootRect.top };
+            }).filter(Boolean);
+            const bounds = getBounds();
+            boardSplats.forEach((splat) => {
+                if (splat.dirt <= 0) return;
+                const pad = splat.radius + 4;
+                const clampY = (value) => Math.max(bounds.y0 + pad, Math.min(bounds.y1 - pad, value));
+                const x = Math.max(bounds.x0 + pad, Math.min(bounds.x1 - pad, splat.x));
+                let y = clampY(splat.y);
+                blockers.forEach((box) => {
+                    if (x + pad <= box.x0 || x - pad >= box.x1 || y + pad <= box.y0 || y - pad >= box.y1) return;
+                    // Out of its way, the shorter way that stays on the board
+                    const below = box.y1 + pad;
+                    const above = box.y0 - pad;
+                    const belowFits = below <= bounds.y1 - pad;
+                    const aboveFits = above >= bounds.y0 + pad;
+                    y = clampY(belowFits && (!aboveFits || below - y < y - above) ? below : above);
+                });
+                if (Math.abs(x - splat.x) > 0.5 || Math.abs(y - splat.y) > 0.5) moveSplat(splat, x, y);
+            });
+        }
+
+        // Stuck scrubbing? After a while without any goo coming off, what's left shows itself
+        function hintGoo() {
+            if (!game || game.stage !== "clean") return;
+            const left = boardSplats.filter((splat) => splat.dirt > 0);
+            if (!left.length) return;
+            bringSplatsIntoView();
+            left.forEach((splat) => {
+                if (splat.element.querySelector(".jb-splat-ring")) return;
+                svgEl("circle", { class: "jb-splat-ring", r: 15 }, splat.element);
+            });
+            say(left.length === 1 ? "Psst... one more blob, there!" : "Psst... the goo's over here!", 1600, true);
+        }
+
+        function scheduleGooHint() {
+            if (!game) return;
+            clearTimeout(game.gooHintTimer);
+            game.gooHintTimer = later(hintGoo, 6000);
         }
 
         function squash(bug, quietly) {
@@ -2237,6 +2294,10 @@
             setTool("sponge");
             setStatus(`Scrub off all the goo! ${dirty} splat${dirty === 1 ? "" : "s"} to go.`);
             say("Eww, so much goo...", 1400, true);
+            // (and again once the message along the bottom has slid up into place)
+            bringSplatsIntoView();
+            later(bringSplatsIntoView, 450);
+            scheduleGooHint();
         }
 
         function scrubAt(point, amount) {
@@ -2244,14 +2305,18 @@
             boardSplats.forEach((splat) => {
                 if (splat.dirt <= 0) return;
                 if (Math.hypot(point.x - splat.x, point.y - splat.y) > splat.radius + 16) return;
-                splat.dirt = Math.max(0, splat.dirt - amount);
-                splat.element.style.opacity = String(splat.dirt);
+                // (the last faint smear counts as clean: scrubbed nearly away, it was too faint to see
+                // but still counted as goo left)
+                splat.dirt = splat.dirt - amount <= 0.15 ? 0 : splat.dirt - amount;
+                // Goo that's still there stays plain to see as it fades
+                splat.element.style.opacity = String(0.4 + (0.6 * splat.dirt));
                 cleanedAny = true;
                 if (splat.dirt <= 0) {
                     splat.element.remove();
                     sparkle({ x: splat.x, y: splat.y });
                 }
             });
+            if (cleanedAny) scheduleGooHint();
 
             if (cleanedAny && Math.random() < 0.35) {
                 spawnFx("jb-bubble", { x: point.x + randomBetween(-12, 12), y: point.y + randomBetween(-10, 10) }, "", 700);
