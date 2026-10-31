@@ -4318,6 +4318,23 @@ html.is-standalone .edge-blend {
     opacity: 1;
 }
 
+/* With the panel on (taking its screws out, or tightening them back in), the HUD keeps between the
+   top two screws so it never covers them (they sit 7px in and grow as they rise: ~36px each side,
+   plus a gap). The battery's no use then (nothing drains it), so it makes way. */
+.jb-back.is-running:not(.cover-off) .jb-hud {
+    max-width: calc(100% - 88px);
+}
+
+.jb-back.is-running:not(.cover-off) .jb-hud-power {
+    display: none;
+}
+
+.jb-back.is-running:not(.cover-off) .jb-hud-item {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .jb-hud-item {
     padding: 4px 9px;
     border-radius: 999px;
