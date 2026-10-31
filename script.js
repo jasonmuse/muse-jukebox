@@ -421,6 +421,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const CLEAR_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>`;
     const PREV_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5.5v13a1 1 0 0 1-1.55.83L7.5 13.2V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.8l8.95-6.13A1 1 0 0 1 18 5.5Z"/></svg>`;
     const SIDE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M18.5 2.5V6.5H14.5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.5 6"/><path d="M5.5 21.5V17.5H9.5"/></svg>`;
+    const EXTERNAL_ICON = `<svg class="game-link-external" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.25 2.75 7.5 8.5M7 3.5H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9"/></svg>`;
     const NEXT_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13a1 1 0 0 0 1.55.83l8.95-6.13V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.8L7.55 4.67A1 1 0 0 0 6 5.5Z"/></svg>`;
     const SHUFFLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>`;
 
@@ -2510,6 +2511,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Under the title: the song's year and tags, or the game it's from as a link to the game (on a
+    // short phone the song's row has no room for its game link, so this is where it is)
+    function setNowPlayingSub(track) {
+        if (!track) {
+            npSub.textContent = "Press play and let the jukebox spin";
+            return;
+        }
+
+        if (!track.game) {
+            npSub.textContent = [track.date, ...track.tags].join(" \u00b7 ");
+            return;
+        }
+
+        const link = document.createElement("a");
+        link.className = "np-game-link";
+        link.href = track.game.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = track.game.name;
+        link.insertAdjacentHTML("beforeend", EXTERNAL_ICON);
+        npSub.replaceChildren(`${track.date} \u00b7 `, link);
+    }
+
     // Landscape deck: big record, song info, scrubber and transport controls
     function updateNowPlaying() {
         updateSideRailState();
@@ -2532,11 +2556,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             npShownTrack = track;
             if (npEyebrow) npEyebrow.textContent = track ? "Now playing" : "Muse Jukebox";
             if (npTitle) npTitle.textContent = track ? track.title : "Pick a song";
-            if (npSub) {
-                npSub.textContent = track
-                    ? [track.date, ...(track.game ? [track.game.name] : track.tags)].join(" \u00b7 ")
-                    : "Press play and let the jukebox spin";
-            }
+            if (npSub) setNowPlayingSub(track);
 
             if (npWave) {
                 drawSongWave(npWave);
@@ -3525,7 +3545,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ? ""
                 : track.tags.map(tag => `<span class="tag-bubble clickable-tag">${tag}</span>`).join('');
             const gameLinkMarkup = track.game
-                ? `<a class="game-link" href="${track.game.url}" target="_blank" rel="noopener noreferrer"><span class="game-link-icon ${track.game.iconClass || ""}" aria-hidden="true">${track.game.icon}</span><span>Featured in ${track.game.name}</span><svg class="game-link-external" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.25 2.75 7.5 8.5M7 3.5H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9"/></svg></a>`
+                ? `<a class="game-link" href="${track.game.url}" target="_blank" rel="noopener noreferrer"><span class="game-link-icon ${track.game.iconClass || ""}" aria-hidden="true">${track.game.icon}</span><span>Featured in ${track.game.name}</span>${EXTERNAL_ICON}</a>`
                 : "";
             const trackElement = document.createElement("div");
             trackElement.classList.add("track", "track-enter");

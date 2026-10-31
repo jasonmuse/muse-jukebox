@@ -1571,10 +1571,11 @@ audio {
         align-items: flex-start;
     }
 
+    /* (room for the record above the cabinet: its whole top edge on screen, not cut off) */
     #jukebox-container {
         width: 100%;
-        margin-top: 74px;
-        height: calc(100% - 74px);
+        margin-top: 78px;
+        height: calc(100% - 78px);
         padding-bottom: 0;
         box-sizing: border-box;
     }
@@ -2236,6 +2237,34 @@ html {
     font-size: clamp(0.72rem, 2vh, 0.92rem);
     line-height: 1.3;
     color: rgba(255, 255, 255, 0.66);
+}
+
+/* The game a song is from, as a link to the game */
+.np-game-link {
+    color: #d3dcff;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: rgba(174, 188, 255, 0.5);
+    text-underline-offset: 2px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.np-game-link .game-link-external {
+    margin-left: 3px;
+    vertical-align: -0.04em;
+}
+
+.np-game-link:focus-visible {
+    outline: 2px solid #aebcff;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+@media (hover: hover) {
+    .np-game-link:hover {
+        color: #ffffff;
+        text-decoration-color: currentColor;
+    }
 }
 
 .np-progress {
@@ -7124,8 +7153,15 @@ html.viewport-shifted body {
         height: calc(100% - 60px);
     }
 
+    /* A smaller record, so all of its top edge fits on screen above the cabinet (with the top of
+       its label still peeking out) without taking any room from the songs */
+    .record {
+        width: 156px;
+        height: 156px;
+    }
+
     .record.up {
-        top: -90px;
+        top: -62px;
     }
 
     .record-seek-controls {
@@ -7164,16 +7200,51 @@ html.viewport-shifted body {
         margin-top: 4px;
     }
 
-    /* Shorter rows, so more songs fit: smaller covers, and a song only shows its tags while it's
-       playing (its title and Play line are enough to pick it out) */
+    /* Shorter rows, so more songs fit: smaller covers, and no tags (a song's title and its Play
+       line are enough to pick it out) */
     .track {
         --cover-size: 52px;
         padding-top: 9px;
         padding-bottom: 9px;
     }
 
-    .track:not(.track-modes-visible) .tags {
+    .track .tags {
         display: none;
+    }
+
+    /* The playing song keeps the same short row as the rest instead of opening up: Pause, its
+       wave and the time on one line, the x by its title. Previous / next are the buttons beside
+       the record, and tapping the record opens the turntable view with everything else. */
+    .track-modes-visible .skip-button,
+    .track-modes-visible .mode-button--continuous,
+    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .song-time-total {
+        display: none;
+    }
+
+    .track-modes-visible .song-progress {
+        flex: 1 1 60px;
+        margin: 0 0 0 12px;
+    }
+
+    .track-modes-visible .song-wave {
+        height: 22px;
+    }
+
+    .track.track-modes-visible img,
+    .track.track-modes-visible .side-switch {
+        align-self: flex-end;
+    }
+
+    .track.track-modes-visible .side-switch {
+        margin-top: 0;
+        margin-bottom: -9px;
+    }
+
+    @container (max-width: 265px) {
+        .track-modes-visible .song-progress {
+            margin-left: 10px;
+        }
     }
 
     .title {
