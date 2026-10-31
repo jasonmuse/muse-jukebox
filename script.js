@@ -6079,6 +6079,195 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ───── Turning the jukebox round by hand ─────
+    // Grab it by either side and drag across: it turns about its middle as far as you've taken it,
+    // as slowly or as quickly as you go (the whole way across is right round and the middle is
+    // edge-on, so the side you've got hold of stays about under your finger), and swaps sides edge-on
+    // just as the button's turn does. Let go past halfway, or with a flick, and it carries on round
+    // at the speed you left it going; otherwise it settles back.
+    const HAND_TURN_MOMENTUM_MS = 250; // let go, it goes round if it would be past edge-on this much later
+    const HAND_TURN_SPEED_WINDOW_MS = 90; // how much of the end of a drag its speed is taken from
+    let handTurn = null;
+
+    function setUpHandTurning() {
+        jukeboxPanel.querySelectorAll(".jukebox-edge").forEach((edge) => {
+            edge.addEventListener("pointerdown", (event) => beginHandTurn(event, edge));
+        });
+    }
+
+    function beginHandTurn(event, edge) {
+        if (handTurn || isJukeboxFlipping || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+        if (document.body.classList.contains("modal-open")) return;
+        const rect = jukeboxPanel.getBoundingClientRect();
+        const centre = rect.left + (rect.width / 2);
+        const reach = event.clientX - centre;
+        if (Math.abs(reach) < 40) return;
+        event.preventDefault();
+        handTurn = {
+            edge,
+            pointerId: event.pointerId,
+            centre,
+            reach, // where it was grabbed, from the middle
+            direction: reach > 0 ? 1 : -1, // the side that's held turns away
+            fromBack: jukeboxPanel.classList.contains("is-flipped"),
+            recordFrom: recordFlipAngle,
+            angle: 0,
+            target: 0,
+            started: false,
+            released: false,
+            samples: [],
+            frame: null,
+            settling: null,
+            dropRecordAfter: null
+        };
+        edge.classList.add("is-held");
+        try {
+            edge.setPointerCapture(event.pointerId);
+        } catch (error) {
+            // Not capturable: its moves still come while it's over the strip
+        }
+        edge.addEventListener("pointermove", moveHandTurn);
+        edge.addEventListener("pointerup", releaseHandTurn);
+        edge.addEventListener("pointercancel", releaseHandTurn);
+        edge.addEventListener("lostpointercapture", releaseHandTurn);
+    }
+
+    // How far round the hand has taken it: 0 square on, 90 edge-on, 180 right round
+    function getHandTurnAngle(turn, x) {
+        const across = 1 - ((x - turn.centre) / turn.reach); // 0 where it was grabbed, 1 the middle, 2 the far side
+        return Math.max(0, Math.min(180, across * 90));
+    }
+
+    function moveHandTurn(event) {
+        const turn = handTurn;
+        if (!turn || turn.released || event.pointerId !== turn.pointerId) return;
+        const angle = getHandTurnAngle(turn, event.clientX);
+        if (!turn.started) {
+            if (angle < 1) return; // (just a press so far, or a nudge outwards)
+            startHandTurn(turn);
+        }
+        turn.samples.push({ time: event.timeStamp, angle });
+        while (turn.samples.length > 2 && event.timeStamp - turn.samples[0].time > HAND_TURN_SPEED_WINDOW_MS) {
+            turn.samples.shift();
+        }
+        turn.target = angle;
+        // (one update a frame, however many moves come in)
+        if (turn.frame === null) {
+            turn.frame = requestAnimationFrame(() => {
+                turn.frame = null;
+                if (!turn.released) setHandTurnAngle(turn, turn.target);
+            });
+        }
+    }
+
+    function startHandTurn(turn) {
+        turn.started = true;
+        isJukeboxFlipping = true;
+        // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
+        if (!turn.fromBack && window.jukebot) window.jukebot.prepare();
+        turn.dropRecordAfter = liftRecordForFlip();
+        jukeboxPanel.classList.remove("powered-up");
+        // Both sides drawn, the cabinet with its depth, as in the button's turn
+        jukeboxPanel.classList.add("is-flipping", "is-turning", "is-hand-turning");
+    }
+
+    function setHandTurnAngle(turn, angle) {
+        turn.angle = angle;
+        // Past edge-on it's the other side facing out, turning on round from edge-on (so neither
+        // side is ever drawn back to front)
+        const pastEdgeOn = angle > 90;
+        jukeboxPanel.classList.toggle("is-flipped", turn.fromBack !== pastEdgeOn);
+        const tilt = (pastEdgeOn ? angle - 180 : angle) * turn.direction;
+        jukeboxPanel.style.transform = `perspective(1400px) rotateY(${tilt.toFixed(2)}deg)`;
+        // The record turns over along with it
+        turnRecords(turn.recordFrom + (angle * turn.direction), 0);
+    }
+
+    function releaseHandTurn(event) {
+        const turn = handTurn;
+        if (!turn || turn.released || event.pointerId !== turn.pointerId) return;
+        turn.released = true;
+        const { edge } = turn;
+        edge.removeEventListener("pointermove", moveHandTurn);
+        edge.removeEventListener("pointerup", releaseHandTurn);
+        edge.removeEventListener("pointercancel", releaseHandTurn);
+        edge.removeEventListener("lostpointercapture", releaseHandTurn);
+        edge.classList.remove("is-held");
+        if (turn.frame !== null) {
+            cancelAnimationFrame(turn.frame);
+            turn.frame = null;
+        }
+        if (!turn.started) {
+            handTurn = null;
+            return;
+        }
+
+        let speed = 0;
+        if (event.type === "pointerup") {
+            // (where it was let go, if that's moved on since the last frame)
+            const angle = getHandTurnAngle(turn, event.clientX);
+            turn.samples.push({ time: event.timeStamp, angle });
+            setHandTurnAngle(turn, angle);
+            speed = getHandTurnSpeed(turn, event.timeStamp);
+        }
+        settleHandTurn(turn, speed);
+    }
+
+    // Degrees a millisecond it was going as it was let go (nothing if it had been held still)
+    function getHandTurnSpeed(turn, now) {
+        const recent = turn.samples.filter((sample) => now - sample.time <= HAND_TURN_SPEED_WINDOW_MS);
+        if (recent.length < 2) return 0;
+        const first = recent[0];
+        const last = recent[recent.length - 1];
+        const span = last.time - first.time;
+        return span > 8 ? (last.angle - first.angle) / span : 0;
+    }
+
+    // On round (or back) from where it was let go, at the speed it was going, slowing to a stop as
+    // it squares up
+    function settleHandTurn(turn, speed) {
+        // Where it's heading: past edge-on a moment from now (it's past already, or it's been flicked
+        // on with enough go to get there) and it goes on round
+        const target = turn.angle + (speed * HAND_TURN_MOMENTUM_MS) >= 90 ? 180 : 0;
+        const from = turn.angle;
+        const distance = target - from;
+        if (Math.abs(distance) < 0.5 || prefersReducedMotion()) {
+            finishHandTurn(turn, target);
+            return;
+        }
+
+        const toward = Math.max(0, speed * Math.sign(distance));
+        const duration = Math.min(650, Math.max(180, (Math.abs(distance) / Math.max(toward, 0.15)) * 1.5));
+        // Starting at the speed it was let go at (a cubic that eases into the end)
+        const slope = Math.min(3, (toward * duration) / Math.abs(distance));
+        const startTime = performance.now();
+        const step = (now) => {
+            const t = Math.min(1, (now - startTime) / duration);
+            const eased = ((slope - 2) * t * t * t) + ((3 - (2 * slope)) * t * t) + (slope * t);
+            setHandTurnAngle(turn, from + (distance * eased));
+            if (t < 1) {
+                turn.settling = requestAnimationFrame(step);
+            } else {
+                finishHandTurn(turn, target);
+            }
+        };
+        turn.settling = requestAnimationFrame(step);
+    }
+
+    function finishHandTurn(turn, target) {
+        if (turn.settling !== null) cancelAnimationFrame(turn.settling);
+        handTurn = null;
+        const showBack = turn.fromBack !== (target === 180);
+        jukeboxPanel.style.transform = "";
+        jukeboxPanel.classList.remove("is-flipping", "is-turning", "is-hand-turning");
+        jukeboxPanel.classList.toggle("is-flipped", showBack);
+        // The record ends B-side out with the back, A-side with the front, whichever way it went
+        turnRecords((((turn.recordFrom + (target * turn.direction)) % 360) + 360) % 360, 0);
+        if (showBack !== turn.fromBack) setJukeboxSide(showBack);
+        isJukeboxFlipping = false;
+        if (turn.dropRecordAfter) turn.dropRecordAfter();
+    }
+
     // A record that's down pops up so you can see it flip, and drops again afterwards
     function liftRecordForFlip() {
         if (!record || record.classList.contains("up")) return () => {};
@@ -6492,6 +6681,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!jukeboxPanel) return;
         setUpLedSigns();
         setUpBackTips();
+        setUpHandTurning();
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
             button.addEventListener("click", () => flipJukebox(button.dataset.flipJukebox === "back"));

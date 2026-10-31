@@ -7174,6 +7174,67 @@ button.title-penguin:focus-visible {
     transform: rotateY(-90deg);
 }
 
+/* ───── TURNING THE JUKEBOX BY HAND ─────
+   A strip down each side, from just outside the cabinet's rim in to where what's on it starts (so it
+   covers no buttons), that you grab and drag across to turn the jukebox round yourself (script.js) */
+.jukebox-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    width: calc(15px + var(--lights-gutter, 20px));
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jukebox-edge--left {
+    left: -15px;
+}
+
+.jukebox-edge--right {
+    right: -15px;
+}
+
+/* A glow along the rim where it's held (and where it can be, under a mouse) */
+.jukebox-edge::after {
+    content: "";
+    position: absolute;
+    top: 14%;
+    bottom: 14%;
+    left: 10px;
+    width: 4px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, transparent, #e4e9ff 25%, #e4e9ff 75%, transparent);
+    box-shadow: 0 0 10px 1px rgba(150, 170, 255, 0.85);
+    opacity: 0;
+    transition: opacity 220ms ease-out;
+    pointer-events: none;
+}
+
+.jukebox-edge--right::after {
+    left: auto;
+    right: 10px;
+}
+
+.jukebox-edge.is-held::after {
+    opacity: 0.9;
+}
+
+@media (hover: hover) {
+    .jukebox-edge:hover::after {
+        opacity: 0.65;
+    }
+}
+
+#jukebox.is-hand-turning,
+#jukebox.is-hand-turning .jukebox-edge {
+    cursor: grabbing;
+}
+
 /* ───── SHORT WINDOWS (keyboard up, split screen): keep the layout, scroll the page ───── */
 html.viewport-short,
 html.viewport-short body {

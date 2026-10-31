@@ -397,6 +397,7 @@
                                 <button class="back-tips-step" type="button" data-tip-step="1" aria-label="More tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
                             </div>
                             <ul class="back-tips-list">
+                                <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5v19"/><path d="M5.2 9.6C3.5 10.3 2.5 11.1 2.5 12c0 2.2 4.3 4 9.5 4s9.5-1.8 9.5-4c0-.9-.8-1.7-2.2-2.4"/><path d="M17.6 7.6l2.5 1.9-2.9 1.3"/></svg><span>Grab the jukebox by either side and drag to turn it round yourself.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/></svg><span>Tap the loop button once to keep songs playing, twice to repeat one song.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><path d="M12 6a6 6 0 0 1 6 6"/></svg><span>Drag the record back and forth to scratch like a DJ.</span></li>
                                 <li class="back-tip"><svg class="back-tip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5v3M7.5 7.5v9M11 4.5v15M14.5 8v8M18 6.5v11M21 10.5v3"/></svg><span>Tap any song's wave to play it from there. Drag the playing one to skip around.</span></li>
@@ -485,6 +486,10 @@
                 </div>
             </div>
         </section>
+
+        <!-- The cabinet's sides: grab one and drag across to turn the jukebox round by hand (script.js) -->
+        <span class="jukebox-edge jukebox-edge--left" aria-hidden="true"></span>
+        <span class="jukebox-edge jukebox-edge--right" aria-hidden="true"></span>
     </div>
     </div>
     </div>
