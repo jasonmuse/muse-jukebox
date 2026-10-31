@@ -2921,13 +2921,154 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
 
+    // ───── The record's switch: the clack as it drops to change songs ─────
+    // The same clack every time got samey, so each one's a little different: pitched up or down a
+    // touch (never the same as the one before), duller or brighter, a little to one side; and now
+    // and then the arm settles with a second, smaller tick, or the needle goes back down with a
+    // crackle as the record comes up again
+    const SWITCH_RATES = [0.86, 0.91, 0.96, 1.01, 1.06, 1.11, 1.16];
+    let lastSwitchRate = -1;
+    let switchBuffer = null;
+    let switchBufferRequest = null;
+    let crackleBuffer = null;
+
+    function pickSwitchRate() {
+        let index = Math.floor(Math.random() * SWITCH_RATES.length);
+        if (index === lastSwitchRate) index = (index + 1 + Math.floor(Math.random() * (SWITCH_RATES.length - 1))) % SWITCH_RATES.length;
+        lastSwitchRate = index;
+        return SWITCH_RATES[index] * (0.99 + (Math.random() * 0.02));
+    }
+
+    function loadSwitchBuffer(context) {
+        if (switchBuffer || switchBufferRequest) return;
+        switchBufferRequest = fetch("audio/jukeboxswitch.mp3")
+            .then((response) => response.arrayBuffer())
+            .then((data) => decodeAudio(context, data))
+            .then((buffer) => {
+                switchBuffer = buffer;
+            })
+            .catch(() => {})
+            .then(() => {
+                switchBufferRequest = null;
+            });
+    }
+
+    function playSwitchSound() {
+        const context = scratchAudio ? scratchAudio.context : null;
+        if (context && switchBuffer && context.state !== "closed") {
+            if (context.state === "running") {
+                playSwitchVariant(context);
+                scheduleScratchAudioSleep();
+                return;
+            }
+            // The sound's asleep: wake it, and if it isn't up in a moment the plain clip plays instead
+            let played = false;
+            const fallback = setTimeout(() => {
+                if (played) return;
+                played = true;
+                playSwitchClip();
+            }, 80);
+            context.resume().then(() => {
+                if (played) return;
+                played = true;
+                clearTimeout(fallback);
+                playSwitchVariant(context);
+                scheduleScratchAudioSleep();
+            }).catch(() => {});
+            return;
+        }
+        playSwitchClip();
+        if (context) loadSwitchBuffer(context);
+    }
+
+    // The plain clip, though still at a different pitch each time
+    function playSwitchClip() {
+        switchSound.preservesPitch = false;
+        switchSound.webkitPreservesPitch = false;
+        switchSound.mozPreservesPitch = false;
+        switchSound.playbackRate = pickSwitchRate();
+        switchSound.volume = 0.5;
+        try {
+            switchSound.currentTime = 0;
+        } catch (error) {
+            // Not loaded yet
+        }
+        const promise = switchSound.play();
+        if (promise && typeof promise.catch === "function") promise.catch(() => {});
+    }
+
+    function playSwitchVariant(context) {
+        const start = context.currentTime + 0.005;
+        const rate = pickSwitchRate();
+        const tone = context.createBiquadFilter();
+        tone.type = "lowpass";
+        tone.frequency.value = 2400 + (Math.random() * 9600);
+        tone.Q.value = 0.4 + (Math.random() * 0.7);
+        const level = context.createGain();
+        level.gain.value = 0.42 + (Math.random() * 0.16);
+        tone.connect(level);
+        if (typeof context.createStereoPanner === "function") {
+            const pan = context.createStereoPanner();
+            pan.pan.value = (Math.random() - 0.5) * 0.6;
+            level.connect(pan);
+            pan.connect(context.destination);
+        } else {
+            level.connect(context.destination);
+        }
+
+        const clack = context.createBufferSource();
+        clack.buffer = switchBuffer;
+        clack.playbackRate.value = rate;
+        clack.connect(tone);
+        clack.start(start);
+
+        const extra = Math.random();
+        if (extra < 0.35) {
+            // The arm settling: a second, smaller, higher tick
+            const tick = context.createBufferSource();
+            tick.buffer = switchBuffer;
+            tick.playbackRate.value = rate * (1.2 + (Math.random() * 0.25));
+            const tickLevel = context.createGain();
+            tickLevel.gain.value = 0.22 + (Math.random() * 0.14);
+            tick.connect(tickLevel);
+            tickLevel.connect(tone);
+            tick.start(start + 0.07 + (Math.random() * 0.08), 0, 0.1);
+        } else if (extra < 0.6) {
+            // The needle going back down as the record comes up again
+            const crackle = context.createBufferSource();
+            crackle.buffer = getCrackleBuffer(context);
+            const band = context.createBiquadFilter();
+            band.type = "bandpass";
+            band.frequency.value = 2000 + (Math.random() * 2600);
+            band.Q.value = 0.8;
+            const crackleLevel = context.createGain();
+            crackleLevel.gain.value = 1.1 + (Math.random() * 0.5);
+            crackle.connect(band);
+            band.connect(crackleLevel);
+            crackleLevel.connect(level);
+            crackle.start(start + 0.3 + (Math.random() * 0.04), Math.random() * 0.12);
+        }
+    }
+
+    // A moment of vinyl crackle: a faint hiss with pops in it, fading out (made once)
+    function getCrackleBuffer(context) {
+        if (crackleBuffer && crackleBuffer.sampleRate === context.sampleRate) return crackleBuffer;
+        const length = Math.round(context.sampleRate * 0.5);
+        const buffer = context.createBuffer(1, length, context.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let index = 0; index < length; index += 1) {
+            const fade = 1 - (index / length);
+            let sample = ((Math.random() * 2) - 1) * 0.04 * fade;
+            if (Math.random() < 0.0009) sample += (Math.random() < 0.5 ? -1 : 1) * (0.45 + (Math.random() * 0.55)) * fade;
+            data[index] = sample;
+        }
+        crackleBuffer = buffer;
+        return buffer;
+    }
+
     // Function to move the record down briefly before starting the next spin
     function moveRecordDownAndUp(callback) {
-        switchSound.volume = 0.5;
-        const switchPlayPromise = switchSound.play();
-        if (switchPlayPromise && typeof switchPlayPromise.catch === "function") {
-            switchPlayPromise.catch(() => {});
-        }
+        playSwitchSound();
         record.classList.remove("up");
         setTimeout(() => {
             record.classList.add("up");
@@ -6299,7 +6440,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const pastEdgeOn = angle > 90;
         jukeboxPanel.classList.toggle("is-flipped", turn.fromBack !== pastEdgeOn);
         const tilt = (pastEdgeOn ? angle - 180 : angle) * turn.direction;
-        jukeboxPanel.style.transform = `perspective(1400px) rotateY(${tilt.toFixed(2)}deg)`;
+        // (about the middle of its depth, as the button's turn: see jukeboxTurnAway in styles.css)
+        jukeboxPanel.style.transform = `perspective(1400px) translateZ(calc(var(--jukebox-depth) * -0.5)) rotateY(${tilt.toFixed(2)}deg) translateZ(calc(var(--jukebox-depth) * 0.5))`;
         // The record turns over along with it
         turnRecords(turn.recordFrom + (angle * turn.direction), 0);
     }

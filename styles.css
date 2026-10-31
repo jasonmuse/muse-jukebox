@@ -2959,23 +2959,25 @@ html {
     animation: jukeboxTurnBack 340ms cubic-bezier(0.2, 0.9, 0.3, 1.12);
 }
 
+/* It turns about the middle of its depth (the translateZs), seen from in front of its face: so once
+   it's squared up again it's exactly the size it is at rest, with nothing to jump when the turn ends */
 @keyframes jukeboxTurnAway {
     from {
-        transform: perspective(1400px) rotateY(0deg);
+        transform: perspective(1400px) translateZ(calc(var(--jukebox-depth) * -0.5)) rotateY(0deg) translateZ(calc(var(--jukebox-depth) * 0.5));
     }
 
     to {
-        transform: perspective(1400px) rotateY(90deg);
+        transform: perspective(1400px) translateZ(calc(var(--jukebox-depth) * -0.5)) rotateY(90deg) translateZ(calc(var(--jukebox-depth) * 0.5));
     }
 }
 
 @keyframes jukeboxTurnBack {
     from {
-        transform: perspective(1400px) rotateY(-90deg);
+        transform: perspective(1400px) translateZ(calc(var(--jukebox-depth) * -0.5)) rotateY(-90deg) translateZ(calc(var(--jukebox-depth) * 0.5));
     }
 
     to {
-        transform: perspective(1400px) rotateY(0deg);
+        transform: perspective(1400px) translateZ(calc(var(--jukebox-depth) * -0.5)) rotateY(0deg) translateZ(calc(var(--jukebox-depth) * 0.5));
     }
 }
 
@@ -5036,54 +5038,337 @@ html.is-standalone .edge-blend {
     fill: #2b2233;
 }
 
-.jb-queen-wing {
-    fill: #a77cf5;
-    stroke: #e9dcff;
-    stroke-width: 1.2;
-    animation-duration: 200ms;
-}
-
-.jb-queen-wing.jb-wing--left {
-    transform-origin: right center;
-}
-
-.jb-queen-wing.jb-wing--right {
-    transform-origin: left center;
+/* ───── The Queen Moth: a chunky, outlined cartoon sprite (a nod to a certain old game's boss fly) ───── */
+.jb-queen-wing,
+.jb-queen-eyespot,
+.jb-queen-abdomen,
+.jb-queen-ruff,
+.jb-queen-head,
+.jb-queen-eye,
+.jb-queen-crown {
+    stroke: #1b0f2a;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
 }
 
 .jb-queen-wing {
-    animation-name: jbQueenFlap;
+    fill: #ff6fcf;
 }
 
-@keyframes jbQueenFlap {
-    to {
-        transform: scaleX(0.55);
-    }
+.jb-queen-wing--low {
+    fill: #c64fd8;
 }
 
 .jb-queen-eyespot {
-    fill: #ffd23f;
-    stroke: #6b3fa8;
+    fill: #fff3cf;
     stroke-width: 1.2;
 }
 
-.jb-queen-body {
-    fill: #5b3a8a;
+.jb-queen-eyespot-dot,
+.jb-queen-pupil {
+    fill: #1b0f2a;
 }
 
-.jb-queen-stripes {
+/* Two frames, as a sprite flaps: wings up, wings down (and no redrawing in between) */
+.jb-queen-wings--up {
+    animation: jbQueenFrameA 240ms steps(1, end) infinite;
+}
+
+.jb-queen-wings--down {
+    opacity: 0;
+    animation: jbQueenFrameB 240ms steps(1, end) infinite;
+}
+
+@keyframes jbQueenFrameA {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes jbQueenFrameB {
+    0% {
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+.jb-queen-abdomen {
+    fill: #7a4ae0;
+}
+
+.jb-queen-bands {
+    fill: none;
     stroke: #ffd23f;
-    stroke-width: 1.4;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+}
+
+.jb-queen-ruff {
+    fill: #fff0c8;
 }
 
 .jb-queen-head {
-    fill: #3a2552;
+    fill: #5b34b8;
+}
+
+.jb-queen-eye {
+    fill: #ffffff;
+    stroke-width: 1.1;
+}
+
+/* Her eyes dart about */
+.jb-queen-pupils {
+    animation: jbQueenLook 3.2s steps(1, end) infinite;
+}
+
+@keyframes jbQueenLook {
+    25% {
+        transform: translate(-0.9px, 0.3px);
+    }
+
+    50% {
+        transform: translate(0.9px, -0.4px);
+    }
+
+    75% {
+        transform: translate(0.2px, 0.7px);
+    }
+}
+
+.jb-queen-brows {
+    fill: none;
+    stroke: #1b0f2a;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    opacity: 0;
+}
+
+.jb-queen-mouth {
+    fill: none;
+    stroke: #1b0f2a;
+    stroke-width: 1.2;
+    stroke-linecap: round;
+}
+
+.jb-queen-fang {
+    fill: #ffffff;
+    stroke: #1b0f2a;
+    stroke-width: 0.6;
+    stroke-linejoin: round;
+}
+
+.jb-queen-antennae {
+    fill: none;
+    stroke: #1b0f2a;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+}
+
+.jb-queen-feathers {
+    fill: none;
+    stroke: #1b0f2a;
+    stroke-width: 0.9;
+    stroke-linecap: round;
 }
 
 .jb-queen-crown {
     fill: #ffd23f;
-    stroke: #c48a12;
+    stroke-width: 1.2;
+}
+
+.jb-queen-gem {
+    fill: #ff4f6d;
+    stroke: #1b0f2a;
+    stroke-width: 0.6;
+}
+
+/* Down to her last few: brows down, face flushed, wings going faster */
+.jb-bug--queen.is-angry .jb-queen-brows {
+    opacity: 1;
+}
+
+.jb-bug--queen.is-angry .jb-queen-head {
+    fill: #c2306b;
+}
+
+.jb-bug--queen.is-angry .jb-queen-wings--up,
+.jb-bug--queen.is-angry .jb-queen-wings--down {
+    animation-duration: 150ms;
+}
+
+/* Her health: chunky pips */
+.jb-queen-hp-back {
+    fill: #1b0f2a;
+    fill-opacity: 0.85;
+    stroke: #fff0c8;
     stroke-width: 0.8;
+}
+
+.jb-queen-pip {
+    fill: #ff4f8b;
+}
+
+.jb-queen-pip.is-empty {
+    fill: #3d2b55;
+}
+
+/* Bonked: she flickers, as a hit sprite does, and wobbles */
+.jb-bug.jb-bug--queen.is-hit .jb-bug-art {
+    animation: jbQueenBonk 440ms linear;
+}
+
+@keyframes jbQueenBonk {
+    0%,
+    11.9% {
+        opacity: 0.15;
+        transform: rotate(-12deg) scale(0.9);
+    }
+
+    12%,
+    23.9% {
+        opacity: 1;
+    }
+
+    24%,
+    35.9% {
+        opacity: 0.15;
+        transform: rotate(9deg) scale(0.96);
+    }
+
+    36%,
+    47.9% {
+        opacity: 1;
+    }
+
+    48%,
+    59.9% {
+        opacity: 0.15;
+        transform: rotate(-4deg);
+    }
+
+    60%,
+    100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ...and sees stars for a moment */
+.jb-queen-stars {
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+}
+
+.jb-bug--queen.is-dazed .jb-queen-stars {
+    opacity: 1;
+}
+
+.jb-bug--queen.is-dazed .jb-queen-stars-spin {
+    animation: jbQueenStars 700ms linear infinite;
+}
+
+@keyframes jbQueenStars {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.jb-queen-star {
+    fill: #ffe35a;
+    stroke: #1b0f2a;
+    stroke-width: 0.7;
+    stroke-linejoin: round;
+}
+
+/* Knocked out: over she goes, spinning away down the board */
+.jb-bug--queen.is-defeated .jb-bug-art {
+    animation: jbQueenKO 1000ms cubic-bezier(0.45, 0, 0.9, 0.55) forwards;
+}
+
+.jb-bug--queen.is-defeated .jb-queen-hp {
+    display: none;
+}
+
+@keyframes jbQueenKO {
+    20% {
+        transform: translateY(-12px) rotate(180deg) scale(1.05);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(230px) rotate(720deg) scale(0.7);
+    }
+}
+
+/* Her crown pops off as she goes */
+.jb-queen-crown-fx {
+    position: absolute;
+    width: 18px;
+    height: 13px;
+    margin: -6px 0 0 -9px;
+    pointer-events: none;
+    filter: drop-shadow(1px 0 0 #1b0f2a) drop-shadow(-1px 0 0 #1b0f2a) drop-shadow(0 1px 0 #1b0f2a) drop-shadow(0 -1px 0 #1b0f2a);
+    animation: jbCrownPop 1100ms cubic-bezier(0.3, 0, 0.7, 1) forwards;
+}
+
+.jb-queen-crown-fx::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #ffe680, #ffc21a);
+    clip-path: polygon(0 100%, 4% 18%, 27% 50%, 50% 0, 73% 50%, 96% 18%, 100% 100%);
+}
+
+@keyframes jbCrownPop {
+    35% {
+        transform: translate(14px, -38px) rotate(80deg);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(36px, 150px) rotate(340deg);
+    }
+}
+
+.jb-pop.jb-pop--ko {
+    color: #ffe35a;
+    font-size: 1.15rem;
+    letter-spacing: 0.06em;
+    text-shadow: 2px 2px 0 #1b0f2a, -1px -1px 0 #1b0f2a, 1px -1px 0 #1b0f2a, -1px 1px 0 #1b0f2a;
+}
+
+/* Her entrance shakes the board */
+.jb-back.is-quaking .jb-internals {
+    animation: jbQuake 460ms ease-out;
+}
+
+@keyframes jbQuake {
+    15% {
+        transform: translate(-3px, 2px);
+    }
+
+    30% {
+        transform: translate(3px, -2px);
+    }
+
+    45% {
+        transform: translate(-2px, -1px);
+    }
+
+    60% {
+        transform: translate(2px, 1px);
+    }
+
+    80% {
+        transform: translate(-1px, 0);
+    }
 }
 
 .jb-hopper-legs {
@@ -5140,15 +5425,6 @@ html.is-standalone .edge-blend {
 
 .jb-bug--glowbug.is-charging .jb-glow-tail {
     fill: #ffffff;
-}
-
-.jb-hp-track {
-    fill: rgba(0, 0, 0, 0.5);
-}
-
-.jb-hp {
-    fill: #ff6b81;
-    transition: width 200ms ease;
 }
 
 .jb-bug.is-hit .jb-bug-art {
@@ -5485,6 +5761,35 @@ html.is-standalone .edge-blend {
     fill: none;
     stroke: rgba(255, 255, 255, 0.7);
     stroke-width: 1.2;
+}
+
+/* While the Queen Moth's out, a white cartoon glove has the swatter */
+.jb-tool-glove {
+    display: none;
+}
+
+.jb-tool.has-glove .jb-tool-glove {
+    display: inline;
+}
+
+.jb-glove-cuff,
+.jb-glove-fist,
+.jb-glove-thumb {
+    fill: #ffffff;
+    stroke: #1b0f2a;
+    stroke-width: 1.3;
+    stroke-linejoin: round;
+}
+
+.jb-glove-cuff {
+    fill: #f1f3fa;
+}
+
+.jb-glove-knuckles {
+    fill: none;
+    stroke: #1b0f2a;
+    stroke-width: 0.9;
+    stroke-linecap: round;
 }
 
 .jb-tool-sponge {
@@ -7029,7 +7334,6 @@ button.title-penguin:focus-visible {
 /* ───── 3D FLIP: the cabinet has real depth while it turns ───── */
 #jukebox.is-flipping {
     transform-style: preserve-3d;
-    transform-origin: 50% 50% calc(var(--jukebox-depth) * -0.5);
 }
 
 #jukebox.is-flipping::before,
@@ -7234,7 +7538,11 @@ html.viewport-shifted body {
     .title-penguin .penguin-icon,
     .title-waves svg,
     .led-sign-track,
-    .jb-signal {
+    .jb-signal,
+    .jb-queen-wings--up,
+    .jb-queen-wings--down,
+    .jb-queen-pupils,
+    .jb-back.is-quaking .jb-internals {
         animation: none;
     }
 

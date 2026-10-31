@@ -266,17 +266,42 @@
             return;
         }
 
-        // Queen Moth (boss)
-        svgEl("path", { class: "jb-wing jb-queen-wing jb-wing--left", d: "M-3-4C-22-24-31-2-22 10-16 18-6 10-3 4Z" }, art);
-        svgEl("path", { class: "jb-wing jb-queen-wing jb-wing--right", d: "M3-4C22-24 31-2 22 10 16 18 6 10 3 4Z" }, art);
-        svgEl("circle", { class: "jb-queen-eyespot", cx: -15, cy: -1, r: 3.6 }, art);
-        svgEl("circle", { class: "jb-queen-eyespot", cx: 15, cy: -1, r: 3.6 }, art);
-        svgEl("ellipse", { class: "jb-queen-body", cx: 0, cy: 3, rx: 5.5, ry: 13 }, art);
-        svgEl("path", { class: "jb-queen-stripes", d: "M-5 2h10M-4.6 7h9.2M-3.6 12h7.2" }, art);
-        svgEl("circle", { class: "jb-queen-head", cx: 0, cy: -11.5, r: 5 }, art);
-        svgEl("circle", { class: "jb-fly-eye", cx: -2.4, cy: -12.4, r: 1.8 }, art);
-        svgEl("circle", { class: "jb-fly-eye", cx: 2.4, cy: -12.4, r: 1.8 }, art);
-        svgEl("path", { class: "jb-queen-crown", d: "M-5.5-16.5l1.5-5.5 3 3.4 1-4.4 1 4.4 3-3.4 1.5 5.5z" }, art);
+        // Queen Moth (boss): a chunky, outlined cartoon sprite, like the boss fly of a certain old
+        // swatting game. Her wings flap in two frames, as a sprite's would.
+        [["up", "M-4-5C-13-21-32-22-31-7-30 2-17 4-5 0Z", "M-4 3C-15 4-25 13-20 21-15 27-7 16-3 9Z", -19, -9],
+            ["down", "M-4-3C-17-12-33-6-30 5-27 13-15 9-5 2Z", "M-4 4C-13 9-19 20-13 25-8 28-5 17-3 10Z", -18, -1]].forEach(([frame, upper, lower, spotX, spotY]) => {
+            const wings = svgEl("g", { class: `jb-queen-wings jb-queen-wings--${frame}` }, art);
+            [-1, 1].forEach((side) => {
+                const flip = side === 1 ? { transform: "scale(-1 1)" } : {};
+                const half = svgEl("g", flip, wings);
+                svgEl("path", { class: "jb-queen-wing", d: upper }, half);
+                svgEl("path", { class: "jb-queen-wing jb-queen-wing--low", d: lower }, half);
+                svgEl("circle", { class: "jb-queen-eyespot", cx: spotX, cy: spotY, r: 4.4 }, half);
+                svgEl("circle", { class: "jb-queen-eyespot-dot", cx: spotX + 0.7, cy: spotY + 0.5, r: 1.9 }, half);
+            });
+        });
+        svgEl("ellipse", { class: "jb-queen-abdomen", cx: 0, cy: 9.5, rx: 6.6, ry: 11.5 }, art);
+        svgEl("path", { class: "jb-queen-bands", d: "M-6.2 6h12.4M-5.8 11.2h11.6M-4.6 16.2h9.2" }, art);
+        svgEl("ellipse", { class: "jb-queen-ruff", cx: 0, cy: -2.5, rx: 8.6, ry: 5.2 }, art);
+        svgEl("path", { class: "jb-queen-antennae", d: "M-2.6-15.4C-4.2-20.4-8.4-22.8-12-21.8M2.6-15.4C4.2-20.4 8.4-22.8 12-21.8" }, art);
+        svgEl("path", { class: "jb-queen-feathers", d: "M-5.4-19.6l-1.4-2.2M-7.8-21.2l-.8-2.5M-10.2-21.9l-.1-2.6M5.4-19.6l1.4-2.2M7.8-21.2l.8-2.5M10.2-21.9l.1-2.6" }, art);
+        svgEl("circle", { class: "jb-queen-head", cx: 0, cy: -10, r: 7.2 }, art);
+        svgEl("ellipse", { class: "jb-queen-eye", cx: -3, cy: -11, rx: 2.7, ry: 3.3 }, art);
+        svgEl("ellipse", { class: "jb-queen-eye", cx: 3, cy: -11, rx: 2.7, ry: 3.3 }, art);
+        const pupils = svgEl("g", { class: "jb-queen-pupils" }, art);
+        svgEl("circle", { class: "jb-queen-pupil", cx: -2.6, cy: -10.3, r: 1.35 }, pupils);
+        svgEl("circle", { class: "jb-queen-pupil", cx: 3.4, cy: -10.3, r: 1.35 }, pupils);
+        svgEl("path", { class: "jb-queen-brows", d: "M-5.8-15.4l4.4 2M5.8-15.4l-4.4 2" }, art);
+        svgEl("path", { class: "jb-queen-mouth", d: "M-2.8-6.2q2.8 2.2 5.6 0" }, art);
+        svgEl("path", { class: "jb-queen-fang", d: "M.9-5.6l.9 1.8.9-2z" }, art);
+        svgEl("path", { class: "jb-queen-crown", d: "M-5.2-15.6-6.4-22l3.2 2.6 3.2-4.8 3.2 4.8 3.2-2.6-1.2 6.4z" }, art);
+        svgEl("circle", { class: "jb-queen-gem", cx: 0, cy: -18.4, r: 1.2 }, art);
+        // Seeing stars after a bonk
+        const stars = svgEl("g", { class: "jb-queen-stars", transform: "translate(0 -27)" }, art);
+        const spin = svgEl("g", { class: "jb-queen-stars-spin" }, stars);
+        [0, 120, 240].forEach((angle) => {
+            svgEl("path", { class: "jb-queen-star", d: "M0-3.4l1 2.1 2.3.3-1.7 1.6.4 2.3L0 1.7-2 2.8l.4-2.3-1.7-1.6 2.3-.3z", transform: `rotate(${angle}) translate(0 -8) rotate(${-angle})` }, spin);
+        });
     }
 
     function init() {
@@ -993,6 +1018,15 @@
                 game.timers.forEach((id) => clearTimeout(id));
             }
             game = null;
+            root.classList.remove("is-quaking");
+            setQueenFight(false);
+        }
+
+        // While the Queen Moth's out the swatter's held in a big white cartoon glove (the tool lives
+        // on the page, outside the panel, so it's told directly)
+        function setQueenFight(on) {
+            root.classList.toggle("queen-fight", on);
+            tool.classList.toggle("has-glove", on);
         }
 
         function clearBoard() {
@@ -1316,15 +1350,39 @@
             const group = svgEl("g", { class: `jb-bug jb-bug--${type}` }, bugLayer);
             const art = svgEl("g", { class: "jb-bug-art" }, group);
             drawBugArt(type, art);
-            let hpBar = null;
+            let hpGroup = null;
+            let hpPips = null;
             if (type === "queen") {
-                svgEl("rect", { class: "jb-hp-track", x: -18, y: -32, width: 36, height: 4, rx: 2 }, group);
-                hpBar = svgEl("rect", { class: "jb-hp", x: -18, y: -32, width: 36, height: 4, rx: 2 }, group);
+                // Her health: a row of chunky pips over her head (under her, near the top)
+                const pipCount = game.config.queenHp;
+                const rowWidth = 42;
+                const gap = 1.2;
+                const pipWidth = (rowWidth - (gap * (pipCount - 1))) / pipCount;
+                hpGroup = svgEl("g", { class: "jb-queen-hp", transform: "translate(0 -40)" }, group);
+                svgEl("rect", { class: "jb-queen-hp-back", x: -(rowWidth / 2) - 1.6, y: -1.6, width: rowWidth + 3.2, height: 6.6, rx: 2.2 }, hpGroup);
+                hpPips = Array.from({ length: pipCount }, (unused, index) => svgEl("rect", {
+                    class: "jb-queen-pip",
+                    x: (-(rowWidth / 2) + (index * (pipWidth + gap))).toFixed(2),
+                    y: 0,
+                    width: pipWidth.toFixed(2),
+                    height: 3.4,
+                    rx: 0.8
+                }, hpGroup));
             }
 
             let startX = x;
             let startY = y;
-            if (startX === undefined) {
+            if (type === "queen" && startX === undefined) {
+                // She makes an entrance: down from the top, in the middle, and the board shakes
+                startX = (bounds.x0 + bounds.x1) / 2;
+                startY = bounds.y0 - spec.radius;
+                say("Gnat attack!", 1500, true);
+                root.classList.remove("is-quaking");
+                void root.offsetWidth;
+                root.classList.add("is-quaking");
+                later(() => root.classList.remove("is-quaking"), 500);
+                setQueenFight(true);
+            } else if (startX === undefined) {
                 // Crawl in from a random edge of the board
                 const edge = Math.floor(Math.random() * 4);
                 startX = randomBetween(bounds.x0 + 30, bounds.x1 - 30);
@@ -1340,7 +1398,10 @@
                 type,
                 spec,
                 element: group,
-                hpBar,
+                hpGroup,
+                hpPips,
+                hpLow: false,
+                angry: false,
                 x: startX,
                 y: startY,
                 angle: Math.random() * Math.PI * 2,
@@ -1382,8 +1443,38 @@
         }
 
         function renderBug(bug) {
-            const rotation = bug.type === "queen" ? 0 : ((bug.angle * 180) / Math.PI) + 90;
+            // (the queen stays upright, just banking a little into her turns)
+            const rotation = bug.type === "queen" ? Math.cos(bug.angle) * 9 : ((bug.angle * 180) / Math.PI) + 90;
             bug.element.setAttribute("transform", `translate(${bug.x.toFixed(1)} ${bug.y.toFixed(1)}) rotate(${rotation.toFixed(1)}) scale(${bug.spec.scale})`);
+            if (bug.hpGroup) {
+                // (her pips sit ~54px over her middle: near the top they'd be under the HUD)
+                const low = bug.y < 100;
+                if (low !== bug.hpLow) {
+                    bug.hpLow = low;
+                    bug.hpGroup.setAttribute("transform", low ? "translate(0 34)" : "translate(0 -40)");
+                }
+            }
+        }
+
+        // The queen's pips, and her temper: down to her last few she gets cross, and quicker
+        function showQueenHp(bug) {
+            if (!bug.hpPips) return;
+            bug.hpPips.forEach((pip, index) => pip.classList.toggle("is-empty", index >= bug.hp));
+            if (!bug.angry && bug.hp > 0 && bug.hp <= Math.ceil(bug.maxHp * 0.4)) {
+                bug.angry = true;
+                bug.speed *= 1.35;
+                bug.element.classList.add("is-angry");
+                say("Uh oh, she's mad!", 1300, true);
+            }
+        }
+
+        // A bonk leaves her seeing stars for a moment
+        function dazeQueen(bug) {
+            bug.element.classList.remove("is-dazed");
+            void bug.element.getBoundingClientRect();
+            bug.element.classList.add("is-dazed");
+            clearTimeout(bug.dazeTimer);
+            bug.dazeTimer = setTimeout(() => bug.element.classList.remove("is-dazed"), 900);
         }
 
         // Closest point on the core chip's edge (pushed out by `pad`)
@@ -1603,6 +1694,23 @@
         function squash(bug, quietly) {
             bug.state = "squashed";
             bug.element.classList.remove("is-chewing");
+            if (bug.type === "queen") {
+                // Knocked out: she flips over and spins away, and her crown pops off
+                clearTimeout(bug.dazeTimer);
+                bug.element.classList.remove("is-dazed", "is-hit");
+                bug.element.classList.add("is-defeated");
+                setTimeout(() => bug.element.remove(), 1100);
+                spawnFx("jb-queen-crown-fx", { x: bug.x, y: bug.y - 30 }, "", 1100);
+                popText({ x: bug.x, y: bug.y - 44 }, "K.O.!", "jb-pop--ko");
+                setQueenFight(false);
+                addSplat(bug.x, bug.y, bug.spec.goo, 1.6);
+                if (!bug.spec.friendly) {
+                    game.squashed += 1;
+                    if (game.blitz) game.blitz.score += 5;
+                }
+                if (typeof navigator.vibrate === "function") navigator.vibrate([16, 40, 30]);
+                return;
+            }
             bug.element.classList.add("is-squashed");
             setTimeout(() => bug.element.remove(), 380);
             addSplat(bug.x, bug.y, bug.spec.goo, bug.type === "queen" ? 2.2 : 1.3);
@@ -1661,8 +1769,9 @@
                 drawBolt(coreLayout, bug);
                 if (bug.type === "queen") {
                     bug.hp = Math.max(0, bug.hp - 2);
-                    bug.hpBar.setAttribute("width", String(36 * (bug.hp / bug.maxHp)));
+                    showQueenHp(bug);
                     if (bug.hp > 0) {
+                        dazeQueen(bug);
                         popText({ x: bug.x, y: bug.y - 40 }, "zzzt!");
                         return;
                     }
@@ -1761,7 +1870,8 @@
                     if (target.mode === "chew") knockBack(target, seconds);
                 }
                 if (target.type === "queen") {
-                    target.hpBar.setAttribute("width", String(36 * (target.hp / target.maxHp)));
+                    showQueenHp(target);
+                    dazeQueen(target);
                     popText({ x: target.x, y: target.y - 40 }, "bonk!");
                     if (game.queenSpawns < 4) {
                         game.queenSpawns += 1;
