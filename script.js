@@ -6229,6 +6229,63 @@ document.addEventListener("DOMContentLoaded", async () => {
         fallback = setTimeout(finish, durationMs + 1000);
     }
 
+    // The cabinet's sides while it turns: strips standing back from the edge of its face (the outer
+    // edge of its white ring), round its rounded corners as well as down its straight sides, so they
+    // meet the face's curve instead of poking out past it. Fitted to the cabinet as a turn starts.
+    const cabinetDepth = jukeboxPanel ? jukeboxPanel.querySelector(".jukebox-depth") : null;
+    let cabinetDepthFit = "";
+
+    function fitCabinetDepth() {
+        if (!cabinetDepth) return;
+        const style = window.getComputedStyle(jukeboxPanel);
+        const width = jukeboxPanel.offsetWidth;
+        const height = jukeboxPanel.offsetHeight;
+        const border = parseFloat(style.borderLeftWidth) || 0;
+        const ring = 3; // the white ring round the face (its box-shadow)
+        const depth = parseFloat(style.getPropertyValue("--jukebox-depth")) || 42;
+        const topRadius = (parseFloat(style.borderTopLeftRadius) || 0) + ring;
+        const bottomRadius = (parseFloat(style.borderBottomLeftRadius) || 0) + ring;
+        const fit = [width, height, border, depth, topRadius, bottomRadius].join(" ");
+        if (!width || fit === cabinetDepthFit) return;
+        cabinetDepthFit = fit;
+
+        // The face's outline, measured from where its padding starts (inside the border)
+        const left = -border - ring;
+        const top = -border - ring;
+        const right = width - border + ring;
+        const bottom = height - border + ring;
+        const arc = (centerX, centerY, radius, from, to, steps) => Array.from({ length: steps + 1 }, (unused, index) => {
+            const angle = (from + (((to - from) * index) / steps)) * (Math.PI / 180);
+            return [centerX + (Math.cos(angle) * radius), centerY + (Math.sin(angle) * radius)];
+        });
+        // Each side: round the top corner, straight down, round the bottom corner
+        // (enough pieces round a corner that it reads as a curve: more round the bigger top ones)
+        const topSteps = Math.max(3, Math.round(topRadius / 7));
+        const bottomSteps = Math.max(2, Math.round(bottomRadius / 7));
+        const sides = [
+            [...arc(left + topRadius, top + topRadius, topRadius, 270, 180, topSteps), ...arc(left + bottomRadius, bottom - bottomRadius, bottomRadius, 180, 90, bottomSteps)],
+            [...arc(right - topRadius, top + topRadius, topRadius, 270, 360, topSteps), ...arc(right - bottomRadius, bottom - bottomRadius, bottomRadius, 0, 90, bottomSteps)]
+        ];
+        const strips = [];
+        sides.forEach((points) => {
+            for (let index = 1; index < points.length; index += 1) {
+                const [fromX, fromY] = points[index - 1];
+                const [toX, toY] = points[index];
+                const length = Math.hypot(toX - fromX, toY - fromY);
+                if (length < 0.5) continue;
+                const strip = document.createElement("span");
+                strip.className = "jukebox-depth-strip";
+                // Along that bit of the edge, then stood back into the cabinet (a hair longer, so the
+                // pieces round a corner meet without a seam)
+                strip.style.width = `${(length + 1).toFixed(2)}px`;
+                strip.style.height = `${depth}px`;
+                strip.style.transform = `translate(${fromX.toFixed(2)}px, ${fromY.toFixed(2)}px) rotate(${(Math.atan2(toY - fromY, toX - fromX) * (180 / Math.PI)).toFixed(2)}deg) translateX(-0.5px) rotateX(-90deg)`;
+                strips.push(strip);
+            }
+        });
+        cabinetDepth.replaceChildren(...strips);
+    }
+
     function flipJukebox(showBack) {
         if (!jukeboxPanel || isJukeboxFlipping || jukeboxPanel.classList.contains("is-flipped") === showBack) return;
 
@@ -6255,6 +6312,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         turnRecords((recordFlipAngle + recordTarget) / 2, FLIP_OUT_MS, FLIP_OUT_EASING);
 
         isJukeboxFlipping = true;
+        fitCabinetDepth();
         jukeboxPanel.classList.remove("powered-up");
         jukeboxPanel.classList.add("is-flipping", "flip-out");
         // A frame into the turn (so it starts straight away), draw the side that's coming round,
@@ -6428,6 +6486,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
         if (!turn.fromBack && window.jukebot) window.jukebot.prepare();
         turn.dropRecordAfter = liftRecordForFlip();
+        fitCabinetDepth();
         jukeboxPanel.classList.remove("powered-up");
         // Both sides drawn, the cabinet with its depth, as in the button's turn
         jukeboxPanel.classList.add("is-flipping", "is-turning", "is-hand-turning");
