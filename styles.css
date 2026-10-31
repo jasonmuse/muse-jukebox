@@ -1585,8 +1585,9 @@ audio {
         max-width: none;
         height: 98%;
         max-height: 98%;
-        padding: 10px 10px 8px 10px;
-        --lights-gutter: 10px;
+        /* (a 12px gutter at the sides: room for the lights' bulbs beside the song list's white ring) */
+        padding: 10px 12px 8px 12px;
+        --lights-gutter: 12px;
         border-radius: 28px 28px 14px 14px;
         box-sizing: border-box;
         display: flex;
@@ -7458,10 +7459,13 @@ button.title-penguin:focus-visible {
     background: linear-gradient(0deg, #7fe6ff, #b79bff 48%, #ff86d6);
     -webkit-mask-image: radial-gradient(circle closest-side, #000 0 60%, transparent 95%);
     mask-image: radial-gradient(circle closest-side, #000 0 60%, transparent 95%);
-    -webkit-mask-size: var(--bulb) var(--bulb-pitch);
-    mask-size: var(--bulb) var(--bulb-pitch);
-    -webkit-mask-position: 50% 0;
-    mask-position: 50% 0;
+    /* The song list's white ring reaches 3px into the column, so the bulbs keep to the rest of it,
+       centred there and no wider than it leaves room for (none cut off, however narrow) */
+    --list-ring: 3px;
+    --bulb-fit: min(var(--bulb), calc(var(--lights-gutter, 20px) - var(--list-ring) - 2px));
+    --bulb-inset: calc((var(--lights-gutter, 20px) - var(--list-ring) - var(--bulb-fit)) / 2);
+    -webkit-mask-size: var(--bulb-fit) var(--bulb-pitch);
+    mask-size: var(--bulb-fit) var(--bulb-pitch);
     -webkit-mask-repeat: no-repeat space;
     mask-repeat: no-repeat space;
     /* The glint measures its run against the column (cqh) */
@@ -7470,10 +7474,14 @@ button.title-penguin:focus-visible {
 
 .cabinet-lights--left {
     left: 0;
+    -webkit-mask-position: var(--bulb-inset) 0;
+    mask-position: var(--bulb-inset) 0;
 }
 
 .cabinet-lights--right {
     right: 0;
+    -webkit-mask-position: calc(var(--list-ring) + var(--bulb-inset)) 0;
+    mask-position: calc(var(--list-ring) + var(--bulb-inset)) 0;
 }
 
 /* The unlit bulbs: covers the ones above the current level; its soft lower edge lets the top
