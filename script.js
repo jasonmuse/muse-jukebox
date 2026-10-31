@@ -3874,18 +3874,73 @@ document.addEventListener("DOMContentLoaded", async () => {
         const response = await fetch(file, { headers: { Range: "bytes=0-9" } });
         const contentRange = response.headers.get("Content-Range") || "";
         const total = Number(contentRange.split("/")[1]);
-        if (response.status !== 206 || !Number.isFinite(total)) {
-            if (response.body) response.body.cancel();
-            throw new Error("Range requests not supported");
+        if (response.status === 206 && Number.isFinite(total)) {
+            return { total, audioStart: getId3Size(new Uint8Array(await response.arrayBuffer())) };
         }
 
-        const header = new Uint8Array(await response.arrayBuffer());
-        let audioStart = 0;
-        if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) {
-            // Skip the ID3 tag at the front of the file
-            audioStart = 10 + (((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F));
+        // The whole song came back instead of the bit asked for (or it didn't say how big it is):
+        // keep all of it, and cut every slice from that
+        let kept;
+        if (response.status === 200) {
+            kept = await keepWholeSong(file, response);
+        } else {
+            if (response.body) response.body.cancel();
+            kept = await fetchWholeSong(file);
         }
-        return { total, audioStart };
+        const head = new Uint8Array(await kept.blob.slice(0, 10).arrayBuffer());
+        return { total: kept.blob.size, audioStart: getId3Size(head), whole: true };
+    }
+
+    // The ID3 tag at the front of an MP3, if there is one: the audio starts after it
+    function getId3Size(bytes) {
+        if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return 0;
+        return 10 + (((bytes[6] & 0x7F) << 21) | ((bytes[7] & 0x7F) << 14) | ((bytes[8] & 0x7F) << 7) | (bytes[9] & 0x7F));
+    }
+
+    // Some servers (and caches) send the whole song whatever part of it's asked for. Then it's kept
+    // whole in memory (fetched just once, however many things measure it) and parts are cut from it.
+    const wholeSongRequests = new Map();
+
+    async function keepWholeSong(file, response) {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const frames = parseMp3Frames(bytes);
+        const blob = new Blob([bytes], { type: "audio/mpeg" });
+        rememberSongSource(file, blob, frames);
+        return { blob, frames };
+    }
+
+    function fetchWholeSong(file) {
+        const kept = songSources.get(file);
+        if (kept) return Promise.resolve(kept);
+        if (!wholeSongRequests.has(file)) {
+            const request = fetch(file).then((response) => {
+                if (!response.ok) throw new Error("Couldn't load the song");
+                return keepWholeSong(file, response);
+            });
+            wholeSongRequests.set(file, request);
+            const done = () => wholeSongRequests.delete(file);
+            request.then(done, done);
+        }
+        return wholeSongRequests.get(file);
+    }
+
+    // Bytes `start` to `end` of a song: asked for, or cut from the whole song where that's how it comes
+    async function fetchSongRange(file, start, end) {
+        const kept = songSources.get(file);
+        if (kept) return new Uint8Array(await kept.blob.slice(start, end + 1).arrayBuffer());
+        const info = await fetchAudioFileInfo(file);
+        if (!info.whole) {
+            const response = await fetch(file, { headers: { Range: `bytes=${start}-${end}` } });
+            if (response.status === 206) return new Uint8Array(await response.arrayBuffer());
+            if (response.status === 200) {
+                const { blob } = await keepWholeSong(file, response);
+                return new Uint8Array(await blob.slice(start, end + 1).arrayBuffer());
+            }
+            if (response.body) response.body.cancel();
+            throw new Error("Couldn't fetch the song");
+        }
+        const { blob } = await fetchWholeSong(file);
+        return new Uint8Array(await blob.slice(start, end + 1).arrayBuffer());
     }
 
     // Fetch and decode ~6 seconds of the song around `centerTime`
@@ -3902,12 +3957,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const startByte = info.audioStart + Math.floor(startTime * bytesPerSecond);
         const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil(endTime * bytesPerSecond));
 
-        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
-        if (response.status !== 206) {
-            if (response.body) response.body.cancel();
-            throw new Error("Range requests not supported");
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await fetchSongRange(file, startByte, endByte);
         const frameStart = findMp3FrameStart(bytes);
         const decoded = await decodeAudio(audio.context, bytes.slice(frameStart).buffer);
 
@@ -4961,6 +5011,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         return 0;
     }
 
+    // Nothing measured of the song yet (it's only just started, or it can't be here): the bars
+    // ripple gently, as they do with Rhythm off, until there is, instead of lying flat
+    let eqWaiting = false;
+    function setEqWaiting(waiting) {
+        if (waiting === eqWaiting || !jukeboxContainer) return;
+        eqWaiting = waiting;
+        jukeboxContainer.classList.toggle("eq-waiting", waiting);
+    }
+
     function stepBeatVisuals(timestamp) {
         const playing = isPlayerActive() && Boolean(currentTrackData) && !document.hidden;
         const elapsed = lastVisualTimestamp === null ? 1 / 60 : Math.min(0.1, Math.max(0, (timestamp - lastVisualTimestamp) / 1000));
@@ -4969,6 +5028,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let position = null;
         let songTime = null;
         let bass = 0;
+        let measured = false; // the song's sound or beats are known here
 
         if (playing) {
             const time = scratch ? scratch.targetTime : player.currentTime;
@@ -4995,6 +5055,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 lastBeatIndex = beatIndex;
 
                 if (spectrum && readSpectrum(spectrum, time + SPECTRUM_LEAD_SECONDS, targetLevels)) {
+                    measured = true;
                     // The speakers thump when the bass jumps (a kick drum), and lean out a little with
                     // a steady bass line
                     let kick = 0;
@@ -5008,9 +5069,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     bass = Math.max(Math.min(1, kick / 0.2), low * 0.4);
                 } else {
                     bass = guessLevels(level, beatIndex, targetLevels);
+                    measured = Boolean(position);
                 }
             }
         }
+        setEqWaiting(playing && rhythmOn && !measured);
         if (!playing || !rhythmOn) {
             lastBeatIndex = null;
             targetLevels.fill(0);
@@ -5183,7 +5246,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Resolves to the audio and the song time it starts at.
     async function decodeSongSlice(file, duration, fromTime, toTime) {
         const context = getAnalysisContext();
-        const source = songSources.get(file);
+        let source = songSources.get(file);
+        let info = null;
+        if (!source) {
+            if (navigator.connection && navigator.connection.saveData) throw new Error("Saving data");
+            info = await fetchAudioFileInfo(file);
+            // (a server that only sends whole songs: it's in memory now)
+            if (info.whole) source = await fetchWholeSong(file);
+        }
         if (source) {
             const { blob, frames } = source;
             const frameSeconds = frames.samplesPerFrame / frames.sampleRate;
@@ -5195,17 +5265,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             return { buffer, startTime: (last * frameSeconds) - buffer.duration };
         }
 
-        if (navigator.connection && navigator.connection.saveData) throw new Error("Saving data");
-        const info = await fetchAudioFileInfo(file);
         const bytesPerSecond = (info.total - info.audioStart) / duration;
         const startByte = info.audioStart + Math.floor(fromTime * bytesPerSecond);
         const endByte = Math.min(info.total - 1, info.audioStart + Math.ceil(toTime * bytesPerSecond) + 1500);
-        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${endByte}` } });
-        if (response.status !== 206) {
-            if (response.body) response.body.cancel();
-            throw new Error("Range requests not supported");
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await fetchSongRange(file, startByte, endByte);
         const frameStart = findMp3FrameStart(bytes);
         // Whole frames only, so the slice's end is a known moment in the song
         let end = frameStart;
@@ -5471,12 +5534,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const bytesPerSecond = (info.total - info.audioStart) / duration;
         const sliceBytes = Math.ceil(Math.min(MIX_ANALYSIS_SECONDS, duration) * bytesPerSecond);
         const startByte = Math.max(info.audioStart, info.total - sliceBytes);
-        const response = await fetch(file, { headers: { Range: `bytes=${startByte}-${info.total - 1}` } });
-        if (response.status !== 206) {
-            if (response.body) response.body.cancel();
-            throw new Error("Range requests not supported");
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
+        const bytes = await fetchSongRange(file, startByte, info.total - 1);
         const tail = await decodeAudio(getAnalysisContext(), bytes.slice(findMp3FrameStart(bytes)).buffer);
         return measureMixInfo(checkDecodedLength(tail, Math.min(MIX_ANALYSIS_SECONDS, duration)), duration, null);
     }
@@ -6082,20 +6140,82 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ───── Turning the jukebox round by hand ─────
     // Grab it by either side and drag across: it turns about its middle as far as you've taken it,
     // as slowly or as quickly as you go (the whole way across is right round and the middle is
-    // edge-on, so the side you've got hold of stays about under your finger), and swaps sides edge-on
-    // just as the button's turn does. Let go past halfway, or with a flick, and it carries on round
-    // at the speed you left it going; otherwise it settles back.
+    // edge-on, so the side you've got hold of stays about under your finger, coming towards you like
+    // a page being turned), and swaps sides edge-on just as the button's turn does. Let go past
+    // halfway, or with a flick, and it carries on round at the speed you left it going; otherwise it
+    // settles back. A finger can take hold of either side a little way in, too (below).
     const HAND_TURN_MOMENTUM_MS = 250; // let go, it goes round if it would be past edge-on this much later
     const HAND_TURN_SPEED_WINDOW_MS = 90; // how much of the end of a drag its speed is taken from
+    const HAND_TURN_REACH_IN = 44; // px in from where what's on the jukebox starts, for a finger
+    const HAND_TURN_SLOP = 10; // px a finger moves before it's plainly going sideways (or not)
     let handTurn = null;
+    let sidewaysGrab = null; // a finger come down near a side, that may set off sideways
 
     function setUpHandTurning() {
-        jukeboxPanel.querySelectorAll(".jukebox-edge").forEach((edge) => {
-            edge.addEventListener("pointerdown", (event) => beginHandTurn(event, edge));
+        const edges = Array.from(jukeboxPanel.querySelectorAll(".jukebox-edge"));
+        edges.forEach((edge) => {
+            edge.addEventListener("pointerdown", (event) => beginHandTurn(event, edge, edge));
         });
+        jukeboxPanel.addEventListener("pointerdown", (event) => watchSidewaysGrab(event, edges), true);
     }
 
-    function beginHandTurn(event, edge) {
+    // On a touch screen either side can be taken hold of a little way in, over what's on the
+    // jukebox there: a finger that sets off sideways, towards the middle, turns it, while taps and
+    // drags up and down (scrolling the songs) are left to whatever's under it. (That keeps the
+    // left side in reach on a phone too, away from the screen's edge, where a swipe goes back.)
+    function watchSidewaysGrab(event, edges) {
+        if (handTurn || sidewaysGrab || isJukeboxFlipping || event.pointerType === "mouse" || !event.isPrimary) return;
+        if (document.body.classList.contains("modal-open")) return;
+        if (event.target.closest(".jukebox-edge, .song-wave, select, input, textarea, .jb-screw, .cover-modal, .jb-back.is-playing")) return;
+        const rect = jukeboxPanel.getBoundingClientRect();
+        const style = window.getComputedStyle(jukeboxPanel);
+        const inset = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0);
+        const fromLeft = event.clientX - (rect.left + inset);
+        const fromRight = (rect.right - inset) - event.clientX;
+        const side = fromLeft <= HAND_TURN_REACH_IN ? -1 : (fromRight <= HAND_TURN_REACH_IN ? 1 : 0);
+        if (!side) return;
+        sidewaysGrab = { pointerId: event.pointerId, pointerType: event.pointerType, x: event.clientX, y: event.clientY, side, edge: edges[side < 0 ? 0 : 1] };
+        document.addEventListener("pointermove", followSidewaysGrab, true);
+        document.addEventListener("pointerup", dropSidewaysGrab, true);
+        document.addEventListener("pointercancel", dropSidewaysGrab, true);
+    }
+
+    function followSidewaysGrab(event) {
+        const grab = sidewaysGrab;
+        if (!grab || event.pointerId !== grab.pointerId) return;
+        const across = event.clientX - grab.x;
+        const down = event.clientY - grab.y;
+        if (Math.abs(across) < HAND_TURN_SLOP && Math.abs(down) < HAND_TURN_SLOP) return;
+        dropSidewaysGrab();
+        // Up or down is the songs scrolling; outwards, away from the middle, isn't a turn either
+        if (Math.abs(across) < Math.abs(down) * 1.4 || Math.sign(across) === grab.side) return;
+        beginHandTurn({
+            pointerId: grab.pointerId,
+            pointerType: grab.pointerType,
+            clientX: grab.x,
+            isPrimary: true,
+            button: 0,
+            preventDefault() {}
+        }, jukeboxPanel, grab.edge);
+        if (!handTurn) return;
+        // (whatever it came down on doesn't get a click out of it)
+        const swallowClick = (click) => {
+            click.stopPropagation();
+            click.preventDefault();
+        };
+        window.addEventListener("click", swallowClick, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", swallowClick, { capture: true }), 600);
+        moveHandTurn(event);
+    }
+
+    function dropSidewaysGrab() {
+        sidewaysGrab = null;
+        document.removeEventListener("pointermove", followSidewaysGrab, true);
+        document.removeEventListener("pointerup", dropSidewaysGrab, true);
+        document.removeEventListener("pointercancel", dropSidewaysGrab, true);
+    }
+
+    function beginHandTurn(event, holder, edge) {
         if (handTurn || isJukeboxFlipping || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
         if (document.body.classList.contains("modal-open")) return;
         const rect = jukeboxPanel.getBoundingClientRect();
@@ -6104,11 +6224,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (Math.abs(reach) < 40) return;
         event.preventDefault();
         handTurn = {
+            holder,
             edge,
             pointerId: event.pointerId,
             centre,
             reach, // where it was grabbed, from the middle
-            direction: reach > 0 ? 1 : -1, // the side that's held turns away
+            direction: reach > 0 ? -1 : 1, // the side that's held comes round towards you
             fromBack: jukeboxPanel.classList.contains("is-flipped"),
             recordFrom: recordFlipAngle,
             angle: 0,
@@ -6120,16 +6241,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             settling: null,
             dropRecordAfter: null
         };
-        edge.classList.add("is-held");
+        if (edge) edge.classList.add("is-held");
         try {
-            edge.setPointerCapture(event.pointerId);
+            holder.setPointerCapture(event.pointerId);
         } catch (error) {
             // Not capturable: its moves still come while it's over the strip
         }
-        edge.addEventListener("pointermove", moveHandTurn);
-        edge.addEventListener("pointerup", releaseHandTurn);
-        edge.addEventListener("pointercancel", releaseHandTurn);
-        edge.addEventListener("lostpointercapture", releaseHandTurn);
+        holder.addEventListener("pointermove", moveHandTurn);
+        holder.addEventListener("pointerup", releaseHandTurn);
+        holder.addEventListener("pointercancel", releaseHandTurn);
+        holder.addEventListener("lostpointercapture", releaseHandTurn);
     }
 
     // How far round the hand has taken it: 0 square on, 90 edge-on, 180 right round
@@ -6186,13 +6307,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     function releaseHandTurn(event) {
         const turn = handTurn;
         if (!turn || turn.released || event.pointerId !== turn.pointerId) return;
+        // (taking the finger over from what it came down on: that loses it, the jukebox doesn't)
+        if (event.type === "lostpointercapture" && event.target !== turn.holder) return;
         turn.released = true;
-        const { edge } = turn;
-        edge.removeEventListener("pointermove", moveHandTurn);
-        edge.removeEventListener("pointerup", releaseHandTurn);
-        edge.removeEventListener("pointercancel", releaseHandTurn);
-        edge.removeEventListener("lostpointercapture", releaseHandTurn);
-        edge.classList.remove("is-held");
+        const { holder, edge } = turn;
+        holder.removeEventListener("pointermove", moveHandTurn);
+        holder.removeEventListener("pointerup", releaseHandTurn);
+        holder.removeEventListener("pointercancel", releaseHandTurn);
+        holder.removeEventListener("lostpointercapture", releaseHandTurn);
+        if (edge) edge.classList.remove("is-held");
         if (turn.frame !== null) {
             cancelAnimationFrame(turn.frame);
             turn.frame = null;

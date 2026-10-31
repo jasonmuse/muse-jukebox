@@ -4010,6 +4010,7 @@ html.is-standalone .edge-blend {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    touch-action: pan-y; /* (sideways is the jukebox being turned by hand) */
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
@@ -6861,9 +6862,11 @@ button.title-penguin:focus-visible {
     opacity: 0.95;
 }
 
-/* With Rhythm off the bars don't follow the song, they just ripple gently while it plays */
+/* With Rhythm off the bars don't follow the song, they just ripple gently while it plays (and so
+   they do with it on, until there's something of the song measured to follow) */
 @media (prefers-reduced-motion: no-preference) {
-    #jukebox-container.is-music-playing:not(.rhythm-on) .speaker-eq span {
+    #jukebox-container.is-music-playing:not(.rhythm-on) .speaker-eq span,
+    #jukebox-container.is-music-playing.eq-waiting .speaker-eq span {
         animation: eqIdle 2.8s ease-in-out infinite;
         animation-delay: calc(var(--i, 0) * -0.175s);
     }
@@ -7117,6 +7120,12 @@ button.title-penguin:focus-visible {
     cursor: grabbing;
 }
 
+/* A finger going sideways anywhere on the jukebox is left to the page (script.js turns it when that
+   starts near a side); up and down still scrolls the songs as ever */
+#jukebox {
+    touch-action: pan-y;
+}
+
 /* ───── SHORT WINDOWS (keyboard up, split screen): keep the layout, scroll the page ───── */
 html.viewport-short,
 html.viewport-short body {
@@ -7328,7 +7337,14 @@ html.viewport-shifted body {
 
     .track.track-modes-visible .side-switch {
         margin-top: 0;
-        margin-bottom: -9px;
+    }
+
+    /* The Side A / B label sits across the bottom of the cover, inside the row (hanging as far
+       below the smaller cover as on a big one, it reached into the next row) */
+    .side-switch,
+    .track.track-modes-visible .side-switch {
+        height: 18px;
+        margin-bottom: -3px;
     }
 
     @container (max-width: 265px) {
