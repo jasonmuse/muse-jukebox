@@ -8321,13 +8321,15 @@ button.title-penguin:focus-visible {
     transform: rotateY(180deg) translateZ(1.5px);
 }
 
-/* The rim, seen when the disc is edge-on */
+/* The rim, seen when the disc is edge-on. It runs only as far as the vinyl is solid in
+   record.png (3.5% in from its top and bottom): any further and its ends poked out past the edge of
+   the disc as a little dark nub while the record turned. */
 .record-edge {
     position: absolute;
     left: 50%;
-    top: 2.6%;
+    top: 3.8%;
     width: 3px;
-    height: 97%;
+    height: 92.4%;
     margin-left: -1.5px;
     border-radius: 2px;
     background: linear-gradient(180deg, #0a0a0a, #353535 50%, #0a0a0a);
