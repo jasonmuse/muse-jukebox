@@ -259,7 +259,13 @@ p {
     right: 8px;
 }
 
+/* ───── SORT AND TAG ─────
+   A pill each beside the dice, in the cabinet's blue, and the menu it opens: dark glass like the
+   LED windows, the sorts with little LED badges, the tags as chips with how many songs each has.
+   The selects they stand for stay in the page out of sight (script.js reads them). */
 #filters {
+    --filter-height: 34px;
+    position: relative;
     margin-bottom: 15px;
     display: flex;
     align-items: center;
@@ -269,101 +275,482 @@ p {
 }
 
 .filter-group {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 6px;
     flex: 1 1 0;
     min-width: 0;
 }
 
-.filter-group label {
-    color: #dfe5ff;
-    font-size: 0.85rem;
-    font-weight: 600;
+.filter-native,
+.filter-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
     white-space: nowrap;
 }
 
+.filter-native {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* The dice and the two pills share one look */
+.random-track-button,
+.filter-trigger {
+    border: 1px solid rgba(142, 161, 255, 0.55);
+    background: linear-gradient(180deg, #3d4296 0%, #2c3074 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 6px rgba(0, 0, 0, 0.28);
+    color: #eef1ff;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 200ms ease, transform 120ms ease;
+}
+
 .random-track-button {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
+    width: var(--filter-height);
+    height: var(--filter-height);
+    min-width: var(--filter-height);
+    flex: 0 0 var(--filter-height);
     padding: 0;
-    border-radius: 9px;
-    border: 1px solid #6f83e8;
-    background: #31367f;
-    color: #f0f3ff;
+    border-radius: 50%;
     font-size: 1.05rem;
     line-height: 1;
-    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 34px;
-    transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
 }
 
-.random-track-button:hover {
-    background: #3c4295;
-    border-color: #8ea1ff;
-    transform: translateY(-1px);
+.filter-trigger {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    height: var(--filter-height);
+    padding: 0 10px 0 12px;
+    border-radius: 999px;
+    font: 700 0.9rem/1 "Outfit", system-ui, sans-serif;
+    text-align: left;
 }
 
-.random-track-button:active {
-    transform: translateY(0);
+.filter-trigger-icon,
+.filter-trigger-chevron {
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.random-track-button:focus {
+.filter-trigger-icon {
+    width: 15px;
+    height: 15px;
+    color: #aebcff;
+}
+
+.filter-trigger-label {
+    flex: 0 0 auto;
+    color: #9aa6e6;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.filter-trigger-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-trigger-chevron {
+    width: 14px;
+    height: 14px;
+    color: #c4ceff;
+    transition: transform 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.filter-trigger[aria-expanded="true"] .filter-trigger-chevron {
+    transform: rotate(180deg);
+}
+
+@media (hover: hover) {
+    .random-track-button:hover,
+    .filter-trigger:hover {
+        border-color: #9db0ff;
+        transform: translateY(-1px);
+    }
+}
+
+.random-track-button:active,
+.filter-trigger:active {
+    transform: scale(0.96);
+}
+
+.random-track-button:focus,
+.filter-trigger:focus {
     outline: none;
-    border-color: #9db0ff;
-    box-shadow: 0 0 0 2px rgba(100, 128, 255, 0.2);
 }
 
-.filter-label-short {
+.random-track-button:focus-visible,
+.filter-trigger:focus-visible,
+.filter-trigger[aria-expanded="true"] {
+    border-color: #b3c1ff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 0 3px rgba(120, 145, 255, 0.32);
+}
+
+/* Narrowed to a tag: that pill lights up pink, like the side A label */
+.filter-trigger.is-filtering {
+    border-color: rgba(255, 150, 220, 0.85);
+    background: linear-gradient(180deg, #5a3a8a 0%, #3c2868 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 12px rgba(255, 138, 216, 0.38);
+}
+
+.filter-trigger.is-filtering .filter-trigger-icon,
+.filter-trigger.is-filtering .filter-trigger-label {
+    color: #ff9fe0;
+}
+
+.filter-trigger.is-filtering .filter-trigger-value {
+    color: #ffe0f5;
+}
+
+/* The menu: opens under its pill (the tags' under both, as there are lots of them), over the
+   songs. script.js says how tall it can be (--filter-menu-room); what doesn't fit scrolls inside
+   it, with the bottom fading out while there's more down there. */
+.filter-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 12; /* (over the songs, the playing song's card and the edges you turn the jukebox by) */
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    max-height: min(520px, var(--filter-menu-room, 60vh));
+    overflow: hidden;
+    border: 1px solid rgba(142, 161, 255, 0.4);
+    border-radius: 16px;
+    background:
+        radial-gradient(120% 70% at 50% 0%, rgba(150, 125, 255, 0.16), transparent 65%),
+        linear-gradient(180deg, #202244, #121328);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    text-align: left;
+    transform-origin: top left;
+    animation: filterMenuIn 180ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+.filter-menu[hidden] {
     display: none;
 }
 
-#tag-filter,
-#sort-filter {
-    background: #31367f;
-    color: #e8ecff;
-    border: 1px solid #6f83e8;
-    border-radius: 8px;
-    padding: 6px 28px 6px 10px;
-    min-width: 0;
+.filter-menu-scroll {
+    position: relative; /* (what's inside scrolls with it, the hidden "songs" words included) */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px;
+}
+
+.filter-menu::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    background: linear-gradient(180deg, rgba(18, 19, 40, 0), #121328 85%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+}
+
+.filter-menu.has-more::after {
+    opacity: 1;
+}
+
+@keyframes filterMenuIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+}
+
+.filter-menu--sort {
+    min-width: 214px;
+}
+
+.filter-menu--tags {
+    right: 0;
+    width: auto;
+    max-width: none;
+    transform-origin: top center;
+}
+
+.filter-menu--tags .filter-menu-scroll {
+    padding: 10px 10px 12px;
+}
+
+/* Sorts: a row each, with an LED badge, and a tick on the one that's on */
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    font-size: 0.9rem;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image:
-        linear-gradient(45deg, transparent 50%, #d6deff 50%),
-        linear-gradient(135deg, #d6deff 50%, transparent 50%);
-    background-position:
-        calc(100% - 14px) calc(50% - 2px),
-        calc(100% - 9px) calc(50% - 2px);
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    min-height: 40px;
+    padding: 6px 10px 6px 7px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: #e3e8ff;
+    font: 600 0.92rem/1.2 "Outfit", system-ui, sans-serif;
+    text-align: left;
     cursor: pointer;
-    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background-color 140ms ease, color 140ms ease;
 }
 
-#tag-filter:hover,
-#sort-filter:hover {
-    background: #393f8f;
-    border-color: #8094f5;
+.filter-option + .filter-option {
+    margin-top: 2px;
 }
 
-#tag-filter:focus,
-#sort-filter:focus {
+.filter-option:focus {
     outline: none;
-    border-color: #9db0ff;
-    box-shadow: 0 0 0 2px rgba(100, 128, 255, 0.2);
 }
 
-#tag-filter option,
-#sort-filter option {
-    background: #2f2c73;
-    color: #ffffff;
+@media (hover: hover) {
+    .filter-option:hover {
+        background: rgba(120, 140, 255, 0.16);
+    }
+}
+
+.filter-option:focus-visible {
+    background: rgba(120, 140, 255, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(157, 176, 255, 0.6);
+}
+
+.filter-option[aria-selected="true"] {
+    background: rgba(255, 138, 216, 0.14);
+    color: #ffe3f6;
+}
+
+.filter-option-badge {
+    position: relative;
+    flex: 0 0 auto;
+    min-width: 42px;
+    padding: 5px 6px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #05060c, #0e1020);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
+    color: #ffc861;
+    font: 800 0.66rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-shadow: 0 0 3px rgba(255, 190, 80, 0.95), 0 0 8px rgba(255, 140, 40, 0.5);
+}
+
+/* (the LED dots over it) */
+.filter-option-badge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, transparent 0 0.55px, rgba(5, 6, 12, 0.5) 1px) 0 0 / 2px 2px;
+    pointer-events: none;
+}
+
+.filter-option[aria-selected="true"] .filter-option-badge {
+    color: #ffb3e8;
+    text-shadow: 0 0 3px rgba(255, 138, 216, 0.95), 0 0 8px rgba(255, 100, 200, 0.55);
+}
+
+.filter-option-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.filter-option-check {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: #ff8ad8;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 160ms ease, transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.filter-option[aria-selected="true"] .filter-option-check {
+    opacity: 1;
+    transform: none;
+}
+
+/* Tags: chips, in groups (all, the vibes, the years), each with its count */
+.filter-menu-heading {
+    margin: 12px 2px 7px;
+    color: #9aa6e6;
+    font: 800 0.64rem/1 "Outfit", system-ui, sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 4px 5px 4px 11px;
+    border: 1px solid rgba(142, 161, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(71, 107, 252, 0.16);
+    color: #e3e8ff;
+    font: 600 0.86rem/1 "Outfit", system-ui, sans-serif;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background-color 140ms ease, border-color 140ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+
+.filter-chip-count {
+    min-width: 22px;
+    padding: 4px 6px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: rgba(8, 10, 28, 0.55);
+    color: #aeb8ef;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+@media (hover: hover) {
+    .filter-chip:hover {
+        background: rgba(71, 107, 252, 0.32);
+        border-color: rgba(157, 176, 255, 0.7);
+        transform: translateY(-1px);
+    }
+}
+
+.filter-chip:active {
+    transform: scale(0.95);
+}
+
+.filter-chip:focus {
+    outline: none;
+}
+
+.filter-chip:focus-visible {
+    border-color: #c4ceff;
+    box-shadow: 0 0 0 3px rgba(120, 145, 255, 0.35);
+}
+
+.filter-chip[aria-selected="true"] {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: linear-gradient(180deg, #ffa3dd, #ff72c4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 10px rgba(255, 138, 216, 0.45);
+    color: #3a0d2e;
+    font-weight: 800;
+}
+
+.filter-chip[aria-selected="true"] .filter-chip-count {
+    background: rgba(58, 13, 46, 0.18);
+    color: #5a1a48;
+}
+
+/* Phones: smaller chips, so more of them fit before the menu has to scroll */
+@media (max-width: 600px), (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
+    #filters .filter-menu--tags .filter-menu-scroll {
+        padding: 8px 8px 10px;
+    }
+
+    #filters .filter-menu-heading {
+        margin: 10px 2px 6px;
+    }
+
+    #filters .filter-chips {
+        gap: 5px;
+    }
+
+    #filters .filter-chip {
+        gap: 5px;
+        min-height: 29px;
+        padding: 3px 4px 3px 9px;
+        font-size: 0.8rem;
+    }
+
+    #filters .filter-chip-count {
+        min-width: 20px;
+        padding: 3px 5px;
+        font-size: 0.66rem;
+    }
+}
+
+/* Narrow phones: the pills' insides squeeze up so "Newest" still fits; narrower still (an iPad's
+   smallest split, an old SE) the words Sort and Tag go, and the icons say it */
+@media (max-width: 400px) {
+    #filters .filter-trigger {
+        gap: 5px;
+        padding: 0 7px 0 9px;
+    }
+
+    #filters .filter-trigger-icon {
+        width: 13px;
+        height: 13px;
+    }
+
+    #filters .filter-trigger-chevron {
+        width: 12px;
+        height: 12px;
+    }
+
+    #filters .filter-trigger-label {
+        letter-spacing: 0.06em;
+    }
+}
+
+@media (max-width: 340px) {
+    #filters .filter-trigger-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .filter-menu {
+        animation: none;
+    }
+
+    .filter-trigger-chevron,
+    .filter-option-check {
+        transition: none;
+    }
 }
 
 #track-list {
@@ -588,7 +975,8 @@ box-shadow: 0 0 0 3px #ffffff;
     gap: 3px;
     width: 58px;
     height: 20px;
-    margin: 0 calc((var(--cover-size) / 2) + var(--cover-gap) - 29px) -9px calc(-1 * ((var(--cover-size) / 2) + var(--cover-gap) + 29px));
+    /* (centred under the cover: its box is the cover size plus its 2px border each side) */
+    margin: 0 calc(((var(--cover-size) + 4px) / 2) + var(--cover-gap) - 29px) -9px calc(-1 * (((var(--cover-size) + 4px) / 2) + var(--cover-gap) + 29px));
     padding: 0;
     box-sizing: border-box;
     border: 1px solid rgba(255, 255, 255, 0.6);
@@ -1621,31 +2009,18 @@ audio {
     }
 
     #filters {
+        --filter-height: 30px;
         margin-bottom: 6px;
         gap: 6px;
     }
 
-    .filter-group {
-        gap: 4px;
-    }
-
-    .filter-group label {
-        font-size: 0.72rem;
-    }
-
-    .filter-label-extra {
-        display: none;
-    }
-
-    .filter-label-short {
-        display: inline;
+    .filter-trigger {
+        gap: 6px;
+        padding: 0 8px 0 10px;
+        font-size: 0.84rem;
     }
 
     .random-track-button {
-        width: 30px;
-        height: 30px;
-        min-width: 30px;
-        flex-basis: 30px;
         font-size: 0.95rem;
     }
 
@@ -1956,23 +2331,17 @@ html {
     }
 
 
-    .filter-label-extra {
-        display: inline;
+    #filters {
+        --filter-height: 34px;
     }
 
-    .filter-label-short {
-        display: none;
-    }
-
-    .filter-group label {
-        font-size: 0.85rem;
+    .filter-trigger {
+        gap: 7px;
+        padding: 0 10px 0 12px;
+        font-size: 0.9rem;
     }
 
     .random-track-button {
-        width: 34px;
-        height: 34px;
-        min-width: 34px;
-        flex-basis: 34px;
         font-size: 1.05rem;
     }
 
@@ -2837,23 +3206,17 @@ html {
         --mode-size: 30px;
     }
 
-    .filter-label-extra {
-        display: none;
+    #filters {
+        --filter-height: 30px;
     }
 
-    .filter-label-short {
-        display: inline;
-    }
-
-    .filter-group label {
-        font-size: 0.72rem;
+    .filter-trigger {
+        gap: 6px;
+        padding: 0 8px 0 10px;
+        font-size: 0.84rem;
     }
 
     .random-track-button {
-        width: 30px;
-        height: 30px;
-        min-width: 30px;
-        flex-basis: 30px;
         font-size: 0.95rem;
     }
 
@@ -7282,6 +7645,89 @@ button.title-penguin:focus-visible {
     transform: scaleX(calc(1 - (var(--hop, 0) * 0.45)));
     opacity: calc(1 - (var(--hop, 0) * 0.5));
     will-change: transform, opacity;
+}
+
+/* Tapped, a penguin dances with you: a crouch, a jump with a spin, a squashy landing; the other
+   joins in a moment later. (Moved by translate, scale and rotate on their own, so it goes on top of
+   their dance to the beat instead of stopping it.) */
+#jukebox-container .title-penguin.is-bouncing .penguin-icon,
+#jukebox-container.penguins-dancing .title-penguin.is-bouncing .penguin-icon {
+    animation: penguinBounce 720ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+#jukebox-container .title-penguin.is-bouncing-along .penguin-icon,
+#jukebox-container.penguins-dancing .title-penguin.is-bouncing-along .penguin-icon {
+    animation: penguinBounceAlong 560ms cubic-bezier(0.3, 0.7, 0.4, 1) 140ms;
+}
+
+#jukebox-container .title-penguin.is-bouncing::after {
+    animation: penguinBounceShadow 720ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+#jukebox-container .title-penguin.is-bouncing-along::after {
+    animation: penguinBounceShadow 560ms cubic-bezier(0.3, 0.7, 0.4, 1) 140ms;
+}
+
+@keyframes penguinBounce {
+    0% {
+        translate: 0 0;
+        scale: 1 1;
+        rotate: y 0deg;
+    }
+
+    14% {
+        translate: 0 0.04em;
+        scale: 1.16 0.8;
+        rotate: y 0deg;
+    }
+
+    45% {
+        translate: 0 -0.62em;
+        scale: 0.9 1.14;
+        rotate: y calc(var(--spin, 360deg) * 0.55);
+    }
+
+    72% {
+        translate: 0 -0.08em;
+        scale: 1 1;
+        rotate: y var(--spin, 360deg);
+    }
+
+    84% {
+        translate: 0 0;
+        scale: 1.14 0.86;
+        rotate: y var(--spin, 360deg);
+    }
+
+    100% {
+        translate: 0 0;
+        scale: 1 1;
+        rotate: y var(--spin, 360deg);
+    }
+}
+
+@keyframes penguinBounceAlong {
+    18% {
+        translate: 0 0.03em;
+        scale: 1.1 0.86;
+    }
+
+    50% {
+        translate: 0 -0.34em;
+        scale: 0.94 1.08;
+    }
+
+    80% {
+        translate: 0 0;
+        scale: 1.08 0.92;
+    }
+}
+
+@keyframes penguinBounceShadow {
+    45% {
+        transform: scaleX(0.55);
+        opacity: 0.45;
+    }
 }
 
 /* Under the title, taking no room: what the note hangs from */

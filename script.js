@@ -3802,8 +3802,215 @@ document.addEventListener("DOMContentLoaded", async () => {
             : songs.filter((track) => matches(track) || matches(getOtherSide(track)));
     }
 
+    // ───── The Sort and Tag menus ─────
+    // The selects still hold the choice (everything else reads them); these show it and change it:
+    // a pill each, opening a menu in the jukebox's own style (the sorts with little LED badges, the
+    // tags as chips: the vibes, then the years, each with how many songs it has)
+    const sortTrigger = document.getElementById("sort-trigger");
+    const tagTrigger = document.getElementById("tag-trigger");
+    const sortMenu = document.getElementById("sort-menu");
+    const tagMenu = document.getElementById("tag-menu");
+    // Each sort's LED badge, its name in the menu and its name on the pill
+    const SORT_CHOICES = {
+        newest: { badge: "NEW", label: "Newest first", short: "Newest" },
+        oldest: { badge: "OLD", label: "Oldest first", short: "Oldest" },
+        "title-asc": { badge: "A\u2013Z", label: "Title, A to Z", short: "A\u2013Z" },
+        "title-desc": { badge: "Z\u2013A", label: "Title, Z to A", short: "Z\u2013A" }
+    };
+    const CHECK_ICON = `<svg class="filter-option-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`;
+    let openFilter = null; // the menu that's open: { trigger, menu, select }
+
+    function syncFilterTriggers() {
+        [[sortTrigger, sortFilter], [tagTrigger, tagFilter]].forEach(([trigger, select]) => {
+            if (!trigger || !select) return;
+            const option = select.options[select.selectedIndex];
+            const choice = select === sortFilter && option ? SORT_CHOICES[option.value] : null;
+            trigger.querySelector(".filter-trigger-value").textContent = choice ? choice.short : (option ? option.textContent : "");
+        });
+        // (lit up while the list's narrowed to a tag)
+        if (tagTrigger && tagFilter) tagTrigger.classList.toggle("is-filtering", tagFilter.value !== "all");
+    }
+
+    function makeFilterOption(option, select, className) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = className;
+        button.setAttribute("role", "option");
+        button.setAttribute("aria-selected", String(option.value === select.value));
+        button.dataset.value = option.value;
+        return button;
+    }
+
+    function buildFilterMenu(menu, select) {
+        menu.textContent = "";
+        const box = document.createElement("div");
+        box.className = "filter-menu-scroll";
+        menu.appendChild(box);
+        fillFilterMenu(box, select);
+    }
+
+    function fillFilterMenu(box, select) {
+        const options = Array.from(select.options);
+        if (select === sortFilter) {
+            options.forEach((option) => {
+                const button = makeFilterOption(option, select, "filter-option");
+                const badge = document.createElement("span");
+                badge.className = "filter-option-badge";
+                const choice = SORT_CHOICES[option.value];
+                badge.textContent = choice ? choice.badge : "";
+                badge.setAttribute("aria-hidden", "true");
+                const label = document.createElement("span");
+                label.className = "filter-option-label";
+                label.textContent = choice ? choice.label : option.textContent;
+                button.append(badge, label);
+                button.insertAdjacentHTML("beforeend", CHECK_ICON);
+                box.appendChild(button);
+            });
+            return;
+        }
+        const isYear = (value) => /^\d{4}$/.test(value);
+        const groups = [
+            ["", options.filter((option) => option.value === "all")],
+            ["Vibes", options.filter((option) => option.value !== "all" && !isYear(option.value)).sort((a, b) => a.textContent.localeCompare(b.textContent))],
+            ["Years", options.filter((option) => isYear(option.value)).sort((a, b) => b.value.localeCompare(a.value))]
+        ];
+        groups.forEach(([title, list]) => {
+            if (!list.length) return;
+            const group = document.createElement("div");
+            group.className = "filter-chips";
+            group.setAttribute("role", "group");
+            if (title) {
+                group.setAttribute("aria-label", title);
+                const heading = document.createElement("p");
+                heading.className = "filter-menu-heading";
+                heading.setAttribute("aria-hidden", "true");
+                heading.textContent = title;
+                box.appendChild(heading);
+            }
+            list.forEach((option) => {
+                const chip = makeFilterOption(option, select, "filter-chip");
+                const name = document.createElement("span");
+                name.textContent = option.textContent;
+                const songCount = getFilteredTracks(option.value).length;
+                const count = document.createElement("span");
+                count.className = "filter-chip-count";
+                count.textContent = String(songCount);
+                const spoken = document.createElement("span");
+                spoken.className = "filter-sr";
+                spoken.textContent = songCount === 1 ? " song" : " songs";
+                count.appendChild(spoken);
+                chip.append(name, count);
+                group.appendChild(chip);
+            });
+            box.appendChild(group);
+        });
+    }
+
+    function openFilterMenu(trigger, menu, select) {
+        if (!trigger || !menu || !select) return;
+        const wasOpen = openFilter && openFilter.menu === menu;
+        closeFilterMenu(false);
+        if (wasOpen) return;
+        buildFilterMenu(menu, select);
+        // How tall it can be: down to the bottom of the song window if it needs to, a bit past that
+        // when the window's short, never off the bottom of the screen
+        const viewport = window.visualViewport;
+        const screenBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+        const top = trigger.getBoundingClientRect().bottom;
+        const listBottom = trackList ? trackList.getBoundingClientRect().bottom : screenBottom;
+        const room = Math.min(screenBottom - top - 20, Math.max(listBottom - top - 8, 240));
+        menu.style.setProperty("--filter-menu-room", `${Math.max(150, Math.round(room))}px`);
+        menu.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+        openFilter = { trigger, menu, select };
+        const chosen = menu.querySelector('[aria-selected="true"]') || menu.querySelector('[role="option"]');
+        if (chosen) {
+            chosen.focus({ preventScroll: true });
+            // (scrolled to by its place in the list, as the menu's still zooming in, and kept clear
+            // of the fade at the bottom)
+            const box = menu.firstElementChild;
+            const below = chosen.offsetTop + chosen.offsetHeight + 40 - box.clientHeight;
+            if (below > box.scrollTop) box.scrollTop = Math.min(below, box.scrollHeight - box.clientHeight);
+        }
+        showMoreInFilterMenu(menu);
+    }
+
+    // (the fade at the bottom says there's more down there; it goes once you've scrolled to the end)
+    function showMoreInFilterMenu(menu) {
+        const box = menu.firstElementChild;
+        menu.classList.toggle("has-more", Boolean(box) && box.scrollTop + box.clientHeight < box.scrollHeight - 4);
+    }
+
+    function closeFilterMenu(returnFocus) {
+        if (!openFilter) return;
+        const { trigger, menu } = openFilter;
+        openFilter = null;
+        menu.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+        if (returnFocus) trigger.focus({ preventScroll: true });
+    }
+
+    function chooseFilter(select, value) {
+        closeFilterMenu(true);
+        if (select.value !== value) {
+            select.value = value;
+            select.dispatchEvent(new Event("change"));
+        }
+        syncFilterTriggers();
+    }
+
+    function setUpFilterMenus() {
+        if (!sortTrigger || !tagTrigger || !sortMenu || !tagMenu) return;
+        sortTrigger.addEventListener("click", () => openFilterMenu(sortTrigger, sortMenu, sortFilter));
+        tagTrigger.addEventListener("click", () => openFilterMenu(tagTrigger, tagMenu, tagFilter));
+        [sortMenu, tagMenu].forEach((menu) => {
+            menu.addEventListener("scroll", () => showMoreInFilterMenu(menu), { capture: true, passive: true });
+            menu.addEventListener("click", (event) => {
+                const option = event.target.closest('[role="option"]');
+                if (option && openFilter && openFilter.menu === menu) chooseFilter(openFilter.select, option.dataset.value);
+            });
+            // Arrow keys go through the choices; Escape shuts the menu
+            menu.addEventListener("keydown", (event) => {
+                const options = Array.from(menu.querySelectorAll('[role="option"]'));
+                const index = options.indexOf(document.activeElement);
+                let next = null;
+                if (event.key === "ArrowDown" || event.key === "ArrowRight") next = options[Math.min(options.length - 1, index + 1)];
+                else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = options[Math.max(0, index - 1)];
+                else if (event.key === "Home") next = options[0];
+                else if (event.key === "End") next = options[options.length - 1];
+                else if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeFilterMenu(true);
+                    return;
+                } else if (event.key === "Tab") {
+                    closeFilterMenu(false);
+                    return;
+                }
+                if (next) {
+                    event.preventDefault();
+                    next.focus();
+                }
+            });
+        });
+        // A tap anywhere else shuts it (a tap on the other pill opens that one instead)
+        document.addEventListener("pointerdown", (event) => {
+            if (!openFilter || openFilter.menu.contains(event.target) || openFilter.trigger.contains(event.target)) return;
+            closeFilterMenu(false);
+        }, true);
+        // (turning the phone or resizing the window shuts it; Safari's bars sliding in and out don't)
+        let menuWidth = window.innerWidth;
+        window.addEventListener("resize", () => {
+            if (window.innerWidth === menuWidth) return;
+            menuWidth = window.innerWidth;
+            closeFilterMenu(false);
+        });
+        syncFilterTriggers();
+    }
+
     // Apply filter and sort selection together
     function applyCurrentFiltersAndSort() {
+        syncFilterTriggers();
         const selectedTag = tagFilter ? tagFilter.value : "all";
         const selectedSort = sortFilter ? sortFilter.value : "newest";
         const filteredTracks = getFilteredTracks(selectedTag);
@@ -4529,10 +4736,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The penguins, the switch on the back and the jukebox all showing whether it's on
     function showRhythmSetting() {
         if (jukeboxContainer) jukeboxContainer.classList.toggle("rhythm-on", rhythmOn);
-        titlePenguins.forEach((penguin) => {
-            if (penguin.hasAttribute("aria-pressed")) penguin.setAttribute("aria-pressed", String(rhythmOn));
-            penguin.title = rhythmOn ? "Rhythm is on: tap to stop the dancing" : "Rhythm: dance to the beat";
-        });
         if (rhythmSwitch) rhythmSwitch.checked = rhythmOn;
         if (rhythmOn) {
             PENGUIN_POSES.forEach((source) => {
@@ -4551,10 +4754,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         rhythmNoteTimer = setTimeout(() => rhythmNote.classList.remove("is-visible"), 1500);
     }
 
+    // Tap a penguin and it dances with you: a crouch, a jump with a spin and a squashy landing, and
+    // the other one joins in a moment later (on top of their dance to the beat, if they're dancing).
+    // Rhythm stays as it is: its switch is on the back.
+    let penguinSpin = 1;
+    let penguinBounceTimer = null;
+    function danceWithPenguins(index) {
+        const tapped = titlePenguins[index];
+        if (!tapped) return;
+        spawnMusicNote(tapped, index === 0 ? -1 : 1);
+        if (prefersReducedMotion()) return;
+        penguinSpin = -penguinSpin; // (the other way round each time)
+        titlePenguins.forEach((penguin, which) => {
+            penguin.style.setProperty("--spin", `${penguinSpin * 360}deg`);
+            penguin.classList.remove("is-bouncing", "is-bouncing-along");
+            void penguin.offsetWidth;
+            penguin.classList.add(which === index ? "is-bouncing" : "is-bouncing-along");
+        });
+        clearTimeout(penguinBounceTimer);
+        penguinBounceTimer = setTimeout(() => {
+            titlePenguins.forEach((penguin) => penguin.classList.remove("is-bouncing", "is-bouncing-along"));
+        }, 900);
+    }
+
     function setUpRhythm() {
         showRhythmSetting();
-        titlePenguins.forEach((penguin) => {
-            penguin.addEventListener("click", () => setRhythm(!rhythmOn, true));
+        titlePenguins.forEach((penguin, index) => {
+            penguin.addEventListener("click", () => danceWithPenguins(index));
         });
         if (rhythmSwitch) {
             rhythmSwitch.addEventListener("change", () => setRhythm(rhythmSwitch.checked));
@@ -4769,11 +4995,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         const complete = chunks.indexOf(0) < 0;
         if (!complete && onsets.length < 2 * analysis.chunkFrames) return;
         if (!analysis.period || (complete && !analysis.periodComplete)) {
-            analysis.period = findBeatPeriod(onsets, analysis.rate);
+            const tempo = findBeatPeriod(onsets, analysis.rate);
+            analysis.period = tempo.period;
             analysis.periodComplete = complete;
+            // (a song that changes tempo is followed through its changes, once it's all measured)
+            analysis.periods = complete && from === 0 ? findTempoMap(tempo, onsets.length, analysis.rate) : null;
         }
         const period = analysis.period;
-        const { frames, strengths } = trackBeats(onsets, period);
+        const { frames, strengths } = trackBeats(onsets, period, analysis.periods);
         if (frames.length < 2) return;
         // A frame is the middle of the samples it looks at, and a sound starts showing in it a little
         // before it lands (30ms, measured with a click track), so beats are put that much later
@@ -4783,9 +5012,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         analysis.firstIndex = Math.round(analysis.beats[0] / (period / analysis.rate));
     }
 
-    // The tempo as a beat's length in frames: the average of the onsets' autocorrelations in 8 second
-    // windows (each scaled by its own loudness), leaning towards 120 BPM
-    function findBeatPeriod(onsets, rate) {
+    // The onsets' autocorrelation in 8 second windows a couple of seconds apart (each scaled by its
+    // own loudness): the tempo's found from these, the song's overall and as it goes
+    function measureTempoWindows(onsets, rate) {
         const windowLength = Math.round(8 * rate);
         const minLag = Math.max(1, Math.round((60 * rate) / 260));
         const maxLag = Math.min(windowLength - 1, Math.round((60 * rate) / 40));
@@ -4793,10 +5022,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (let index = 0; index < windowLength; index += 1) {
             hann[index] = 0.5 - (0.5 * Math.cos((2 * Math.PI * index) / (windowLength - 1)));
         }
-        const sums = new Float64Array(maxLag + 1);
+        const windows = [];
         const piece = new Float32Array(windowLength);
-        let windows = 0;
-        // (a window every couple of seconds is plenty for the average)
         for (let start = -Math.floor(windowLength / 2); start + (windowLength / 2) < onsets.length; start += Math.round(rate * 2)) {
             let energy = 0;
             for (let index = 0; index < windowLength; index += 1) {
@@ -4805,39 +5032,116 @@ document.addEventListener("DOMContentLoaded", async () => {
                 energy += piece[index] * piece[index];
             }
             if (energy <= 0) continue;
+            const correlation = new Float32Array(maxLag + 1);
             for (let lag = minLag; lag <= maxLag; lag += 1) {
                 let sum = 0;
                 for (let index = 0; index + lag < windowLength; index += 1) {
                     sum += piece[index] * piece[index + lag];
                 }
-                sums[lag] += sum / energy;
+                correlation[lag] = sum / energy;
             }
-            windows += 1;
+            windows.push({ centre: start + (windowLength / 2), correlation });
         }
+        return { windows, minLag, maxLag };
+    }
+
+    // The most likely beat length (frames) in an autocorrelation (summed over `count` windows),
+    // leaning towards 120 BPM, and towards `near` too when it's given, found between whole frames
+    function pickBeatLag(correlation, count, minLag, maxLag, rate, near) {
         let bestLag = Math.round((60 * rate) / 120);
         let best = -Infinity;
         for (let lag = minLag; lag <= maxLag; lag += 1) {
             const bpm = (60 * rate) / lag;
-            const score = Math.log1p(1e6 * Math.max(0, sums[lag] / Math.max(1, windows))) - (0.5 * Math.pow(Math.log2(bpm / 120), 2));
+            let score = Math.log1p(1e6 * Math.max(0, correlation[lag] / count)) - (0.5 * Math.pow(Math.log2(bpm / 120), 2));
+            if (near) score -= 2 * Math.pow(Math.log2(lag / near), 2);
             if (score > best) {
                 best = score;
                 bestLag = lag;
             }
         }
-        // Between whole frames: a parabola through the autocorrelation around the best lag
+        // A parabola through the autocorrelation around the best lag
         let lag = bestLag;
         if (bestLag > minLag && bestLag < maxLag) {
-            const before = sums[bestLag - 1];
-            const after = sums[bestLag + 1];
-            const curve = before - (2 * sums[bestLag]) + after;
+            const before = correlation[bestLag - 1];
+            const after = correlation[bestLag + 1];
+            const curve = before - (2 * correlation[bestLag]) + after;
             if (curve < 0) lag += Math.max(-0.5, Math.min(0.5, (0.5 * (before - after)) / curve));
         }
         return lag;
     }
 
+    // The tempo as a beat's length in frames: from the average of the windows' autocorrelations
+    function findBeatPeriod(onsets, rate) {
+        const tempo = measureTempoWindows(onsets, rate);
+        const sums = new Float64Array(tempo.maxLag + 1);
+        tempo.windows.forEach(({ correlation }) => {
+            for (let lag = tempo.minLag; lag <= tempo.maxLag; lag += 1) sums[lag] += correlation[lag];
+        });
+        tempo.period = pickBeatLag(sums, Math.max(1, tempo.windows.length), tempo.minLag, tempo.maxLag, rate);
+        return tempo;
+    }
+
+    // Some songs change tempo part way (a remix of a few parts, say): then a beat's length for every
+    // frame, following the tempo through each part that keeps well away from the song's overall one
+    // for a good while (16s or more); null for a song that keeps to one tempo, beaten as before
+    function findTempoMap(tempo, frameCount, rate) {
+        const { windows, minLag, maxLag, period } = tempo;
+        if (windows.length < 8) return null;
+        const median = (list) => {
+            const sorted = list.slice().sort((a, b) => a - b);
+            return sorted[Math.floor(sorted.length / 2)];
+        };
+        const smooth = (list, reach) => list.map((unused, index) => median(list.slice(Math.max(0, index - reach), index + reach + 1)));
+        // Each window's own tempo, then smoothed over ~18 seconds (medians, so a stray window, or a
+        // stretch felt in threes for a few bars, doesn't count)
+        const raw = windows.map(({ correlation }) => pickBeatLag(correlation, 1, minLag, maxLag, rate));
+        const heard = smooth(smooth(raw, 2), 4);
+        // Split into parts that keep to one tempo (within 5%)
+        const parts = [];
+        heard.forEach((lag, index) => {
+            const part = parts[parts.length - 1];
+            if (part && Math.abs(Math.log(lag / part.first)) <= 0.05) {
+                part.lags.push(lag);
+            } else {
+                parts.push({ start: index, first: lag, lags: [lag] });
+            }
+        });
+        const lags = new Float32Array(windows.length).fill(period);
+        let changes = false;
+        const longEnough = Math.round(16 / 2); // (the windows are 2s apart)
+        // A part at a simple ratio to the song's tempo (half, two thirds, ...) is the same beat felt
+        // another way, not a new tempo
+        const related = (lag, to, ratios) => ratios.some((ratio) => Math.abs(Math.log((to / lag) / ratio)) < 0.04);
+        const isSameBeat = (lag) => related(lag, period, [0.5, 2 / 3, 0.75, 4 / 3, 1.5, 2]);
+        parts.forEach((part) => {
+            const lag = median(part.lags);
+            // (a few percent off is left to the beat tracker, which follows the music that closely anyway)
+            if (part.lags.length < longEnough || Math.abs(Math.log(lag / period)) <= 0.04 || isSameBeat(lag)) return;
+            // A new tempo is heard steadily all through its part (most windows agree, give or take
+            // the ones hearing it in threes or halves); a beatless stretch, like an ambient outro,
+            // gives all sorts and isn't one
+            const own = raw.slice(part.start, part.start + part.lags.length);
+            const agreeing = own.filter((heardLag) => related(heardLag, lag, [1, 2 / 3, 1.5, 0.5, 2])).length;
+            if (agreeing < own.length * 0.6) return;
+            changes = true;
+            lags.fill(lag, part.start, part.start + part.lags.length);
+        });
+        if (!changes) return null;
+        const periods = new Float32Array(frameCount);
+        let at = 0;
+        for (let frame = 0; frame < frameCount; frame += 1) {
+            while (at + 1 < windows.length && windows[at + 1].centre <= frame) at += 1;
+            const next = Math.min(windows.length - 1, at + 1);
+            const span = windows[next].centre - windows[at].centre;
+            const along = span > 0 ? Math.max(0, Math.min(1, (frame - windows[at].centre) / span)) : 0;
+            periods[frame] = lags[at] + ((lags[next] - lags[at]) * along);
+        }
+        return periods;
+    }
+
     // Ellis's dynamic programming: the best chain of beats, each on a strong onset and about a
     // period after the one before. Gives the frames of the beats and how hard each one hits.
-    function trackBeats(onsets, period) {
+    function trackBeats(onsets, period, periods) {
         const count = onsets.length;
         let mean = 0;
         for (let index = 0; index < count; index += 1) mean += onsets[index];
@@ -4868,17 +5172,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         // The best total for a chain of beats ending at each frame, and the beat before it there
         const score = new Float32Array(count);
         const before = new Int32Array(count).fill(-1);
-        const nearest = Math.round(period / 2);
-        const furthest = Math.round(period * 2);
-        // What a gap between two beats costs: nothing at the tempo, more the further off it is
-        const gapCosts = new Float32Array(furthest + 1);
-        for (let gap = nearest; gap <= furthest; gap += 1) {
-            gapCosts[gap] = BEAT_TIGHTNESS * Math.pow(Math.log(gap / period), 2);
-        }
+        // What a gap between two beats costs: nothing at the tempo, more the further off it is (for a
+        // song that changes tempo, at the tempo it's at there: tables kept by quarter frames)
+        const makeGapCosts = (beatLength) => {
+            const nearest = Math.round(beatLength / 2);
+            const furthest = Math.round(beatLength * 2);
+            const costs = new Float32Array(furthest + 1);
+            for (let gap = nearest; gap <= furthest; gap += 1) {
+                costs[gap] = BEAT_TIGHTNESS * Math.pow(Math.log(gap / beatLength), 2);
+            }
+            return { nearest, furthest, costs };
+        };
+        const steadyGaps = makeGapCosts(period);
+        const gapTables = new Map();
+        const gapsAt = (index) => {
+            if (!periods) return steadyGaps;
+            const key = Math.round(periods[Math.min(periods.length - 1, index)] * 4);
+            if (!gapTables.has(key)) gapTables.set(key, makeGapCosts(key / 4));
+            return gapTables.get(key);
+        };
         let started = false;
         for (let index = 0; index < count; index += 1) {
             let best = -Infinity;
             let from = -1;
+            const { nearest, furthest, costs: gapCosts } = gapsAt(index);
             for (let gap = nearest; gap <= furthest && index - gap >= 0; gap += 1) {
                 const value = score[index - gap] - gapCosts[gap];
                 if (value > best) {
@@ -4968,7 +5285,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The penguins keep their own count, going at the song's tempo and easing towards where its
     // beats are: when the beats are worked out again as more of the song is measured, the dance
     // drifts over instead of jumping. (A jump in the song puts them straight back in step.)
-    function followBeat(position, time) {
+    function followBeat(position, time, elapsed) {
         if (!position) {
             danceBeat = null;
             return null;
@@ -4982,7 +5299,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             let behind = (target - danceBeat) % 1;
             if (behind > 0.5) behind -= 1;
             if (behind < -0.5) behind += 1;
-            danceBeat += behind * 0.15;
+            // (by time, not by frame: the same on a 120Hz screen as on a 60Hz one)
+            danceBeat += behind * (1 - Math.exp(-elapsed / 0.1));
         }
         danceSongTime = time;
         const index = Math.floor(danceBeat);
@@ -5188,7 +5506,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (position) {
                     beatIndex = position.index;
                     const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
-                    level = Math.exp(-(position.phase * position.period) / 0.12) * accent;
+                    // (the flash fades in real time: a slowed side's beats are longer in song time)
+                    level = Math.exp(-(position.phase * position.period) / (0.12 * getTrackRate(currentTrackData))) * accent;
                     if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
                         onBeat(beatIndex);
                     }
@@ -5234,7 +5553,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (rhythmOn) {
             // (the dance keeps time either way; it's only moved while the front's in sight, not
             // behind the back panel or the now playing view)
-            const dance = followBeat(position, songTime);
+            const dance = followBeat(position, songTime, elapsed);
             if (!isFrontHidden() && !nowPlayingOpen) {
                 applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5));
                 dancePenguins(dance, elapsed);
@@ -6312,6 +6631,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         turnRecords((recordFlipAngle + recordTarget) / 2, FLIP_OUT_MS, FLIP_OUT_EASING);
 
         isJukeboxFlipping = true;
+        closeFilterMenu(false);
         fitCabinetDepth();
         jukeboxPanel.classList.remove("powered-up");
         jukeboxPanel.classList.add("is-flipping", "flip-out");
@@ -6486,6 +6806,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Jukebot's board is drawn while the page is idle; make sure it's ready before it shows
         if (!turn.fromBack && window.jukebot) window.jukebot.prepare();
         turn.dropRecordAfter = liftRecordForFlip();
+        closeFilterMenu(false);
         fitCabinetDepth();
         jukeboxPanel.classList.remove("powered-up");
         // Both sides drawn, the cabinet with its depth, as in the button's turn
@@ -7060,6 +7381,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (sortFilter) {
         sortFilter.value = "newest";
     }
+    setUpFilterMenus();
     showTrackListSkeleton();
     const sortedTracks = sortTracks(getFilteredTracks("all"), sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
