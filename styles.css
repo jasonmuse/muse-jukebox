@@ -11,6 +11,13 @@
     initial-value: 0;
 }
 
+/* (a length, so a row's cover, its Side A / B label and what's beside it can glide to a new size) */
+@property --cover-size {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 88px;
+}
+
 :root {
     --app-height: 100vh;
     /* Follows the backdrop (script.js): purple with the gradient, night sky with the space gif.
@@ -3091,10 +3098,17 @@ html {
         --cover-size: 60px;
         --cover-gap: 12px;
         padding: 9px 8px;
+        transition: --cover-size 380ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .track:not(.track-modes-visible) .tags {
         display: none;
+    }
+
+    /* The playing song's row is taller (its tags show), so its cover grows to fill it top to
+       bottom, and its title, tags and buttons glide over to make room */
+    .track.track-modes-visible {
+        --cover-size: 85px;
     }
 
     .title {
@@ -3181,9 +3195,13 @@ html {
         padding: 8px 6px;
     }
 
-    /* Short rows here too: tags only on the song that's playing */
+    /* Short rows here too: tags only on the song that's playing (its cover fills its row) */
     .track:not(.track-modes-visible) .tags {
         display: none;
+    }
+
+    .track.track-modes-visible {
+        --cover-size: 81px;
     }
 
     .title {
@@ -7780,14 +7798,17 @@ button.title-penguin:focus-visible {
 /* Sound waves rolling out from the penguins: now and then on their own, and with every beat while
    a song plays (script.js sets each wave's glow then). Pink on the left and blue on the right, like
    the two ends of "Muse"; each one further out is bigger and fainter, and only whole waves show
-   when there's little room. */
+   when there's little room. Where the cabinet's wider than the title they're bigger, to fill out
+   its top corners (still centred on the penguins); on phones there's no room to spare. */
 .title-waves {
+    --wave-scale: 1.3;
     position: relative;
     flex: 0 1 0.76em;
     min-width: 0;
     height: 0.92em;
     align-self: flex-end;
-    margin-bottom: 0.16em;
+    margin-bottom: calc((0.62em / var(--wave-scale)) - 0.46em);
+    font-size: calc(var(--wave-scale) * 1em);
     overflow: hidden;
     color: #ff8ad8;
     filter: drop-shadow(0 0 0.05em currentColor);
@@ -8496,6 +8517,13 @@ html.viewport-shifted body {
     .cabinet-lights {
         --bulb: 7px;
         --bulb-pitch: 11px;
+    }
+}
+
+/* (a phone's title fills the cabinet's width: no corners to fill) */
+@media (max-width: 600px) {
+    .title-waves {
+        --wave-scale: 1;
     }
 }
 
