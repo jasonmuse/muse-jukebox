@@ -319,10 +319,20 @@
         </div>
 
         <!-- Speaker grille: the cones pump with the beat -->
-        <div class="jukebox-speakers" aria-hidden="true">
-            <span class="speaker speaker--left"><span class="speaker-cone"></span></span>
-            <span class="speaker-eq"><span style="--c: #ff86d6"></span><span style="--c: #f589db"></span><span style="--c: #ec8ce1"></span><span style="--c: #e28ee6"></span><span style="--c: #d991ec"></span><span style="--c: #cf94f1"></span><span style="--c: #c597f7"></span><span style="--c: #bc9afc"></span><span style="--c: #b3a0ff"></span><span style="--c: #acaaff"></span><span style="--c: #a4b4ff"></span><span style="--c: #9dbeff"></span><span style="--c: #95c8ff"></span><span style="--c: #8ed2ff"></span><span style="--c: #86dcff"></span><span style="--c: #7fe6ff"></span></span>
-            <span class="speaker speaker--right"><span class="speaker-cone"></span></span>
+        <!-- The speaker panel. On phones too short for the playing song's row to have them, repeat
+             and shuffle are here either side of the equaliser, which spells out what you've picked
+             for a moment when you tap one -->
+        <div class="jukebox-speakers">
+            <span class="speaker speaker--left" aria-hidden="true"><span class="speaker-cone"></span></span>
+            <button id="speaker-loop" class="speaker-mode speaker-mode--loop" type="button" aria-pressed="false" aria-label="Keep playing songs" title="Keep playing songs">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 11.5V10a4 4 0 0 1 4-4h13"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12.5V14a4 4 0 0 1-4 4h-13"/><path class="loop-one" d="M10.7 10.2 12.6 8.7v6.7"/></svg>
+            </button>
+            <span class="speaker-eq" aria-hidden="true"><span style="--c: #ff86d6"></span><span style="--c: #f589db"></span><span style="--c: #ec8ce1"></span><span style="--c: #e28ee6"></span><span style="--c: #d991ec"></span><span style="--c: #cf94f1"></span><span style="--c: #c597f7"></span><span style="--c: #bc9afc"></span><span style="--c: #b3a0ff"></span><span style="--c: #acaaff"></span><span style="--c: #a4b4ff"></span><span style="--c: #9dbeff"></span><span style="--c: #95c8ff"></span><span style="--c: #8ed2ff"></span><span style="--c: #86dcff"></span><span style="--c: #7fe6ff"></span></span>
+            <button id="speaker-shuffle" class="speaker-mode speaker-mode--shuffle" type="button" aria-pressed="false" aria-label="Shuffle songs" title="Shuffle songs">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 3 21 6.5 17.5 10"/><path d="M17.5 14 21 17.5 17.5 21"/><path d="M3 17.5h2.6a4 4 0 0 0 3.3-1.8l5.2-7.4a4 4 0 0 1 3.3-1.8H21"/><path d="M3 6.5h2.6a4 4 0 0 1 3.3 1.8l.6.8"/><path d="M21 17.5h-3.6a4 4 0 0 1-3.3-1.8l-.6-.8"/></svg>
+            </button>
+            <span class="speaker speaker--right" aria-hidden="true"><span class="speaker-cone"></span></span>
+            <p id="speaker-readout" class="speaker-readout" aria-live="polite"></p>
         </div>
 
         <!-- Back of the jukebox: the jukebox is Jukebot, and this is its rear panel -->

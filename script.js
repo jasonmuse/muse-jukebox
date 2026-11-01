@@ -374,6 +374,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const jukeboxGlow = document.getElementById("jukebox-glow");
     const musicNotes = document.getElementById("music-notes");
     const speakerCones = Array.from(document.querySelectorAll(".speaker-cone"));
+    const speakersPanel = document.querySelector(".jukebox-speakers");
+    const speakerLoop = document.getElementById("speaker-loop");
+    const speakerShuffle = document.getElementById("speaker-shuffle");
+    const speakerReadout = document.getElementById("speaker-readout");
     const eqBars = Array.from(document.querySelectorAll(".speaker-eq span"));
     const cabinetLightShades = Array.from(document.querySelectorAll(".cabinet-lights-shade"));
     const titlePenguins = Array.from(document.querySelectorAll(".title-penguin"));
@@ -1464,7 +1468,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updatePlaybackModeButtons() {
-        [trackList, nowPlaying].forEach((element) => {
+        [trackList, nowPlaying, speakersPanel].forEach((element) => {
             if (!element) return;
             element.classList.toggle("continuous-on", continuousPlayEnabled);
             element.classList.toggle("repeat-one", repeatOneEnabled);
@@ -1474,7 +1478,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let loopTitle = "Keep playing songs";
         if (continuousPlayEnabled) loopTitle = "Keeping songs playing (tap again to repeat just this one)";
         if (repeatOneEnabled) loopTitle = "Repeating this song (tap again to turn off)";
-        document.querySelectorAll(".mode-button--continuous, #np-continuous").forEach((button) => {
+        document.querySelectorAll(".mode-button--continuous, #np-continuous, #speaker-loop").forEach((button) => {
             button.setAttribute("aria-pressed", String(continuousPlayEnabled || repeatOneEnabled));
             button.setAttribute("aria-label", loopLabel);
             button.setAttribute("title", loopTitle);
@@ -1482,6 +1486,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.querySelectorAll(".mode-button--shuffle, #np-shuffle").forEach((button) => {
             button.setAttribute("aria-pressed", String(shuffleEnabled));
         });
+        // (the speaker panel's is always there, so it shows whether songs are really being shuffled)
+        if (speakerShuffle) speakerShuffle.setAttribute("aria-pressed", String(shuffleEnabled && continuousPlayEnabled));
     }
 
     // Only the current song shows the keep-playing / shuffle buttons
@@ -1620,6 +1626,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         // The queued song was picked for the old order
         discardUpNext();
         updatePlaybackModeButtons();
+    }
+
+    // Repeat and shuffle on the speaker panel (phones too short for the playing row to have them).
+    // Repeat goes round like the row's: keep playing, repeat this song, off. Shuffle means keep
+    // playing in any order, so switching it on switches that on too. Either way the equaliser spells
+    // out what's on for a moment.
+    let speakerReadoutTimer = null;
+
+    function showSpeakerReadout(text, tone) {
+        if (!speakerReadout || !speakersPanel) return;
+        speakerReadout.textContent = text;
+        speakerReadout.dataset.tone = tone;
+        speakersPanel.classList.add("is-reading-out");
+        clearTimeout(speakerReadoutTimer);
+        speakerReadoutTimer = setTimeout(() => speakersPanel.classList.remove("is-reading-out"), 1600);
+    }
+
+    function setUpSpeakerModes() {
+        if (!speakerLoop || !speakerShuffle) return;
+        speakerLoop.addEventListener("click", () => {
+            cycleLoopMode();
+            if (repeatOneEnabled) showSpeakerReadout("Repeat this song", "pink");
+            else if (continuousPlayEnabled) showSpeakerReadout("Keep playing", "pink");
+            else showSpeakerReadout("Repeat off", "off");
+        });
+        speakerShuffle.addEventListener("click", () => {
+            if (continuousPlayEnabled) {
+                toggleShuffle();
+            } else {
+                if (!shuffleEnabled) toggleShuffle();
+                setLoopMode(true, false);
+            }
+            showSpeakerReadout(shuffleEnabled ? "Shuffle on" : "Shuffle off", shuffleEnabled ? "blue" : "off");
+        });
     }
 
     // Straight there, no fade
@@ -7382,6 +7422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         sortFilter.value = "newest";
     }
     setUpFilterMenus();
+    setUpSpeakerModes();
     showTrackListSkeleton();
     const sortedTracks = sortTracks(getFilteredTracks("all"), sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);

@@ -8059,6 +8059,157 @@ button.title-penguin:focus-visible {
     }
 }
 
+/* Repeat and shuffle on the speaker panel, either side of the equaliser: only on phones so short
+   that the playing song's row leaves them out (see the short-phone layout further down). Round
+   buttons set into the grille, lit when they're on like the two ends of the equaliser: pink for
+   repeat, blue for shuffle. Tapping one has the equaliser spell out what's on for a moment. */
+.speaker-mode {
+    position: relative;
+    flex: 0 0 auto;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(139, 155, 255, 0.3);
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, #282c48, #12131f 72%);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #8f99cc;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: color 220ms ease, border-color 220ms ease, box-shadow 240ms ease, transform 120ms ease;
+}
+
+/* (a bigger target than it looks) */
+.speaker-mode::before {
+    content: "";
+    position: absolute;
+    inset: -6px -8px;
+}
+
+.speaker-mode svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 380ms cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+
+.speaker-mode:active {
+    transform: scale(0.9);
+}
+
+.speaker-mode:focus {
+    outline: none;
+}
+
+.speaker-mode:focus-visible {
+    border-color: #d6e6ff;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(214, 230, 255, 0.55);
+}
+
+.jukebox-speakers.continuous-on .speaker-mode--loop,
+.jukebox-speakers.repeat-one .speaker-mode--loop {
+    border-color: rgba(255, 150, 220, 0.8);
+    background: radial-gradient(circle at 50% 35%, #4a2a52, #1d1222 72%);
+    box-shadow: inset 0 0 6px rgba(255, 138, 216, 0.35), 0 0 10px rgba(255, 138, 216, 0.55);
+    color: #ffb3e8;
+}
+
+.jukebox-speakers.continuous-on.shuffle-on .speaker-mode--shuffle {
+    border-color: rgba(127, 230, 255, 0.8);
+    background: radial-gradient(circle at 50% 35%, #1f4252, #0f1a24 72%);
+    box-shadow: inset 0 0 6px rgba(127, 230, 255, 0.35), 0 0 10px rgba(127, 230, 255, 0.55);
+    color: #b5f3ff;
+}
+
+/* (the loop turns round as it goes on, and once more for repeat-one, so its little 1 lands the
+   right way up; shuffle's arrows swap over) */
+.jukebox-speakers.continuous-on .speaker-mode--loop svg {
+    transform: rotate(180deg);
+}
+
+.jukebox-speakers.repeat-one .speaker-mode--loop svg {
+    transform: rotate(360deg);
+}
+
+.jukebox-speakers.continuous-on.shuffle-on .speaker-mode--shuffle svg {
+    transform: scaleX(-1);
+}
+
+.jukebox-speakers.repeat-one #speaker-loop .loop-one {
+    opacity: 1;
+    transform: none;
+}
+
+/* What's on, in LED letters, where the equaliser was */
+.speaker-readout {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: none;
+    margin: 0;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #05060c, #0e1020);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(139, 155, 255, 0.25);
+    color: #ffc861;
+    font: 800 0.6rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-shadow: 0 0 3px rgba(255, 190, 80, 0.95), 0 0 8px rgba(255, 140, 40, 0.5);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.88);
+    transition: opacity 180ms ease, transform 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+    pointer-events: none;
+}
+
+/* (the LED dots over it) */
+.speaker-readout::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, transparent 0 0.55px, rgba(5, 6, 12, 0.5) 1px) 0 0 / 2px 2px;
+}
+
+.speaker-readout[data-tone="pink"] {
+    color: #ffb3e8;
+    text-shadow: 0 0 3px rgba(255, 138, 216, 0.95), 0 0 8px rgba(255, 100, 200, 0.55);
+}
+
+.speaker-readout[data-tone="blue"] {
+    color: #b5f3ff;
+    text-shadow: 0 0 3px rgba(127, 230, 255, 0.95), 0 0 8px rgba(80, 200, 255, 0.55);
+}
+
+.jukebox-speakers.is-reading-out .speaker-readout {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+
+.speaker-eq {
+    transition: opacity 180ms ease;
+}
+
+.jukebox-speakers.is-reading-out .speaker-eq {
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .speaker-mode svg,
+    .speaker-readout {
+        transition: none;
+    }
+}
+
 /* Glow behind the cabinet; its brightness follows the beat */
 .jukebox-glow {
     position: absolute;
@@ -8497,7 +8648,8 @@ html.viewport-shifted body {
 
     /* The playing song keeps the same short row as the rest instead of opening up: Pause, its
        wave and the time on one line, the x by its title. Previous / next are the buttons beside
-       the record, and tapping the record opens the turntable view with everything else. */
+       the record, repeat and shuffle are on the speaker panel, and tapping the record opens the
+       turntable view with everything else. */
     .track-modes-visible .skip-button,
     .track-modes-visible .mode-button--continuous,
     #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
@@ -8541,7 +8693,10 @@ html.viewport-shifted body {
         font-size: 1.05rem;
     }
 
+    /* (the gaps can close right up, so the speakers, repeat, shuffle and the equaliser still fit
+       side by side on the narrowest phones) */
     .jukebox-speakers {
+        gap: 4px;
         margin-top: 6px;
         padding: 3px 10px;
     }
@@ -8553,5 +8708,13 @@ html.viewport-shifted body {
 
     .speaker-eq {
         height: 20px;
+    }
+
+    .speaker-mode {
+        display: inline-flex;
+    }
+
+    .speaker-readout {
+        display: block;
     }
 }
