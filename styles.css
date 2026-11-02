@@ -8688,6 +8688,13 @@ html.viewport-shifted body {
         font-size: 1.8rem;
     }
 
+    /* The waves by the penguins are bigger here, to fill the cabinet's top corners: the smaller
+       title leaves room either side of the penguins and from the cabinet's top down to the sign
+       (they stop just short of the sign, beats included) */
+    .title-waves {
+        --wave-scale: 1.65;
+    }
+
     .flip-sign {
         margin: 0 0 6px;
         padding: 4px 22px;
