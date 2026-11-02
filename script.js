@@ -8133,6 +8133,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
         };
 
+        // It's fetched as the jukebox turns round, so it's all there (anything newer from GitHub
+        // too) by the time History is tapped, instead of changing under you just after it opens
+        if (jukeboxPanel && typeof MutationObserver === "function") {
+            const turnWatcher = new MutationObserver(() => {
+                if (history) {
+                    turnWatcher.disconnect();
+                } else if (jukeboxPanel.classList.contains("is-flipped")) {
+                    load();
+                }
+            });
+            turnWatcher.observe(jukeboxPanel, { attributes: true, attributeFilter: ["class"] });
+        }
+
         const open = () => {
             if (historyDialog.open) return;
             clearTimeout(closeTimer);
