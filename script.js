@@ -2212,7 +2212,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ahead of the playing deck when that side is slower (or behind when it's faster), and the moment
     // the two reach the same spot in the song the sound moves over to it: no gap, no repeat, and it
     // can go back and forth as often as you like.
-    const SIDE_SWAP_LEAD = 0.3; // s: about how long the other side runs (silently) before they meet
+    const SIDE_SWAP_LEAD = 0.45; // s: about how long the other side runs (silently) before they meet
     const SIDE_SWAP_GIVE_UP_MS = 4000;
     const shownSides = new Map(); // side A's file -> the side its row was last flipped to
     let sideSwap = null; // the other side, running silently until it meets the playing deck
@@ -2342,6 +2342,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         to.muted = true;
         to.volume = 1;
         applyTrackSpeed(to, track);
+        if (scratchAudio && scratchAudio.context.state === "running") readAudioClock(scratchAudio.context);
         const swap = {
             from, to, rate, fromRate: from.playbackRate, began: performance.now(), cue: 0, cuedAt: 0, loaded: false,
             going: false, goingAt: 0, lastSeen: null, readings: [], timer: null
@@ -2361,10 +2362,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Where the other side starts: about where the playing deck will be once it gets going, plus a
-    // moment's lead (ahead if it's slower, so the playing deck catches it up; behind if it's faster)
+    // moment's lead (ahead if it's slower, so the playing deck catches it up; behind if it's faster).
+    // They're to meet in what's heard, as long after the hand-over as sound takes to come out.
     function cueSideSwap(swap) {
         const { from, to, rate, fromRate } = swap;
-        const at = from.currentTime + (fromRate * sideSwapDelay) + ((fromRate - rate) * SIDE_SWAP_LEAD);
+        const at = from.currentTime + (fromRate * sideSwapDelay) + ((fromRate - rate) * (SIDE_SWAP_LEAD + soundDelay));
         swap.cue = Math.max(0, Math.min(at, from.duration - 1));
         swap.cuedAt = performance.now();
         swap.loaded = to.readyState >= 3;
@@ -2422,10 +2424,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         swap.readings.push({ at: now / 1000, from: from.currentTime, to: to.currentTime });
         while (swap.readings.length > 20) swap.readings.shift();
         if (swap.readings.length < 8 && !document.hidden) return;
-        const placeNow = (key, rate) => swap.readings.reduce((sum, reading) => sum + reading[key] - (rate * reading.at), 0)
-            / swap.readings.length + (rate * now / 1000);
+        // (where each deck will be when a hand-over now is heard, as long from now as sound takes to come out)
+        const heardAt = (now / 1000) + soundDelay;
+        const placeThen = (key, rate) => swap.readings.reduce((sum, reading) => sum + reading[key] - (rate * reading.at), 0)
+            / swap.readings.length + (rate * heardAt);
         // How far the other side still has to go to meet the playing deck (in the song's time)
-        const apart = (placeNow("to", swap.rate) - placeNow("from", swap.fromRate)) * Math.sign(swap.fromRate - swap.rate);
+        const apart = (placeThen("to", swap.rate) - placeThen("from", swap.fromRate)) * Math.sign(swap.fromRate - swap.rate);
         if (apart > 0.6) {
             // A long way off (the song was skipped back meanwhile): line it up again
             cueSideSwap(swap);
@@ -2434,6 +2438,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // (in the background the checks come too far apart to wait for the moment)
         if (apart > 0 && !document.hidden) return;
         if (apart > -0.04 || document.hidden) {
+            noteFlip(`hand-over ${Math.round(-apart * 1000)}ms past, sound out ${Math.round(soundDelay * 1000)}ms`);
             finishSideSwap(swap);
             return;
         }
@@ -2484,8 +2489,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // deck first gets going silently at the new speed, then Web Audio takes the sound over from the
     // playing deck right where it is, winds down (or up) and lands exactly where the spare deck has
     // got to, which carries on from there. (Where the spare deck turned out to be goes into the
-    // wind's shape, a little faster or slower part-way, where nobody can hear it.) If the stretch
-    // can't be had in time, the flip falls back to the silent hand-over above.
+    // wind's shape, a little faster or slower part-way, where nobody can hear it.) It's all lined up
+    // by what's heard: sound takes a moment to come out (a fifth of a second through AirPods), so
+    // each deck's muted or unmuted that long before Web Audio's heard taking over or handing back.
+    // If the stretch can't be had in time, the flip falls back to the silent hand-over above.
     const SIDE_WIND_SECONDS = 0.9;
     const SIDE_WIND_POINTS = 96;
     const SIDE_WIND_FADE = 0.03; // s: at each end Web Audio and the deck overlap this long
@@ -2493,6 +2500,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SIDE_WIND_GUESS = 0.3; // s: about how long after a flip the wind gets going
     const SIDE_WIND_GIVE_UP_MS = 2500;
     let sideWind = null;
+    let soundDelay = 0.02; // s: how long sound takes to come out (learnt from Web Audio as it goes)
+
+    // With ?flipdebug on the address, what each flip did is listed at the top of the screen (a flip
+    // on a phone can't be watched any other way)
+    const flipDebug = /[?&]flipdebug\b/.test(location.search);
+    const flipNotes = [];
+
+    function noteFlip(text) {
+        if (!flipDebug) return;
+        flipNotes.push(`${(performance.now() / 1000).toFixed(2)} ${text}`);
+        while (flipNotes.length > 16) flipNotes.shift();
+        let panel = document.getElementById("flip-debug");
+        if (!panel) {
+            panel = document.createElement("pre");
+            panel.id = "flip-debug";
+            panel.style.cssText = "position:fixed;top:6px;left:6px;right:6px;z-index:2147483647;margin:0;padding:6px 8px;"
+                + "font:10px/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:#fff;background:rgba(0,0,0,0.82);"
+                + "border-radius:8px;pointer-events:none";
+            document.body.appendChild(panel);
+        }
+        panel.textContent = flipNotes.join("\n");
+    }
+
+    function describeAudio(context) {
+        const ms = (seconds) => `${Math.round((seconds || 0) * 1000)}ms`;
+        let stamp = "";
+        if (typeof context.getOutputTimestamp === "function") {
+            const { contextTime, performanceTime } = context.getOutputTimestamp();
+            stamp = `, stamp ${ms(context.currentTime - contextTime)} behind ${ms((performance.now() - performanceTime) / 1000)} old`;
+        }
+        return `base ${ms(context.baseLatency)} out ${ms(context.outputLatency)}${stamp}, ${context.sampleRate / 1000}kHz`;
+    }
 
     function getWindEase(progress) {
         return progress < 0.5 ? 2 * progress * progress : 1 - ((((-2 * progress) + 2) ** 2) / 2);
@@ -2524,24 +2563,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         return distance;
     }
 
-    // Web Audio's clock against the page's: the context time being heard at a page time (s). The
-    // output timestamp's only taken where it agrees with the context's own clock. (An iPhone's seems
-    // to start again from nothing once the context has slept and woken, which put the wind seconds
-    // out: the flip never seemed to happen.)
+    // Web Audio's clock against the page's: the context time being heard at a page time (s), and
+    // `delay`, how long what it's playing now takes to come out (a few hundredths of a second from a
+    // phone's speaker, a fifth of a second or more through AirPods). The output timestamp's only
+    // taken where it agrees with the context's own clock (an iPhone's can start again from nothing
+    // once the context has slept and woken), and never as sound coming out sooner than the context
+    // says: WebKit's is the moment the sound was made, not heard.
     function readAudioClock(context) {
         const now = performance.now() / 1000;
+        const playing = context.currentTime;
+        let heard = playing - (context.baseLatency || 0) - (context.outputLatency || 0);
         if (typeof context.getOutputTimestamp === "function") {
             const stamp = context.getOutputTimestamp();
             if (stamp && stamp.performanceTime > 0 && stamp.contextTime > 0) {
-                const page = stamp.performanceTime / 1000;
-                const behind = context.currentTime - stamp.contextTime;
-                if (Math.abs(page - now) < 0.5 && behind > -0.01 && behind < 0.5) {
-                    return { context: stamp.contextTime, page };
-                }
+                const stampPage = stamp.performanceTime / 1000;
+                const stampHeard = stamp.contextTime + (now - stampPage);
+                const behind = playing - stampHeard;
+                if (Math.abs(stampPage - now) < 0.5 && behind > -0.01 && behind < 0.5) heard = Math.min(heard, stampHeard);
             }
         }
-        const latency = (context.baseLatency || 0) + (context.outputLatency || 0);
-        return { context: context.currentTime - latency, page: now };
+        const delay = Math.max(0, playing - heard);
+        if (context.state === "running") soundDelay = delay;
+        return { context: heard, page: now, delay };
     }
 
     // Where a deck is in the song at page time `at` (s): where its recent readings put it, at its speed
@@ -2587,6 +2630,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const to = getSpareDeck();
         if (!audio || !to || !(from.duration > 0) || isSwitchingTrack || from.volume < 0.99 || document.hidden
             || from.duration - from.currentTime < 8) {
+            noteFlip(`flip ${from.playbackRate}>${rate}: hand-over, no wind`);
             startSideSwap(track);
             return;
         }
@@ -2606,9 +2650,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const wind = {
             kind: "audio", track, from, to, rate, fromRate: from.playbackRate, began: performance.now(), plain,
             slice: null, start: 0, startPage: 0, startPosition: 0, curve: null, distance: 0, land: 0, landPage: 0,
-            source: null, gain: null, fromMuted: false, again: false,
+            source: null, gain: null, fromMuted: false, again: false, cutAt: 0, landAt: 0, cutTimer: null, landTimer: null,
+            awakeAt: audio.context.state === "running" ? performance.now() - 1000 : 0,
             fromReadings: [], toReadings: [], toGoing: false, toGoingAt: 0, toSeen: null, toCuedAt: 0, timer: null
         };
+        noteFlip(`flip ${wind.fromRate}>${rate}, Web Audio ${audio.context.state}`);
         // (the plain wind, before it's fitted to where the spare deck is)
         for (let index = 0; index < SIDE_WIND_POINTS; index += 1) {
             plain[index] = wind.fromRate + ((rate - wind.fromRate) * getWindEase(index / (SIDE_WIND_POINTS - 1)));
@@ -2619,7 +2665,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const playPromise = to.play();
         if (playPromise && typeof playPromise.catch === "function") {
             playPromise.catch(() => {
-                if (sideWind === wind && !wind.start) fallBackFromWind(wind);
+                if (sideWind === wind && !wind.start) fallBackFromWind(wind, "the spare deck won't play");
             });
         }
         const here = from.currentTime;
@@ -2628,17 +2674,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (sideWind === wind) wind.slice = slice;
             })
             .catch(() => {
-                if (sideWind === wind && !wind.start) fallBackFromWind(wind);
+                if (sideWind === wind && !wind.start) fallBackFromWind(wind, "couldn't get the stretch of song");
             });
         wind.timer = setInterval(() => stepSideWind(wind), 10);
     }
 
     // The spare deck sets off from where it'll need to be when the wind lands on it, if the wind
-    // gets going `after` seconds from now (it takes the deck a moment to get going itself)
+    // gets going `after` seconds from now (it takes the deck a moment to get going itself, and the
+    // wind's heard as long after it starts as sound takes to come out)
     function cueWindDeck(wind, after) {
         const { from, to, rate, fromRate } = wind;
-        const cue = from.currentTime + (fromRate * (after + SIDE_WIND_LEAD)) + wind.plainDistance
-            - (rate * (after + SIDE_WIND_LEAD + SIDE_WIND_SECONDS - sideSwapDelay));
+        const heardAfter = after + soundDelay + SIDE_WIND_LEAD;
+        const cue = from.currentTime + (fromRate * heardAfter) + wind.plainDistance
+            - (rate * (heardAfter + SIDE_WIND_SECONDS - sideSwapDelay));
         wind.toGoing = false;
         wind.toSeen = null;
         wind.toReadings = [];
@@ -2666,9 +2714,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             rescueSideWind(wind);
             return;
         }
+        // The decks' readings count once Web Audio's been awake a moment: on an iPhone, waking it
+        // changes how long sound takes to come out, and the decks' readings can jump with it
+        const awake = scratchAudio.context.state === "running";
+        if (!awake) {
+            wind.awakeAt = 0;
+        } else if (!wind.awakeAt) {
+            wind.awakeAt = nowMs;
+            noteFlip(`awake ${Math.round(nowMs - wind.began)}ms after the tap`);
+        }
+        const settled = awake && nowMs - wind.awakeAt >= 100;
         if (!from.seeking) {
             if (!wind.start) {
-                wind.fromReadings.push({ at: now, position: from.currentTime });
+                if (settled) wind.fromReadings.push({ at: now, position: from.currentTime });
+                else wind.fromReadings = [];
                 while (wind.fromReadings.length > 20) wind.fromReadings.shift();
             } else if (Math.abs(from.currentTime - getDeckPlace(wind.fromReadings, wind.fromRate, now)) > 0.4) {
                 // The song was skipped along mid-wind: wind over again from the new spot
@@ -2696,6 +2755,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     wind.toGoingAt = nowMs;
                     sideSwapDelay = Math.min(0.6, Math.max(0.05, (sideSwapDelay + ((nowMs - wind.toCuedAt) / 1000)) / 2));
                 }
+            } else if (!settled) {
+                wind.toReadings = [];
             } else if (nowMs - wind.toGoingAt > 120) {
                 // (a deck's reading is rough just after it starts)
                 wind.toReadings.push({ at: now, position: to.currentTime });
@@ -2708,11 +2769,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (!wind.start) {
             // (or sooner if Web Audio hasn't woken up: an iPhone can keep it waiting)
-            if (nowMs - wind.began > SIDE_WIND_GIVE_UP_MS || (nowMs - wind.began > 700 && scratchAudio.context.state !== "running")) {
-                fallBackFromWind(wind);
+            if (nowMs - wind.began > SIDE_WIND_GIVE_UP_MS || (nowMs - wind.began > 700 && !awake)) {
+                fallBackFromWind(wind, awake ? "nothing to wind with in time" : "Web Audio didn't wake");
                 return;
             }
-            if (!wind.slice || wind.fromReadings.length < 6 || wind.toReadings.length < 6 || scratchAudio.context.state !== "running") return;
+            if (!wind.slice || wind.fromReadings.length < 6 || wind.toReadings.length < 6 || !awake) return;
             // The decks close in on each other (they go at different speeds), so there's a moment when
             // the plain wind, started then, would land right where the spare deck is. Near enough to
             // that moment it starts at once, making up the difference on the way (a little faster or
@@ -2722,14 +2783,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             const fromOffset = getDeckPlace(wind.fromReadings, fromRate, 0);
             const toOffset = getDeckPlace(wind.toReadings, rate, 0);
             const ideal = (fromOffset + wind.plainDistance - toOffset - (rate * SIDE_WIND_SECONDS)) / (rate - fromRate);
-            const startNow = now + SIDE_WIND_LEAD;
-            // (what starting now would leave to make up, as a swell through the middle of the wind)
-            const swellNow = Math.abs((rate - fromRate) * (startNow - ideal)) / (SIDE_WIND_SECONDS / 2);
-            if (swellNow <= 0.15 * Math.min(rate, fromRate) || ideal < startNow) {
-                beginSideWind(wind, startNow);
-            } else if (ideal - now > 0.9) {
+            // (the soonest it can be heard: as long from now as sound takes to come out, and a moment)
+            const soonest = now + readAudioClock(scratchAudio.context).delay + SIDE_WIND_LEAD;
+            // (what starting then would leave to make up, as a swell through the middle of the wind)
+            const swell = Math.abs((rate - fromRate) * (soonest - ideal)) / (SIDE_WIND_SECONDS / 2);
+            if (swell <= 0.15 * Math.min(rate, fromRate) || ideal < soonest) {
+                beginSideWind(wind, soonest);
+            } else if (ideal - soonest > 0.85) {
+                noteFlip("spare deck off again: too far out");
                 cueWindDeck(wind, SIDE_WIND_GUESS);
-            } else if (ideal - now <= SIDE_WIND_LEAD + 0.015) {
+            } else if (ideal - soonest <= 0.015) {
                 beginSideWind(wind, ideal);
             }
             return;
@@ -2739,13 +2802,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             rescueSideWind(wind);
             return;
         }
-        // (Web Audio's at full sound before the playing deck goes quiet, and the spare deck's on before
-        // Web Audio fades: the overlap covers the 10ms between checks)
-        if (!wind.fromMuted && nowMs >= (wind.startPage * 1000) + 4) {
+        // Web Audio's at full sound before the playing deck goes quiet, and the spare deck's on before
+        // Web Audio fades. A deck's muted or unmuted as long before the moment as sound takes to come
+        // out, as it's heard that much later (on time, as timers to the moment; otherwise the next check).
+        if (!wind.fromMuted && nowMs >= wind.cutAt - 1) {
             from.muted = true;
             wind.fromMuted = true;
+            noteFlip(`playing deck off ${Math.round(nowMs - wind.cutAt)}ms late`);
         }
-        if (nowMs >= (wind.landPage * 1000) - 14) landSideWind(wind);
+        if (nowMs >= wind.landAt - 1) landSideWind(wind);
     }
 
     // Web Audio takes the sound over from the playing deck, on a wind shaped to land just where the
@@ -2758,8 +2823,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const start = Math.max(clock.context + (wantedPage - clock.page), context.currentTime + SIDE_WIND_FADE + 0.03);
         const startPage = clock.page + (start - clock.context);
         // (a wind that wouldn't start for a while yet: the clocks don't agree, so the silent hand-over)
-        if (startPage - (performance.now() / 1000) > 0.5) {
-            fallBackFromWind(wind);
+        if (startPage - clock.delay - (performance.now() / 1000) > 0.5) {
+            fallBackFromWind(wind, "the clocks don't agree");
             return;
         }
         const landPage = startPage + SIDE_WIND_SECONDS;
@@ -2772,6 +2837,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const height = behind / getCurveDistance({ start: 0, length: SIDE_WIND_SECONDS, values: swell }, SIDE_WIND_SECONDS);
         if (Math.abs(height) > 0.2 * Math.min(rate, fromRate)) {
             // The spare deck's too far off to make up without it being heard: it sets off again
+            noteFlip(`spare deck off again: ${Math.round(behind * 1000)}ms out`);
             cueWindDeck(wind, 0.4);
             return;
         }
@@ -2780,7 +2846,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const preRoll = SIDE_WIND_FADE;
         const offset = startPosition - (preRoll * fromRate) - slice.startTime;
         if (offset < 0.02 || startPosition + wind.plainDistance + behind + 1 > slice.startTime + slice.buffer.duration) {
-            fallBackFromWind(wind);
+            fallBackFromWind(wind, "the stretch of song doesn't cover it");
             return;
         }
         const source = context.createBufferSource();
@@ -2799,11 +2865,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
         clearTimeout(scratchSleepTimer);
         const curve = { start, length: SIDE_WIND_SECONDS, values };
+        // The playing deck goes quiet, and later the spare deck comes on, as long before Web Audio's
+        // heard taking over and handing back as their sound takes to come out (as long as Web Audio's)
+        const nowMs = performance.now();
+        const cutAt = ((startPage - clock.delay) * 1000) + 4;
+        const landAt = ((landPage - clock.delay) * 1000) - 14;
         Object.assign(wind, {
             source, gain, start, startPage, startPosition, curve,
             distance: getCurveDistance(curve, start + SIDE_WIND_SECONDS),
-            land: start + SIDE_WIND_SECONDS, landPage, begunAt: performance.now()
+            land: start + SIDE_WIND_SECONDS, landPage, begunAt: nowMs, cutAt, landAt,
+            cutTimer: setTimeout(() => stepSideWind(wind), Math.max(0, cutAt - nowMs)),
+            landTimer: setTimeout(() => stepSideWind(wind), Math.max(0, landAt - nowMs))
         });
+        noteFlip(`wind ${Math.round(nowMs - wind.began)}ms after the tap, heard in ${Math.round((startPage * 1000) - nowMs)}ms,`
+            + ` ${Math.round(behind * 1000)}ms made up; sound out ${Math.round(clock.delay * 1000)}ms (${describeAudio(context)})`);
     }
 
     // It's there: the spare deck takes the sound over and carries on as the player
@@ -2811,10 +2886,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { from, to } = wind;
         sideWind = null;
         clearInterval(wind.timer);
+        clearTimeout(wind.cutTimer);
+        clearTimeout(wind.landTimer);
         to.muted = false;
-        wind.gain.gain.setValueAtTime(1, wind.land);
-        wind.gain.gain.linearRampToValueAtTime(0, wind.land + SIDE_WIND_FADE);
-        wind.source.stop(wind.land + SIDE_WIND_FADE + 0.02);
+        from.muted = true;
+        // Web Audio fades once the spare deck's sound is coming out, which is when what Web Audio
+        // plays now is heard (so a check that came late leaves no gap)
+        const fadeAt = Math.max(wind.land, scratchAudio.context.currentTime + 0.005);
+        wind.gain.gain.setValueAtTime(1, fadeAt);
+        wind.gain.gain.linearRampToValueAtTime(0, fadeAt + SIDE_WIND_FADE);
+        wind.source.stop(fadeAt + SIDE_WIND_FADE + 0.02);
+        noteFlip(`spare deck on ${Math.round(performance.now() - wind.landAt)}ms late`);
         player = to;
         syncDeckLooping();
         sideDeck = { deck: from, src: from.getAttribute("src") };
@@ -2834,10 +2916,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // No stretch of the song in time (or none at all): the silent hand-over instead. The spare deck
     // carries on as it is: the flip's tap started it, and an iPhone mightn't let it start again now.
-    function fallBackFromWind(wind) {
+    function fallBackFromWind(wind, reason) {
         if (sideWind !== wind) return;
         sideWind = null;
         clearInterval(wind.timer);
+        noteFlip(`hand-over instead: ${reason}`);
         startSideSwap(wind.track);
         // (no hand-over after all: it stops)
         if (!sideSwap || sideSwap.to !== wind.to) {
@@ -2850,9 +2933,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // deck if it's going, otherwise the playing deck takes the new speed
     function rescueSideWind(wind) {
         if (!wind.start) {
-            fallBackFromWind(wind);
+            fallBackFromWind(wind, document.hidden ? "page hidden" : "overdue");
             return;
         }
+        noteFlip(`straight over: ${document.hidden ? "page hidden" : "overdue"}`);
         if (wind.toGoing) {
             wind.land = scratchAudio.context.currentTime;
             landSideWind(wind);
@@ -2876,6 +2960,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         clearInterval(wind.timer);
+        clearTimeout(wind.cutTimer);
+        clearTimeout(wind.landTimer);
         const { from, to } = wind;
         to.pause();
         to.muted = false;
@@ -4725,13 +4811,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         scheduleScratchAudioSleep();
     }
 
-    // Idle audio contexts keep the audio hardware busy, so suspend between scratches
+    // Idle audio contexts keep the audio hardware busy, so suspend between scratches. Not while a
+    // song with two sides plays where its flips are wound by Web Audio (on iPhones): waking it as
+    // you flip takes a moment, and changes how long sound takes to come out just as the flip's lined up.
     function scheduleScratchAudioSleep() {
         clearTimeout(scratchSleepTimer);
         scratchSleepTimer = setTimeout(() => {
-            if (scratchAudio && !scratch && !sideWind && scratchAudio.context.state === "running") {
-                scratchAudio.context.suspend().catch(() => {});
+            if (!scratchAudio || scratch || sideWind || scratchAudio.context.state !== "running") return;
+            if (speedChangesStutter && !document.hidden && isPlayerActive() && getOtherSide(currentTrackData)) {
+                readAudioClock(scratchAudio.context); // (how long sound takes to come out, for the next flip)
+                scheduleScratchAudioSleep();
+                return;
             }
+            scratchAudio.context.suspend().catch(() => {});
         }, 4000);
     }
 
