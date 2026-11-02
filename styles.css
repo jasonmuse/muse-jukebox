@@ -3519,6 +3519,7 @@ html {
 }
 
 .back-header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -4345,6 +4346,14 @@ html.is-standalone .edge-blend {
     background-position: center 6px;
 }
 
+/* (the narrowest phones: closer letters, so the model plate keeps to one line) */
+@media (max-width: 340px) {
+    .jb-cover-band--top {
+        padding: 0 38px;
+        letter-spacing: 0.06em;
+    }
+}
+
 .jb-cover-band--bottom {
     padding: 0 44px;
     background-position: center calc(100% - 6px);
@@ -4447,10 +4456,9 @@ html.is-standalone .edge-blend {
 .jb-cover-scroll {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    overflow: hidden;
+    container: jb-panel / inline-size;
     touch-action: pan-y; /* (sideways is the jukebox being turned by hand) */
-    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -4470,6 +4478,133 @@ html.is-standalone .edge-blend {
 .jb-cover-scroll.has-tip-ticker > * {
     margin-top: auto;
     margin-bottom: auto;
+}
+
+/* ───── The panel fits: it never scrolls ─────
+   Where everything doesn't fit, script.js tightens it a step at a time, only as far as it has to:
+   the tips go along the LED sign first, then there's less room between things (fit-1), then the
+   sticker gets compact, its button beside the steps (fit-2), then the writing's a little smaller
+   (fit-3), and on the shortest panels the welcome note goes along the LED sign too (fit-4). The
+   Frog Quest badge stays at the bottom throughout. */
+.jb-cover-scroll.fit-1 {
+    gap: 6px;
+    padding-top: 0;
+    padding-bottom: 4px;
+}
+
+.jb-cover-scroll.fit-1 .jukebox-description {
+    padding: 10px 20px;
+}
+
+.jb-cover-scroll.fit-1 .back-settings {
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.jb-cover-scroll.fit-2 .jb-sticker {
+    padding: 9px 12px;
+}
+
+.jb-cover-scroll.fit-2 .jb-sticker-top {
+    gap: 10px;
+}
+
+.jb-cover-scroll.fit-2 .jb-sticker-face {
+    width: 52px;
+    height: 39px;
+}
+
+.jb-cover-scroll.fit-2 .jb-sticker-bottom {
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.jb-cover-scroll.fit-2 .jb-step {
+    width: 20px;
+    height: 20px;
+    margin-left: 5px;
+}
+
+.jb-cover-scroll.fit-2 .jb-step:first-child {
+    margin-left: 0;
+}
+
+.jb-cover-scroll.fit-2 .jb-step + .jb-step::before {
+    width: 5px;
+}
+
+.jb-cover-scroll.fit-2 .jb-step svg {
+    width: 12px;
+    height: 12px;
+}
+
+.jb-cover-scroll.fit-2 .jb-sticker-button {
+    min-height: 30px;
+    padding: 0 11px;
+    font-size: 0.82rem;
+}
+
+/* (with a button, and room beside the steps for it: it goes in their row, where the "step 3 of 6"
+   was; once he's fixed, the steps are all ticked, so the buttons take their row) */
+@container jb-panel (min-width: 270px) {
+    .jb-cover-scroll.fit-2 .jb-sticker:has(.jb-sticker-actions:not([hidden])) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .jb-cover-scroll.fit-2 .jb-sticker:has(.jb-sticker-actions:not([hidden])) .jb-sticker-top {
+        grid-column: 1 / -1;
+    }
+
+    .jb-cover-scroll.fit-2 .jb-sticker:has(.jb-sticker-actions:not([hidden])) .jb-sticker-note {
+        display: none;
+    }
+
+    /* (the dashed line runs on under the button) */
+    .jb-cover-scroll.fit-2 .jb-sticker-actions {
+        flex-wrap: nowrap;
+        align-items: center;
+        margin-top: 8px;
+        padding: 8px 0 0 10px;
+        border-top: 1px dashed rgba(59, 48, 22, 0.35);
+    }
+
+    .jb-back.is-fixed .jb-cover-scroll.fit-2 .jb-sticker-bottom {
+        display: none;
+    }
+
+    .jb-back.is-fixed .jb-cover-scroll.fit-2 .jb-sticker-actions {
+        grid-column: 1 / -1;
+        padding-left: 0;
+    }
+}
+
+.jb-cover-scroll.fit-3 .jukebox-description {
+    padding: 8px 18px;
+    font-size: 0.88em;
+    line-height: 1.3;
+}
+
+.jb-cover-scroll.fit-3 .jb-sticker-copy strong {
+    font-size: 0.94rem;
+}
+
+.jb-cover-scroll.fit-3 .jb-sticker-copy span {
+    font-size: 0.76rem;
+    line-height: 1.25;
+}
+
+/* (along the LED sign instead: the note's only kept here for screen readers) */
+.jb-cover-scroll.fit-4 .jukebox-description {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* Corner screws */
@@ -4682,17 +4817,22 @@ html.is-standalone .edge-blend {
 }
 
 /* Smoke from the vents while Jukebot is broken */
+/* Smoke rising off the top of the panel while Jukebot's broken (and his panel's on). It belongs to
+   the header above, so it's drawn over the panel instead of being cut off at its edge: 6px into the
+   panel, which starts 10px below the header. */
 .jb-smoke {
     position: absolute;
-    top: 6px;
+    z-index: 6;
+    top: calc(100% + 16px);
     left: 50%;
+    display: none;
     width: 0;
     height: 0;
     pointer-events: none;
 }
 
-.jb-back:not(.is-broken) .jb-smoke {
-    display: none;
+.jukebox-back:has(> .jb-back.is-broken:not(.cover-off)) .jb-smoke {
+    display: block;
 }
 
 .jb-smoke span {

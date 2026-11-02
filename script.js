@@ -7436,6 +7436,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const flipSignLed = document.querySelector(".flip-sign-led");
     const ledTickers = new Map(); // sign -> its words and what's been laid down
     let tickerShowsTips = false; // the panel's too short for the tips card, so they're on its sign
+    let tickerShowsWelcome = false; // the shortest panels: the welcome note's on the sign as well
 
     // Where the words are kept: `left`/`right` are along the whole scroll (px), so a word at `left`
     // is at the sign's front once the scroll and any push have gone that far
@@ -7629,6 +7630,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         setLedSign(flipSignLed, song ? [song, ...invitation] : invitation);
 
         const panelItems = [["Muse Tunes", "brand"], song || ["Pick a song, any song", "song"]];
+        if (tickerShowsWelcome) {
+            // (its first sentence: the rest says what the front does anyway)
+            const welcome = (document.querySelector(".jukebox-description-text")?.textContent || "").replace(/\s+/g, " ").trim();
+            if (welcome) panelItems.push([welcome.split(". ")[0].replace(/[.\s]+$/, ""), ""]);
+        }
         if (tickerShowsTips) {
             document.querySelectorAll(".back-tip span").forEach((tip) => panelItems.push([`Tip: ${tip.textContent}`, ""]));
         }
@@ -7799,22 +7805,63 @@ document.addEventListener("DOMContentLoaded", async () => {
         tipsBox.addEventListener("focusout", (event) => hold(tipsBox.contains(event.relatedTarget)));
         document.addEventListener("visibilitychange", () => syncBackTips());
 
+        // The panel never scrolls. Where everything doesn't fit, it's tightened a step at a time
+        // (.fit-1 to .fit-4 in styles.css), only as far as it has to be, with the tips fitted again
+        // at each step; at the last, the welcome note goes along the LED sign too
+        const FIT_STEPS = 4;
+        const sticker = document.getElementById("jb-sticker");
+        const setFitStep = (step) => {
+            for (let index = 1; index <= FIT_STEPS; index += 1) scroller.classList.toggle(`fit-${index}`, index <= step);
+        };
+        // (what the fit depends on: the panel's size, what Jukebot's sticker says, which grows and
+        // shrinks over a repair job, and the badge once it's loaded; not the changes fitting makes)
+        const getFitKey = () => [
+            scroller.clientWidth, scroller.clientHeight,
+            sticker ? sticker.textContent : "", sticker ? sticker.querySelectorAll("button").length : 0,
+            below ? below.offsetHeight : 0
+        ].join("|");
+        let fitKey = "";
+        const fitPanel = () => {
+            if (!scroller.clientHeight) return;
+            let step = 0;
+            setFitStep(0);
+            fitTips();
+            while (scroller.scrollHeight - scroller.clientHeight > 1 && step < FIT_STEPS) {
+                step += 1;
+                setFitStep(step);
+                fitTips();
+            }
+            if ((step >= 4) !== tickerShowsWelcome) {
+                tickerShowsWelcome = step >= 4;
+                refreshLedSigns();
+            }
+            fitKey = getFitKey();
+        };
+        let fitFrame = null;
+        const scheduleFit = () => {
+            if (fitFrame !== null) return;
+            fitFrame = requestAnimationFrame(() => {
+                fitFrame = null;
+                if (getFitKey() !== fitKey) fitPanel();
+            });
+        };
+
         // Fit again whenever the room changes: the panel's size, or anything else in it (Jukebot's
         // sticker grows during a repair job, and the text and badge settle once they've loaded)
         if (typeof ResizeObserver === "function") {
-            const observer = new ResizeObserver(fitTips);
+            const observer = new ResizeObserver(scheduleFit);
             observer.observe(scroller);
             Array.from(scroller.children).forEach((child) => {
                 if (child !== tipsBox) observer.observe(child);
             });
         } else {
-            fitTips();
-            window.addEventListener("resize", fitTips);
+            fitPanel();
+            window.addEventListener("resize", fitPanel);
         }
-        // The tips' own text settles once its font has loaded
+        // The writing settles once its font has loaded
         if (document.fonts) {
-            document.fonts.addEventListener("loadingdone", fitTips);
-            document.fonts.ready.then(fitTips);
+            document.fonts.addEventListener("loadingdone", fitPanel);
+            document.fonts.ready.then(fitPanel);
         }
     }
 
