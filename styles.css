@@ -8600,13 +8600,35 @@ html.viewport-shifted body {
         top: -62px;
     }
 
+    /* The buttons beside the record fill the corners above the cabinet: most of the height between
+       the top of the screen and the cabinet, and from just in from the screen's edge to just short
+       of where the record curves in at their bottom */
     .record-seek-controls {
-        top: -36px;
+        top: -50px;
+        width: calc(100vw - 16px);
+    }
+
+    .record-seek-group {
+        gap: 5px;
     }
 
     .record-seek-button {
-        min-height: 26px;
-        padding: 2px 6px;
+        height: 40px;
+        min-width: 0;
+        padding: 0 6px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+    }
+
+    .record-skip-button {
+        width: 36px;
+        height: 40px;
+        padding: 0;
+    }
+
+    .record-skip-button svg {
+        width: 16px;
+        height: 16px;
     }
 
     #jukebox {
@@ -8718,5 +8740,26 @@ html.viewport-shifted body {
 
     .speaker-readout {
         display: block;
+    }
+}
+
+/* (the narrowest of those phones: a little smaller, so they still clear the record) */
+@media (max-width: 340px) and (max-height: 700px) and (orientation: portrait) {
+    .record-seek-controls {
+        width: calc(100vw - 12px);
+    }
+
+    .record-seek-group {
+        gap: 4px;
+    }
+
+    .record-seek-button {
+        padding: 0 4px;
+        font-size: 0.86rem;
+    }
+
+    .record-skip-button {
+        width: 32px;
+        padding: 0;
     }
 }
