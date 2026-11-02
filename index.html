@@ -355,26 +355,29 @@
             </div>
 
             <div class="jb-back is-broken mood-broken" id="jukebot">
-                <!-- Inside the jukebox: circuit board, Jukebot's face chip, bugs and goo -->
-                <svg class="jb-internals" id="jb-internals" aria-hidden="true">
-                    <defs>
-                        <radialGradient id="jb-glow"><stop offset="0" stop-color="#f4ff9a" stop-opacity="0.95"/><stop offset="1" stop-color="#f4ff9a" stop-opacity="0"/></radialGradient>
-                        <!-- Faint dot grid on the board -->
-                        <pattern id="jb-grid" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="0.9" fill="#ffffff" fill-opacity="0.07"/></pattern>
-                        <!-- Scanlines on Jukebot's screen -->
-                        <pattern id="jb-scanlines" width="6" height="3" patternUnits="userSpaceOnUse"><rect width="6" height="1" fill="#ffffff" fill-opacity="0.05"/></pattern>
-                        <linearGradient id="jb-screen-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16203a"/><stop offset="1" stop-color="#070b16"/></linearGradient>
-                        <!-- Soft glow for LEDs, signals and the face -->
-                        <filter id="jb-led-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                    </defs>
-                    <g id="jb-board"></g>
-                    <g class="jb-core" id="jb-core"></g>
-                    <g id="jb-splats"></g>
-                    <!-- Repairs: broken wires and the memory lights -->
-                    <g id="jb-repairs"></g>
-                    <g id="jb-bugs"></g>
-                    <g id="jb-zaps"></g>
-                </svg>
+                <!-- Inside the jukebox: circuit board, Jukebot's face chip, bugs and goo (cut off at
+                     the board's rounded edge; the panel over it isn't, so it's drawn over that edge) -->
+                <div class="jb-inside">
+                    <svg class="jb-internals" id="jb-internals" aria-hidden="true">
+                        <defs>
+                            <radialGradient id="jb-glow"><stop offset="0" stop-color="#f4ff9a" stop-opacity="0.95"/><stop offset="1" stop-color="#f4ff9a" stop-opacity="0"/></radialGradient>
+                            <!-- Faint dot grid on the board -->
+                            <pattern id="jb-grid" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="0.9" fill="#ffffff" fill-opacity="0.07"/></pattern>
+                            <!-- Scanlines on Jukebot's screen -->
+                            <pattern id="jb-scanlines" width="6" height="3" patternUnits="userSpaceOnUse"><rect width="6" height="1" fill="#ffffff" fill-opacity="0.05"/></pattern>
+                            <linearGradient id="jb-screen-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16203a"/><stop offset="1" stop-color="#070b16"/></linearGradient>
+                            <!-- Soft glow for LEDs, signals and the face -->
+                            <filter id="jb-led-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        <g id="jb-board"></g>
+                        <g class="jb-core" id="jb-core"></g>
+                        <g id="jb-splats"></g>
+                        <!-- Repairs: broken wires and the memory lights -->
+                        <g id="jb-repairs"></g>
+                        <g id="jb-bugs"></g>
+                        <g id="jb-zaps"></g>
+                    </svg>
+                </div>
 
                 <!-- Rear panel: unscrew the four corner screws to take it off -->
                 <div class="jb-cover" id="jb-cover">

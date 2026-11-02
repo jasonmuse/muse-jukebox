@@ -735,6 +735,13 @@ p {
     }
 }
 
+/* (narrower, the two pills share the row by what's in them: All has room to spare that Newest needs) */
+@media (max-width: 370px) {
+    .filter-group {
+        flex: 1 1 auto;
+    }
+}
+
 @media (max-width: 340px) {
     #filters .filter-trigger-label {
         position: absolute;
@@ -4689,12 +4696,13 @@ html.is-standalone .edge-blend {
     }
 }
 
+/* (the board doesn't cut off what's on it: its panel, leaned back on crooked or coming off, is
+   drawn over its edge, like the smoke above it. Only the insides are cut off at the edge.) */
 .jb-back {
     position: relative;
     flex: 1;
     min-height: 0;
     border-radius: 12px;
-    overflow: hidden;
     background: #1b1e2d;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     isolation: isolate;
@@ -4725,6 +4733,15 @@ html.is-standalone .edge-blend {
     }
 }
 
+/* (clipped, not hidden, where the browser can: it needn't be a scroller of its own) */
+.jb-inside {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    overflow: clip;
+}
+
 .jb-internals {
     position: absolute;
     inset: 0;
@@ -4748,18 +4765,32 @@ html.is-standalone .edge-blend {
         #343a52;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 2px 0 rgba(255, 255, 255, 0.08);
     transform-origin: 50% 100%;
-    transition: transform 560ms cubic-bezier(0.55, 0, 0.75, 0.4), opacity 420ms ease 140ms;
+    transition: transform 560ms cubic-bezier(0.55, 0, 0.75, 0.4), opacity 420ms ease 140ms, visibility 0s linear 560ms;
 }
 
+/* Off, it drops away over the bottom of the jukebox, and once it's gone it's out of reach too (its
+   switches and buttons can't be tabbed to) */
 .jb-back.cover-off .jb-cover {
     transform: translate(12px, 75%) rotate(7deg);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
 }
 
 .jb-back.is-fixed .jb-cover,
 .jb-back:not(.cover-off) .jb-cover {
-    transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.12), opacity 220ms ease;
+    transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.12), opacity 220ms ease, visibility 0s linear 0s;
+}
+
+/* (Bug blitz pops it off with the quicker curve) */
+.jb-back.is-fixed.cover-off .jb-cover {
+    transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.12), opacity 220ms ease, visibility 0s linear 520ms;
+}
+
+/* (a page that scrolls, in a short window, would grow longer for it while it's off: there it's
+   cut off at the jukebox's edge instead) */
+html.viewport-short .jukebox-back {
+    overflow: clip;
 }
 
 .jb-cover-band {
@@ -5347,6 +5378,15 @@ html.is-standalone .edge-blend {
     text-overflow: ellipsis;
 }
 
+/* With the panel off it keeps to the board too (it's not cut off at the board's edge any more): on
+   a board too narrow for it, it goes onto two lines */
+.jb-back.cover-off .jb-hud {
+    width: max-content;
+    max-width: calc(100% - 16px);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
 .jb-hud-item {
     padding: 4px 9px;
     border-radius: 999px;
@@ -5409,6 +5449,22 @@ html.is-standalone .edge-blend {
     text-align: center;
 }
 
+/* (the narrowest phones: a little smaller, so it all still fits on one line) */
+@media (max-width: 340px) {
+    .jb-hud {
+        gap: 4px;
+        font-size: 0.7rem;
+    }
+
+    .jb-hud-item {
+        padding: 3px 7px;
+    }
+
+    .jb-power-bar {
+        width: 22px;
+    }
+}
+
 .jb-toast {
     position: absolute;
     left: 50%;
@@ -5418,7 +5474,8 @@ html.is-standalone .edge-blend {
     margin: 0;
     padding: 7px 14px;
     box-sizing: border-box;
-    border-radius: 999px;
+    /* (a pill on one line; on a narrow board, where it takes a few, a rounded box, not a ball) */
+    border-radius: 16px;
     background: rgba(14, 16, 28, 0.85);
     color: #ffffff;
     font-size: 0.82rem;
@@ -7948,6 +8005,7 @@ html.is-standalone .edge-blend {
    (with its Keep fixing button) moves to the top so it's in view on short screens. */
 .jb-back.is-loose .jb-cover {
     transform: translate(3px, 4px) rotate(-0.8deg);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 2px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .jb-back.is-loose .jb-sticker {
@@ -9452,5 +9510,268 @@ html.viewport-shifted body {
     .record-skip-button {
         width: 32px;
         padding: 0;
+    }
+}
+
+/* ───── NARROW WINDOWS ─────
+   Under 310px wide: a desktop window dragged narrow beside something else (its scrollbar takes a
+   little more off the songs), or a Galaxy Fold's front screen. The sizes above stop at the
+   narrowest phones (320px), and narrower than that they ran out of room: a song's Play line
+   wrapped beside its cover, and the speakers' right cone and the back's Songs button stuck out
+   past the cabinet. Last in the file, so it wins over the sizes above. */
+@media (max-width: 310px) {
+    /* The pills' arrows go, so what they're set to still fits (their icons say which is which) */
+    #filters {
+        gap: 5px;
+    }
+
+    #filters .filter-trigger {
+        justify-content: center;
+        gap: 5px;
+        padding: 0 8px;
+    }
+
+    #filters .filter-trigger-chevron {
+        display: none;
+    }
+
+    #filters .filter-trigger-value {
+        flex: 0 1 auto;
+    }
+
+    /* The equaliser gives up some of its width, so both speakers stay on the panel */
+    .jukebox-speakers {
+        gap: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .speaker-eq {
+        flex: 0 1 auto;
+        min-width: 0;
+        gap: 2px;
+    }
+
+    .speaker-eq span {
+        flex: 0 1 4px;
+        min-width: 1.5px;
+    }
+
+    /* The back: Songs is just its flip arrows (the ones on the sign that turned the jukebox round),
+       and the rest is a little smaller and closer, so it all fits across */
+    .back-header {
+        gap: 5px;
+    }
+
+    .back-header .back-title {
+        font-size: 1.15rem;
+    }
+
+    .back-header .jb-lights {
+        gap: 3px;
+        margin-right: 0;
+    }
+
+    .back-header .jb-light {
+        width: 9px;
+        height: 9px;
+    }
+
+    .back-flip-button {
+        width: 34px;
+        padding: 0;
+    }
+
+    /* (its name's still there for screen readers) */
+    .back-flip-button span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    /* (too few words to a line to spread them out evenly) */
+    .jukebox-description {
+        text-align: left;
+    }
+
+    /* The turntable view: its five buttons share the width there is (they were wider than the view),
+       and the song's name goes down with the width too, so a short one isn't cut short */
+    .now-playing.is-open {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .now-playing.is-open .np-transport {
+        gap: 3px;
+    }
+
+    .now-playing.is-open .np-button {
+        --size: clamp(30px, calc((100vw - 104px) / 4), 46px);
+    }
+
+    .now-playing.is-open .np-play {
+        --size: 52px;
+    }
+
+    .np-title {
+        font-size: clamp(1.05rem, min(4.4vh, 8vw), 1.9rem);
+    }
+
+    /* Jukebot's job: with his panel on, there's only room between its top screws for how many
+       screws are left (the step and the time are back once it's off) */
+    .jb-back.is-running:not(.cover-off) #jb-level,
+    .jb-back.is-running:not(.cover-off) .jb-hud-time {
+        display: none;
+    }
+}
+
+/* Tall enough for the usual rows. The record's a little smaller, so the buttons beside it keep to
+   its edges, and a song's row is a little card: the cover at the top, the title and tags beside it,
+   and the Play line all along underneath. (.track-info spans the card: a grid with the cover's
+   column kept empty, which holds the cover's height open above the Play line.) */
+@media (max-width: 310px) and (min-height: 701px), (max-width: 310px) and (orientation: landscape) {
+    .record {
+        width: 170px;
+        height: 170px;
+    }
+
+    .record.up {
+        top: -62px;
+    }
+
+    .record-seek-controls {
+        width: calc(100vw - 12px);
+    }
+
+    .record-seek-group {
+        gap: 3px;
+    }
+
+    .record-seek-button {
+        min-width: 0;
+        padding: 2px 5px;
+        font-size: 0.8rem;
+    }
+
+    .record-skip-button {
+        width: 28px;
+        height: 24px;
+        padding: 0;
+    }
+
+    .track:not(.track-skeleton) {
+        --cover-size: 50px;
+    }
+
+    .track:not(.track-skeleton) img {
+        position: relative;
+        z-index: 1;
+        align-self: flex-start;
+    }
+
+    .track:not(.track-skeleton) .side-switch {
+        align-self: flex-start;
+        margin-top: calc(var(--cover-size) - 11px);
+        margin-bottom: 0;
+    }
+
+    .track:not(.track-skeleton) .track-info {
+        --cover-column: calc(var(--cover-size) + 4px + var(--cover-gap));
+        display: grid;
+        grid-template-columns: var(--cover-column) minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        margin-left: calc(-1 * var(--cover-column));
+    }
+
+    .track:not(.track-skeleton) .track-info::before {
+        content: "";
+        grid-area: 1 / 1 / 4 / 2;
+        height: calc(var(--cover-size) + 4px);
+    }
+
+    .track .title {
+        grid-area: 1 / 2;
+    }
+
+    .track .tags {
+        grid-area: 2 / 2;
+    }
+
+    .track .playback-controls {
+        grid-area: 4 / 1 / 5 / 3;
+        margin-top: 8px;
+    }
+
+    /* (the playing song's wave: a line of its own, the card's width) */
+    .track-modes-visible .song-progress {
+        flex: 0 0 100%;
+        margin: 8px 0 0;
+    }
+}
+
+/* Short as well: the one-line rows stay, with a smaller cover; where the time won't fit beside
+   the Play button and the wave, it goes (the wave shows how far in the song is), and the
+   speaker panel's buttons and the ones beside the record are a little smaller */
+@media (max-width: 310px) and (max-height: 700px) and (orientation: portrait) {
+    .track {
+        --cover-size: 40px;
+        --cover-gap: 8px;
+    }
+
+    .track .play-button {
+        min-width: 50px;
+        padding: 0 8px;
+    }
+
+    .track .song-progress,
+    .track-modes-visible .song-progress {
+        flex-basis: 28px;
+        margin-left: 8px;
+    }
+
+    .track .song-wave {
+        min-width: 28px;
+    }
+
+    @container (max-width: 135px) {
+        .song-time {
+            display: none;
+        }
+    }
+
+    .speaker {
+        width: 26px;
+        height: 26px;
+    }
+
+    .speaker-mode {
+        width: 26px;
+        height: 26px;
+    }
+
+    .speaker-eq {
+        gap: 1.5px;
+    }
+
+    .record-seek-controls {
+        width: calc(100vw - 10px);
+    }
+
+    .record-seek-group {
+        gap: 3px;
+    }
+
+    .record-seek-button {
+        height: 34px;
+        padding: 0 3px;
+        font-size: 0.8rem;
+    }
+
+    .record-skip-button {
+        width: 28px;
+        height: 34px;
     }
 }
