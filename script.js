@@ -7963,18 +7963,241 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // ───── History: every change to the jukebox, from the very first day ─────
+    // A logbook on the back, a month at a time, newest first. history.json (tools/make-history.py)
+    // has every change up to when it was made; anything newer comes from GitHub as it opens (asked
+    // at most every ten minutes, and if GitHub doesn't answer, it just goes up to history.json).
+    const HISTORY_FILE = "history.json";
+    const HISTORY_NEWER_URL = "https://api.github.com/repos/jasonmuse/muse-jukebox/commits?sha=main&per_page=100";
+    const HISTORY_NEWER_KEY = "museJukeboxHistoryNewer";
+    const HISTORY_NEWER_MS = 10 * 60 * 1000;
+    const historyDialog = document.getElementById("history-dialog");
+
+    // "2026-11-02" as that day here (not midnight in London)
+    function parseHistoryDate(date) {
+        const [year, month, day] = date.split("-").map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    function toHistoryDate(time) {
+        const date = new Date(time);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    // A change's parts (kept apart with semicolons), each starting with a capital
+    function splitHistoryChange(text) {
+        return text.split(/;\s+/)
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+    }
+
+    // The changes since `newestDate` from GitHub (merges left out, as in history.json)
+    async function fetchNewerHistory(newestDate) {
+        try {
+            const kept = JSON.parse(sessionStorage.getItem(HISTORY_NEWER_KEY) || "null");
+            if (kept && kept.since === newestDate && Date.now() - kept.at < HISTORY_NEWER_MS) return kept.changes;
+        } catch (error) {
+            // Storage blocked: just ask
+        }
+        // (from the day before, in case the clocks differ: what's already there is dropped after)
+        const since = parseHistoryDate(newestDate);
+        since.setDate(since.getDate() - 1);
+        const response = await fetch(`${HISTORY_NEWER_URL}&since=${since.toISOString()}`);
+        if (!response.ok) return [];
+        const commits = await response.json();
+        const changes = (Array.isArray(commits) ? commits : [])
+            .filter((commit) => commit && commit.sha && commit.commit && (!commit.parents || commit.parents.length < 2))
+            .map((commit) => ({
+                sha: commit.sha.slice(0, 7),
+                date: toHistoryDate((commit.commit.author || commit.commit.committer).date),
+                text: String(commit.commit.message || "").split("\n")[0].trim()
+            }))
+            .filter((change) => change.text);
+        try {
+            sessionStorage.setItem(HISTORY_NEWER_KEY, JSON.stringify({ since: newestDate, at: Date.now(), changes }));
+        } catch (error) {
+            // Storage blocked: asked again next time
+        }
+        return changes;
+    }
+
+    function setUpHistory() {
+        const button = document.getElementById("history-button");
+        if (!button) return;
+        // (a browser without <dialog> goes without)
+        if (!historyDialog || typeof historyDialog.showModal !== "function") {
+            button.hidden = true;
+            return;
+        }
+        const panel = historyDialog.querySelector(".history-panel");
+        const scroller = document.getElementById("history-scroll");
+        const list = document.getElementById("history-months");
+        const status = document.getElementById("history-status");
+        const summary = document.getElementById("history-summary");
+        let history = null;
+        let loading = null;
+        let closeTimer = null;
+
+        const formatDate = (date, options) => parseHistoryDate(date).toLocaleDateString("en-US", options);
+
+        // A month at a time, each day a stop on the line with what changed that day
+        const render = () => {
+            const { eras, changes } = history;
+            const fragment = document.createDocumentFragment();
+            let monthKey = "";
+            let dayKey = "";
+            let days = null;
+            let dayChanges = null;
+            changes.forEach((change) => {
+                const month = change.date.slice(0, 7);
+                if (month !== monthKey) {
+                    monthKey = month;
+                    dayKey = "";
+                    const item = document.createElement("li");
+                    item.className = "history-month";
+                    const head = document.createElement("h3");
+                    head.className = "history-month-head";
+                    const name = document.createElement("span");
+                    name.textContent = formatDate(`${month}-01`, { month: "long", year: "numeric" });
+                    head.append(name);
+                    if (eras[month]) {
+                        const era = document.createElement("span");
+                        era.className = "history-era";
+                        era.textContent = eras[month];
+                        head.append(era);
+                    }
+                    days = document.createElement("ol");
+                    days.className = "history-days";
+                    item.append(head, days);
+                    fragment.append(item);
+                }
+                if (change.date !== dayKey) {
+                    dayKey = change.date;
+                    const day = document.createElement("li");
+                    day.className = "history-day";
+                    const time = document.createElement("time");
+                    time.className = "history-date";
+                    time.dateTime = change.date;
+                    time.textContent = formatDate(change.date, { month: "short", day: "numeric" });
+                    dayChanges = document.createElement("ul");
+                    dayChanges.className = "history-changes";
+                    day.append(time, dayChanges);
+                    days.append(day);
+                }
+                splitHistoryChange(change.text).forEach((part) => {
+                    const line = document.createElement("li");
+                    line.textContent = part;
+                    dayChanges.append(line);
+                });
+            });
+            const dayItems = fragment.querySelectorAll(".history-day");
+            dayItems[0].classList.add("is-latest");
+            dayItems[dayItems.length - 1].classList.add("is-first");
+            list.replaceChildren(fragment);
+            const first = changes[changes.length - 1];
+            summary.textContent = `${changes.length} changes since ${formatDate(first.date, { month: "short", day: "numeric", year: "numeric" })}`;
+            status.hidden = true;
+        };
+
+        const load = () => {
+            if (loading) return;
+            status.hidden = false;
+            status.textContent = "Winding back the tape…";
+            loading = fetch(HISTORY_FILE)
+                .then((response) => {
+                    if (!response.ok) throw new Error(`${HISTORY_FILE}: ${response.status}`);
+                    return response.json();
+                })
+                .then((data) => {
+                    const changes = Array.isArray(data.changes) ? data.changes.filter((change) => change && change.sha && change.date && change.text) : [];
+                    if (!changes.length) throw new Error(`${HISTORY_FILE}: no changes`);
+                    history = { eras: data.eras || {}, changes };
+                    render();
+                    // Anything newer goes on top, if GitHub answers
+                    fetchNewerHistory(changes[0].date)
+                        .then((newer) => {
+                            const known = new Set(history.changes.map((change) => change.sha.slice(0, 7)));
+                            const added = newer.filter((change) => !known.has(change.sha));
+                            if (!added.length) return;
+                            history.changes = [...added, ...history.changes];
+                            render();
+                        })
+                        .catch(() => {});
+                })
+                .catch(() => {
+                    // (it tries again the next time it's opened)
+                    loading = null;
+                    status.hidden = false;
+                    status.textContent = "The tape's jammed. Try again in a bit.";
+                });
+        };
+
+        const open = () => {
+            if (historyDialog.open) return;
+            clearTimeout(closeTimer);
+            historyDialog.classList.remove("is-closing");
+            historyDialog.showModal();
+            scroller.scrollTop = 0;
+            if (!history) load();
+        };
+
+        const finishClosing = () => {
+            clearTimeout(closeTimer);
+            historyDialog.classList.remove("is-closing");
+            if (historyDialog.open) historyDialog.close();
+        };
+
+        // It sinks away first (unless motion's turned down)
+        const close = () => {
+            if (!historyDialog.open || historyDialog.classList.contains("is-closing")) return;
+            if (prefersReducedMotion()) {
+                historyDialog.close();
+                return;
+            }
+            historyDialog.classList.add("is-closing");
+            closeTimer = setTimeout(finishClosing, 260);
+        };
+
+        panel.addEventListener("animationend", (event) => {
+            if (event.target === panel && historyDialog.classList.contains("is-closing")) finishClosing();
+        });
+        historyDialog.addEventListener("close", () => {
+            clearTimeout(closeTimer);
+            historyDialog.classList.remove("is-closing");
+        });
+
+        button.addEventListener("click", open);
+        historyDialog.querySelector(".history-close").addEventListener("click", close);
+        // Escape closes it too, and so does a tap outside it (one that started outside it as well)
+        historyDialog.addEventListener("cancel", (event) => {
+            if (!event.cancelable) return;
+            event.preventDefault();
+            close();
+        });
+        let pressedOutside = false;
+        historyDialog.addEventListener("pointerdown", (event) => {
+            pressedOutside = event.target === historyDialog;
+        });
+        historyDialog.addEventListener("click", (event) => {
+            if (event.target === historyDialog && pressedOutside) close();
+        });
+    }
+
     function setUpJukeboxBack() {
         if (!jukeboxPanel) return;
         setUpLedSigns();
         setUpBackTips();
         setUpHandTurning();
+        setUpHistory();
 
         document.querySelectorAll("[data-flip-jukebox]").forEach((button) => {
             button.addEventListener("click", () => flipJukebox(button.dataset.flipJukebox === "back"));
         });
 
+        // (Escape with the history open only closes the history)
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && jukeboxPanel.classList.contains("is-flipped") && !coverModal?.classList.contains("active")) {
+            if (event.key === "Escape" && jukeboxPanel.classList.contains("is-flipped") && !coverModal?.classList.contains("active") && !historyDialog?.open) {
                 flipJukebox(false);
             }
         });

@@ -3609,6 +3609,395 @@ html {
     transform: scale(0.95);
 }
 
+/* ───── HISTORY: every change to the jukebox, from the very first day ─────
+   Its button sits beside "Songs" on the back, a ghost of it (just its clock on phones, where the
+   header has no room for more). It opens a logbook: a month at a time, newest first, each day a
+   stop on a line with its date lit up like the LED signs. */
+.back-history-button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0 12px 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+    color: #e4e9ff;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 140ms ease-out, background-color 160ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.back-history-button:active {
+    transform: scale(0.95);
+}
+
+.back-history-button:focus-visible,
+.history-close:focus-visible {
+    outline: 2px solid #d6e6ff;
+    outline-offset: 2px;
+}
+
+.history-icon {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .back-history-button:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .history-close:hover {
+        background-color: rgba(255, 255, 255, 0.18);
+    }
+}
+
+/* (its name's still there for screen readers) */
+@media (max-width: 480px) {
+    .back-history-button {
+        padding: 0;
+    }
+
+    .back-history-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+/* (the narrowest phones: the header's a little closer together, so it all still fits) */
+@media (max-width: 340px) {
+    .back-header {
+        gap: 6px;
+    }
+
+    .back-header .back-title {
+        font-size: 1.32rem;
+    }
+
+    .back-header .jb-lights {
+        gap: 4px;
+        margin-right: 0;
+    }
+
+    .back-flip-button {
+        padding: 0 11px;
+    }
+}
+
+.history-dialog {
+    width: min(540px, calc(100vw - 20px));
+    max-width: none;
+    max-height: none;
+    margin: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #e4e9ff;
+    overflow: visible;
+}
+
+/* (browsers too old for dialogs would otherwise show it at the foot of the page) */
+.history-dialog:not([open]) {
+    display: none;
+}
+
+.history-dialog::backdrop {
+    background: rgba(10, 8, 30, 0.66);
+}
+
+.history-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: min(720px, calc(100vh - 28px));
+    border-radius: 18px;
+    overflow: hidden;
+    background: #1b1e2d;
+    box-shadow: 0 0 0 1.5px rgba(207, 214, 255, 0.32), 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 36px rgba(142, 161, 255, 0.16);
+}
+
+@supports (height: 100dvh) {
+    .history-panel {
+        max-height: min(720px, calc(100dvh - 28px));
+    }
+}
+
+/* Opening, it rises into place; closing, it sinks away again (script.js waits for that) */
+.history-dialog[open] .history-panel {
+    animation: historyIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-dialog[open]::backdrop {
+    animation: historyBackdropIn 280ms ease-out;
+}
+
+.history-dialog.is-closing .history-panel {
+    animation: historyOut 180ms ease-in forwards;
+}
+
+.history-dialog.is-closing::backdrop {
+    animation: historyBackdropIn 180ms ease-in reverse forwards;
+}
+
+@keyframes historyIn {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.97);
+    }
+}
+
+@keyframes historyOut {
+    to {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+}
+
+@keyframes historyBackdropIn {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .history-dialog[open] .history-panel,
+    .history-dialog[open]::backdrop,
+    .history-dialog.is-closing .history-panel,
+    .history-dialog.is-closing::backdrop {
+        animation: none;
+    }
+}
+
+.history-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 14px 14px 18px;
+    background: linear-gradient(180deg, #2a2852, #1f2136);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.history-head-icon {
+    width: 26px;
+    height: 26px;
+    color: #ffc861;
+    filter: drop-shadow(0 0 4px rgba(255, 170, 60, 0.55));
+}
+
+.history-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.history-heading h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.15;
+    background: linear-gradient(90deg, #8ea1ff, #d4c9ff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+}
+
+.history-summary {
+    margin: 3px 0 0;
+    font-size: 0.82rem;
+    color: rgba(228, 233, 255, 0.6);
+}
+
+.history-close {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #e4e9ff;
+    cursor: pointer;
+    transition: background-color 160ms ease-out, transform 140ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.history-close:active {
+    transform: scale(0.92);
+}
+
+.history-close svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+}
+
+.history-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 18px 20px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(174, 188, 255, 0.35) transparent;
+}
+
+.history-scroll:focus {
+    outline: none;
+}
+
+.history-months,
+.history-days,
+.history-changes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Each month's name stays at the top while its days go by */
+.history-month-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 10px;
+    margin: 0 -18px;
+    padding: 16px 18px 10px;
+    background: linear-gradient(180deg, #1b1e2d 78%, rgba(27, 30, 45, 0));
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #aebcff;
+}
+
+.history-era {
+    font-size: 0.84rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: rgba(228, 233, 255, 0.55);
+}
+
+/* The line the days sit on */
+.history-days {
+    margin-left: 5px;
+    padding-left: 20px;
+    border-left: 2px solid rgba(142, 161, 255, 0.22);
+}
+
+.history-day {
+    position: relative;
+    padding: 2px 0 14px;
+}
+
+/* (each month's line stops at its last day) */
+.history-day:last-child {
+    padding-bottom: 4px;
+}
+
+.history-day::before {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: -25px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #1b1e2d;
+    box-shadow: 0 0 0 2px #8ea1ff;
+}
+
+/* (the latest day's lit up, like the song that's on) */
+.history-day.is-latest::before {
+    background: #b5f3ff;
+    box-shadow: 0 0 0 2px #8ee9ff, 0 0 10px rgba(90, 200, 255, 0.8);
+}
+
+.history-date {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font: 800 0.72rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffc861;
+    text-shadow: 0 0 3px rgba(255, 190, 80, 0.6);
+}
+
+/* The very first day gets a sticker, like Jukebot's */
+.history-day.is-first .history-date::after {
+    content: "Day one";
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: #ffe066;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+    font: 800 0.68rem "Outfit", system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    text-shadow: none;
+    color: #3b3016;
+}
+
+.history-changes {
+    display: grid;
+    gap: 5px;
+    margin-top: 6px;
+}
+
+.history-changes li {
+    position: relative;
+    padding-left: 13px;
+    font-size: 0.92rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.history-changes li::before {
+    content: "";
+    position: absolute;
+    top: 0.58em;
+    left: 0;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(174, 188, 255, 0.6);
+}
+
+.history-status {
+    margin: 22px 0 6px;
+    text-align: center;
+    font-size: 0.86rem;
+    color: rgba(228, 233, 255, 0.6);
+}
+
+.history-status[hidden] {
+    display: none;
+}
+
 /* Settings: a slim plate of switches on the back, like an amp's */
 .back-settings {
     flex: 0 0 auto;
