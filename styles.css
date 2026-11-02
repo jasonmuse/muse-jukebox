@@ -11,6 +11,13 @@
     initial-value: 0;
 }
 
+/* (a length, so a row's cover, its Side A / B label and what's beside it can glide to a new size) */
+@property --cover-size {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 88px;
+}
+
 :root {
     --app-height: 100vh;
     /* Follows the backdrop (script.js): purple with the gradient, night sky with the space gif.
@@ -74,7 +81,11 @@ display: flex;
 justify-content: center;
 align-items: flex-start;
 padding: 0;
+/* Nothing out at the sides. (Clipped, not hidden: hidden made it a scroller up and down too, ending
+   just under the cabinet, so its shadow was cut off there, and a turn, which brings the cabinet's
+   near side out past it, gave it a scrollbar. Older browsers without clip keep hidden.) */
 overflow-x: hidden;
+overflow-x: clip;
 position: relative;
 z-index: 2;
 padding-left: env(safe-area-inset-left, 0px);
@@ -3091,10 +3102,17 @@ html {
         --cover-size: 60px;
         --cover-gap: 12px;
         padding: 9px 8px;
+        transition: --cover-size 380ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .track:not(.track-modes-visible) .tags {
         display: none;
+    }
+
+    /* The playing song's row is taller (its tags show), so its cover grows to fill it top to
+       bottom, and its title, tags and buttons glide over to make room */
+    .track.track-modes-visible {
+        --cover-size: 85px;
     }
 
     .title {
@@ -3137,15 +3155,18 @@ html {
     }
 }
 
-/* Desktop windows: keep the two panels well proportioned on big monitors */
+/* Desktop windows: keep the two panels well proportioned on big monitors, with some room round
+   them, so they sit in the window instead of filling it edge to edge */
 @media (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
     #jukebox-wrapper {
         align-items: center;
+        padding: clamp(14px, 4vh, 48px) clamp(20px, 4vw, 80px);
     }
 
     #jukebox-container {
         max-width: min(1600px, 175vh);
         max-height: 1100px;
+        gap: clamp(16px, 2.2vw, 32px);
     }
 
     /* A tall panel would leave a gap under the record: cap the turntable and centre the deck */
@@ -3181,9 +3202,13 @@ html {
         padding: 8px 6px;
     }
 
-    /* Short rows here too: tags only on the song that's playing */
+    /* Short rows here too: tags only on the song that's playing (its cover fills its row) */
     .track:not(.track-modes-visible) .tags {
         display: none;
+    }
+
+    .track.track-modes-visible {
+        --cover-size: 81px;
     }
 
     .title {
@@ -7779,15 +7804,23 @@ button.title-penguin:focus-visible {
 
 /* Sound waves rolling out from the penguins: now and then on their own, and with every beat while
    a song plays (script.js sets each wave's glow then). Pink on the left and blue on the right, like
-   the two ends of "Muse"; each one further out is bigger and fainter, and only whole waves show
-   when there's little room. */
+   the two ends of "Muse"; each one further out is bigger and fainter. Each side's fill out the
+   cabinet's top corner: they take all the room beside the penguin, out into the side lights'
+   gutter, and sit in the middle of it, a little higher than the penguins. Where there's little
+   room they're up against the penguin and only whole waves show. Bigger where the cabinet's wider
+   than the title; on phones there's no room to spare. */
 .title-waves {
+    --wave-scale: 1.5;
     position: relative;
-    flex: 0 1 0.76em;
+    flex: 1 1 0;
     min-width: 0;
     height: 0.92em;
     align-self: flex-end;
-    margin-bottom: 0.16em;
+    /* (its middle 0.72em up the title, a little above the penguins' middle; the top margin keeps
+       it from making the title any taller) */
+    margin-top: -1em;
+    margin-bottom: calc((0.72em / var(--wave-scale)) - 0.46em);
+    font-size: calc(var(--wave-scale) * 1em);
     overflow: hidden;
     color: #ff8ad8;
     filter: drop-shadow(0 0 0.05em currentColor);
@@ -7795,12 +7828,20 @@ button.title-penguin:focus-visible {
     container-type: inline-size;
 }
 
+.title-waves--left {
+    margin-left: calc(-0.7 * var(--lights-gutter, 0px));
+}
+
 .title-waves--right {
+    margin-right: calc(-0.7 * var(--lights-gutter, 0px));
     color: #8ee9ff;
     transform: scaleX(-1);
 }
 
 .title-waves svg {
+    /* (the four are 0.636em across, from 0.074em in: moved along to the middle of the room there
+       is, or not at all when it's tight) */
+    --wave-shift: max(0px, 50% - 0.392em);
     position: absolute;
     top: 0;
     bottom: 0;
@@ -7815,13 +7856,13 @@ button.title-penguin:focus-visible {
 }
 
 .title-waves svg:nth-child(1) {
-    right: 0.074em;
+    right: calc(var(--wave-shift) + 0.074em);
     width: 0.126em;
     height: 0.34em;
 }
 
 .title-waves svg:nth-child(2) {
-    right: 0.209em;
+    right: calc(var(--wave-shift) + 0.209em);
     width: 0.161em;
     height: 0.5em;
     stroke-opacity: 0.8;
@@ -7829,7 +7870,7 @@ button.title-penguin:focus-visible {
 }
 
 .title-waves svg:nth-child(3) {
-    right: 0.344em;
+    right: calc(var(--wave-shift) + 0.344em);
     width: 0.196em;
     height: 0.66em;
     stroke-opacity: 0.6;
@@ -7837,7 +7878,7 @@ button.title-penguin:focus-visible {
 }
 
 .title-waves svg:nth-child(4) {
-    right: 0.479em;
+    right: calc(var(--wave-shift) + 0.479em);
     width: 0.231em;
     height: 0.82em;
     stroke-opacity: 0.42;
@@ -8496,6 +8537,13 @@ html.viewport-shifted body {
     .cabinet-lights {
         --bulb: 7px;
         --bulb-pitch: 11px;
+    }
+}
+
+/* (a phone's title fills the cabinet's width: no corners to fill) */
+@media (max-width: 600px) {
+    .title-waves {
+        --wave-scale: 1;
     }
 }
 

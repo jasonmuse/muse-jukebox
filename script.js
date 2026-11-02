@@ -3909,9 +3909,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         const isYear = (value) => /^\d{4}$/.test(value);
+        // (the mystery song's ????? and then Unsorted go after the rest, A to Z)
+        const LAST_VIBES = ["?????", "Unsorted"];
+        const vibeRank = (option) => LAST_VIBES.indexOf(option.textContent) + 1;
         const groups = [
             ["", options.filter((option) => option.value === "all")],
-            ["Vibes", options.filter((option) => option.value !== "all" && !isYear(option.value)).sort((a, b) => a.textContent.localeCompare(b.textContent))],
+            ["Vibes", options.filter((option) => option.value !== "all" && !isYear(option.value)).sort((a, b) => vibeRank(a) - vibeRank(b) || a.textContent.localeCompare(b.textContent))],
             ["Years", options.filter((option) => isYear(option.value)).sort((a, b) => b.value.localeCompare(a.value))]
         ];
         groups.forEach(([title, list]) => {
