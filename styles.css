@@ -3250,6 +3250,45 @@ html {
     }
 }
 
+/* Short screens beside the Now playing panel (a tablet or an opened-out phone with the browser's
+   tab bar showing, a short desktop window, a phone on its side): short rows, so more songs fit.
+   The playing song's row is no taller than the rest. The panel beside it already shows its tags,
+   the keep-playing and shuffle buttons and the whole time, so the row keeps just its Pause, its
+   wave and where it's got to (and its cover stays the size of the others). */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 660px), (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) and (max-height: 660px) {
+    .track,
+    .track.track-modes-visible {
+        --cover-size: 52px;
+    }
+
+    .track {
+        --cover-gap: 12px;
+        padding: 7px 8px;
+    }
+
+    .track .tags {
+        display: none;
+    }
+
+    .track-modes-visible .skip-button,
+    .track-modes-visible .mode-button--continuous,
+    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .song-time-total {
+        display: none;
+    }
+
+    .title {
+        font-size: 1.05rem;
+    }
+
+    .play-button {
+        min-height: 28px;
+        min-width: 58px;
+        padding: 0 13px;
+        font-size: 0.84em;
+    }
+}
+
 /* ───── FRONT SIGN (flips the jukebox around) ───── */
 .flip-sign {
     position: relative;
