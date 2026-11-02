@@ -1952,7 +1952,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function pauseCurrentTrack() {
         if (!currentTrackData) return;
-        cancelSideSwitch();
+        cancelSideSwitch({ pausing: true });
         finishAutoMixNow();
 
         if (document.hidden) {
@@ -2087,17 +2087,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // is one row with a label on its cover that flips it over. Both sides play the same file, just
     // at different speeds (the pitch goes with it, like a record at 33 instead of 45).
     //
-    // A flip while it plays never touches the speed of the deck that's playing: Safari, and every
-    // browser on an iPhone, stops the sound for a moment whenever a playing song's speed changes. So
-    // the spare deck starts the same song silently at the other side's speed, a little ahead of the
-    // playing deck when that side is slower (or behind when it's faster), and the moment the two
-    // reach the same spot in the song the sound moves over to it: no gap, no repeat, and it can go
-    // back and forth as often as you like.
+    // The silent hand-over: where the wind further down can't be played (no stretch of the song to
+    // hand, say), a flip still never touches the speed of the deck that's playing, as Safari, and
+    // every browser on an iPhone, stops the sound for a moment whenever a playing song's speed
+    // changes. So the spare deck starts the same song silently at the other side's speed, a little
+    // ahead of the playing deck when that side is slower (or behind when it's faster), and the moment
+    // the two reach the same spot in the song the sound moves over to it: no gap, no repeat, and it
+    // can go back and forth as often as you like.
     const SIDE_SWAP_LEAD = 0.3; // s: about how long the other side runs (silently) before they meet
     const SIDE_SWAP_GIVE_UP_MS = 4000;
     const shownSides = new Map(); // side A's file -> the side its row was last flipped to
     let sideSwap = null; // the other side, running silently until it meets the playing deck
-    let sideSwapDelay = 0.25; // s: how long a deck takes to get going (learnt as it goes)
+    let sideSwapDelay = 0.15; // s: how long a deck takes to get going (learnt as it goes)
     let sideDeck = null; // { deck, src }: the spare deck, still holding the song from the last flip
     let sideDeckRest = null; // the deck that just handed over, about to stop
 
@@ -2187,7 +2188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         showRowSide(row, other, true);
         if (!isCurrent) return;
         if (isPlayerActive() && !scratch) {
-            startSideSwap(other);
+            startSideWind(other);
         } else {
             // Paused: the deck just takes the other side's speed, ready for Play
             cancelSideSwitch();
@@ -2344,7 +2345,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Something else happened first (another song, a pause, a scratch, a flip back): the other side
     // stops and the playing deck carries on
-    function cancelSideSwitch() {
+    function cancelSideSwitch(options = {}) {
+        stopSideWind(options);
         const swap = sideSwap;
         if (!swap) return;
         sideSwap = null;
@@ -2355,6 +2357,451 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (player.paused && currentTrackData) applyTrackSpeed(player, currentTrackData);
     }
 
+    // ───── Winding over to the other side ─────
+    // A flip while it plays winds the song over to the other side's speed, pitch and all, like a
+    // record going from 45 to 33: 0.9s, easing in and out, with the record turning at the speed you
+    // hear. Where a playing song's speed can change smoothly (Chrome, Firefox) the playing deck just
+    // eases over. Safari, and every browser on an iPhone, stops the sound for a moment at every speed
+    // change, so there the wind is played by Web Audio from a decoded stretch of the song: the spare
+    // deck first gets going silently at the new speed, then Web Audio takes the sound over from the
+    // playing deck right where it is, winds down (or up) and lands exactly where the spare deck has
+    // got to, which carries on from there. (Where the spare deck turned out to be goes into the
+    // wind's shape, a little faster or slower part-way, where nobody can hear it.) If the stretch
+    // can't be had in time, the flip falls back to the silent hand-over above.
+    const SIDE_WIND_SECONDS = 0.9;
+    const SIDE_WIND_POINTS = 96;
+    const SIDE_WIND_FADE = 0.03; // s: at each end Web Audio and the deck overlap this long
+    const SIDE_WIND_LEAD = 0.06; // s: how far ahead the wind is scheduled
+    const SIDE_WIND_GUESS = 0.3; // s: about how long after a flip the wind gets going
+    const SIDE_WIND_GIVE_UP_MS = 2500;
+    let sideWind = null;
+
+    function getWindEase(progress) {
+        return progress < 0.5 ? 2 * progress * progress : 1 - ((((-2 * progress) + 2) ** 2) / 2);
+    }
+
+    // A speed curve as Web Audio plays it (straight lines between its points): the speed at context
+    // time `t`, and how far through the song it has gone by then (the area under it)
+    function getCurveRate(curve, t) {
+        const span = curve.values.length - 1;
+        const at = Math.max(0, Math.min(span, ((t - curve.start) / curve.length) * span));
+        const index = Math.min(span - 1, Math.floor(at));
+        return curve.values[index] + ((curve.values[index + 1] - curve.values[index]) * (at - index));
+    }
+
+    function getCurveDistance(curve, t) {
+        const span = curve.values.length - 1;
+        const step = curve.length / span;
+        const until = Math.max(0, Math.min(curve.length, t - curve.start));
+        const whole = Math.min(span, Math.floor(until / step));
+        let distance = 0;
+        for (let index = 0; index < whole; index += 1) {
+            distance += (curve.values[index] + curve.values[index + 1]) * step / 2;
+        }
+        const rest = until - (whole * step);
+        if (rest > 0 && whole < span) {
+            const end = curve.values[whole] + ((curve.values[whole + 1] - curve.values[whole]) * (rest / step));
+            distance += (curve.values[whole] + end) * rest / 2;
+        }
+        return distance;
+    }
+
+    // Web Audio's clock against the page's: the context time being heard at a page time (s)
+    function readAudioClock(context) {
+        if (typeof context.getOutputTimestamp === "function") {
+            const stamp = context.getOutputTimestamp();
+            if (stamp && stamp.performanceTime > 0 && stamp.contextTime > 0) {
+                return { context: stamp.contextTime, page: stamp.performanceTime / 1000 };
+            }
+        }
+        const latency = (context.baseLatency || 0) + (context.outputLatency || 0);
+        return { context: context.currentTime - latency, page: performance.now() / 1000 };
+    }
+
+    // Where a deck is in the song at page time `at` (s): where its recent readings put it, at its speed
+    function getDeckPlace(readings, rate, at) {
+        return (readings.reduce((sum, reading) => sum + reading.position - (rate * reading.at), 0) / readings.length) + (rate * at);
+    }
+
+    // Where the wind is in the song, and how fast it's going, at context time `t`
+    function getWindPlace(wind, t) {
+        if (t <= wind.start) return { position: wind.startPosition - ((wind.start - t) * wind.fromRate), rate: wind.fromRate };
+        const { curve } = wind;
+        if (t < curve.start + curve.length) return { position: wind.startPosition + getCurveDistance(curve, t), rate: getCurveRate(curve, t) };
+        return { position: wind.startPosition + wind.distance + ((t - curve.start - curve.length) * wind.rate), rate: wind.rate };
+    }
+
+    // How fast the record should turn mid-flip (the speed you can hear), or null when it isn't winding
+    function getSideWindRate() {
+        const wind = sideWind;
+        if (!wind) return null;
+        if (wind.kind === "deck") return wind.deck.playbackRate;
+        if (!wind.start || !scratchAudio) return wind.fromRate;
+        const clock = readAudioClock(scratchAudio.context);
+        return getWindPlace(wind, clock.context + ((performance.now() / 1000) - clock.page)).rate;
+    }
+
+    function startSideWind(track) {
+        const rate = getTrackRate(track);
+        // (flipped again part-way through a wind: it winds on over to that side once it's landed)
+        if (sideWind && sideWind.kind === "audio" && sideWind.start) {
+            sideWind.again = true;
+            return;
+        }
+        // (the playing deck easing over: it just turns round from the speed it's got to)
+        if (!speedChangesStutter) {
+            if (!sideWind) cancelSideSwitch();
+            windDeckTo(player, rate);
+            return;
+        }
+        cancelSideSwitch();
+        const from = player;
+        if (Math.abs(from.playbackRate - rate) < 0.001) return;
+        const audio = getScratchAudio();
+        const to = getSpareDeck();
+        if (!audio || !to || !(from.duration > 0) || isSwitchingTrack || from.volume < 0.99 || document.hidden
+            || from.duration - from.currentTime < 8) {
+            startSideSwap(track);
+            return;
+        }
+        finishAutoMixNow();
+        discardUpNext();
+        clearTimeout(sideDeckRest);
+        if (!sideDeck || sideDeck.deck !== to || to.getAttribute("src") !== sideDeck.src) {
+            const file = getTrackAudio(track);
+            const source = songSources.get(file);
+            setDeckSource(to, source ? URL.createObjectURL(source.blob) : file, { blob: Boolean(source) });
+            sideDeck = { deck: to, src: to.getAttribute("src") };
+        }
+        to.muted = true;
+        to.volume = 1;
+        applyTrackSpeed(to, track);
+        const plain = new Float32Array(SIDE_WIND_POINTS);
+        const wind = {
+            kind: "audio", track, from, to, rate, fromRate: from.playbackRate, began: performance.now(), plain,
+            slice: null, start: 0, startPage: 0, startPosition: 0, curve: null, distance: 0, land: 0, landPage: 0,
+            source: null, gain: null, fromMuted: false, again: false,
+            fromReadings: [], toReadings: [], toGoing: false, toGoingAt: 0, toSeen: null, toCuedAt: 0, timer: null
+        };
+        // (the plain wind, before it's fitted to where the spare deck is)
+        for (let index = 0; index < SIDE_WIND_POINTS; index += 1) {
+            plain[index] = wind.fromRate + ((rate - wind.fromRate) * getWindEase(index / (SIDE_WIND_POINTS - 1)));
+        }
+        wind.plainDistance = getCurveDistance({ start: 0, length: SIDE_WIND_SECONDS, values: plain }, SIDE_WIND_SECONDS);
+        sideWind = wind;
+        cueWindDeck(wind, SIDE_WIND_GUESS);
+        const playPromise = to.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+            playPromise.catch(() => {
+                if (sideWind === wind && !wind.start) fallBackFromWind(wind);
+            });
+        }
+        const here = from.currentTime;
+        decodeSongSlice(getTrackAudio(track), from.duration, Math.max(0, here - 0.5), here + 5, audio.context)
+            .then((slice) => {
+                if (sideWind === wind) wind.slice = slice;
+            })
+            .catch(() => {
+                if (sideWind === wind && !wind.start) fallBackFromWind(wind);
+            });
+        wind.timer = setInterval(() => stepSideWind(wind), 10);
+    }
+
+    // The spare deck sets off from where it'll need to be when the wind lands on it, if the wind
+    // gets going `after` seconds from now (it takes the deck a moment to get going itself)
+    function cueWindDeck(wind, after) {
+        const { from, to, rate, fromRate } = wind;
+        const cue = from.currentTime + (fromRate * (after + SIDE_WIND_LEAD)) + wind.plainDistance
+            - (rate * (after + SIDE_WIND_LEAD + SIDE_WIND_SECONDS - sideSwapDelay));
+        wind.toGoing = false;
+        wind.toSeen = null;
+        wind.toReadings = [];
+        wind.toCuedAt = performance.now();
+        try {
+            to.currentTime = Math.max(0, Math.min(cue, from.duration - 1));
+        } catch (error) {
+            // Not loaded yet (older Safari): it's tried again once it is
+            wind.toCue = cue;
+        }
+    }
+
+    // Every 10ms: the decks' readings, then the wind starts, then it lands
+    function stepSideWind(wind) {
+        if (sideWind !== wind) return;
+        const { from, to } = wind;
+        const nowMs = performance.now();
+        const now = nowMs / 1000;
+        if (from !== player || from.paused || scratch || (!wind.start && getTrackRate(currentTrackData) !== wind.rate)) {
+            cancelSideSwitch();
+            return;
+        }
+        if (document.hidden) {
+            // (in the background the checks come too far apart to line anything up: straight over)
+            rescueSideWind(wind);
+            return;
+        }
+        if (!from.seeking) {
+            if (!wind.start) {
+                wind.fromReadings.push({ at: now, position: from.currentTime });
+                while (wind.fromReadings.length > 20) wind.fromReadings.shift();
+            } else if (Math.abs(from.currentTime - getDeckPlace(wind.fromReadings, wind.fromRate, now)) > 0.4) {
+                // The song was skipped along mid-wind: wind over again from the new spot
+                const track = currentTrackData;
+                cancelSideSwitch({ keepPlace: true });
+                if (track && isPlayerActive()) startSideWind(track);
+                return;
+            }
+        }
+        if (wind.toCue !== undefined && to.readyState >= 1) {
+            try {
+                to.currentTime = wind.toCue;
+                delete wind.toCue;
+            } catch (error) {
+                // still loading
+            }
+        }
+        if (!to.paused && !to.seeking && to.readyState >= 3) {
+            if (!wind.toGoing) {
+                // (going once it's moving: one reading on from the last)
+                const seen = wind.toSeen;
+                wind.toSeen = to.currentTime;
+                if (seen !== null && to.currentTime > seen + 0.001) {
+                    wind.toGoing = true;
+                    wind.toGoingAt = nowMs;
+                    sideSwapDelay = Math.min(0.6, Math.max(0.05, (sideSwapDelay + ((nowMs - wind.toCuedAt) / 1000)) / 2));
+                }
+            } else if (nowMs - wind.toGoingAt > 120) {
+                // (a deck's reading is rough just after it starts)
+                wind.toReadings.push({ at: now, position: to.currentTime });
+                while (wind.toReadings.length > 20) wind.toReadings.shift();
+            }
+        } else if (to.seeking) {
+            wind.toGoing = false;
+            wind.toSeen = null;
+            wind.toReadings = [];
+        }
+        if (!wind.start) {
+            if (nowMs - wind.began > SIDE_WIND_GIVE_UP_MS) {
+                fallBackFromWind(wind);
+                return;
+            }
+            if (!wind.slice || wind.fromReadings.length < 6 || wind.toReadings.length < 6 || scratchAudio.context.state !== "running") return;
+            // The decks close in on each other (they go at different speeds), so there's a moment when
+            // the plain wind, started then, would land right where the spare deck is. Near enough to
+            // that moment it starts at once, making up the difference on the way (a little faster or
+            // slower through the middle of the wind: it just winds a touch later or sooner); otherwise it waits for
+            // the moment, or the spare deck sets off again from nearer if that's a long way off.
+            const { rate, fromRate } = wind;
+            const fromOffset = getDeckPlace(wind.fromReadings, fromRate, 0);
+            const toOffset = getDeckPlace(wind.toReadings, rate, 0);
+            const ideal = (fromOffset + wind.plainDistance - toOffset - (rate * SIDE_WIND_SECONDS)) / (rate - fromRate);
+            const startNow = now + SIDE_WIND_LEAD;
+            // (what starting now would leave to make up, as a swell through the middle of the wind)
+            const swellNow = Math.abs((rate - fromRate) * (startNow - ideal)) / (SIDE_WIND_SECONDS / 2);
+            if (swellNow <= 0.15 * Math.min(rate, fromRate) || ideal < startNow) {
+                beginSideWind(wind, startNow);
+            } else if (ideal - now > 0.9) {
+                cueWindDeck(wind, SIDE_WIND_GUESS);
+            } else if (ideal - now <= SIDE_WIND_LEAD + 0.015) {
+                beginSideWind(wind, ideal);
+            }
+            return;
+        }
+        // (Web Audio's at full sound before the playing deck goes quiet, and the spare deck's on before
+        // Web Audio fades: the overlap covers the 10ms between checks)
+        if (!wind.fromMuted && nowMs >= (wind.startPage * 1000) + 4) {
+            from.muted = true;
+            wind.fromMuted = true;
+        }
+        if (nowMs >= (wind.landPage * 1000) - 14) landSideWind(wind);
+    }
+
+    // Web Audio takes the sound over from the playing deck, on a wind shaped to land just where the
+    // spare deck will be
+    function beginSideWind(wind, wantedPage) {
+        const { context } = scratchAudio;
+        const { slice, rate, fromRate } = wind;
+        const clock = readAudioClock(context);
+        // (scheduled ahead of what the speakers are playing by however long sound takes to come out)
+        const start = Math.max(clock.context + (wantedPage - clock.page), context.currentTime + SIDE_WIND_FADE + 0.03);
+        const startPage = clock.page + (start - clock.context);
+        const landPage = startPage + SIDE_WIND_SECONDS;
+        const startPosition = getDeckPlace(wind.fromReadings, fromRate, startPage);
+        // How much further (or less far) it has to go than the plain wind, made up by a smooth swell
+        // of speed through the middle of it
+        const behind = getDeckPlace(wind.toReadings, rate, landPage) - startPosition - wind.plainDistance;
+        const swell = new Float32Array(SIDE_WIND_POINTS);
+        for (let index = 0; index < SIDE_WIND_POINTS; index += 1) swell[index] = Math.sin(Math.PI * index / (SIDE_WIND_POINTS - 1)) ** 2;
+        const height = behind / getCurveDistance({ start: 0, length: SIDE_WIND_SECONDS, values: swell }, SIDE_WIND_SECONDS);
+        if (Math.abs(height) > 0.2 * Math.min(rate, fromRate)) {
+            // The spare deck's too far off to make up without it being heard: it sets off again
+            cueWindDeck(wind, 0.4);
+            return;
+        }
+        const values = new Float32Array(SIDE_WIND_POINTS);
+        for (let index = 0; index < SIDE_WIND_POINTS; index += 1) values[index] = wind.plain[index] + (height * swell[index]);
+        const preRoll = SIDE_WIND_FADE;
+        const offset = startPosition - (preRoll * fromRate) - slice.startTime;
+        if (offset < 0.02 || startPosition + wind.plainDistance + behind + 1 > slice.startTime + slice.buffer.duration) {
+            fallBackFromWind(wind);
+            return;
+        }
+        const source = context.createBufferSource();
+        source.buffer = slice.buffer;
+        const gain = context.createGain();
+        gain.gain.setValueAtTime(0, start - preRoll);
+        gain.gain.linearRampToValueAtTime(1, start);
+        source.connect(gain);
+        gain.connect(context.destination);
+        source.playbackRate.setValueAtTime(fromRate, start - preRoll);
+        source.playbackRate.setValueCurveAtTime(values, start, SIDE_WIND_SECONDS);
+        source.start(start - preRoll, offset);
+        source.onended = () => {
+            source.disconnect();
+            gain.disconnect();
+        };
+        clearTimeout(scratchSleepTimer);
+        const curve = { start, length: SIDE_WIND_SECONDS, values };
+        Object.assign(wind, {
+            source, gain, start, startPage, startPosition, curve,
+            distance: getCurveDistance(curve, start + SIDE_WIND_SECONDS),
+            land: start + SIDE_WIND_SECONDS, landPage
+        });
+    }
+
+    // It's there: the spare deck takes the sound over and carries on as the player
+    function landSideWind(wind) {
+        const { from, to } = wind;
+        sideWind = null;
+        clearInterval(wind.timer);
+        to.muted = false;
+        wind.gain.gain.setValueAtTime(1, wind.land);
+        wind.gain.gain.linearRampToValueAtTime(0, wind.land + SIDE_WIND_FADE);
+        wind.source.stop(wind.land + SIDE_WIND_FADE + 0.02);
+        player = to;
+        syncDeckLooping();
+        sideDeck = { deck: from, src: from.getAttribute("src") };
+        sideDeckRest = setTimeout(() => {
+            if (from === player) return;
+            from.pause();
+            from.muted = false;
+        }, 150);
+        scheduleScratchAudioSleep();
+        updateMediaSessionPosition();
+        updateNowPlayingProgress();
+        // Flipped again while it wound: on over to that side too
+        if (wind.again && currentTrackData && Math.abs(getTrackRate(currentTrackData) - wind.rate) > 0.001 && isPlayerActive() && !scratch) {
+            startSideWind(currentTrackData);
+        }
+    }
+
+    // No stretch of the song in time (or none at all): the silent hand-over instead
+    function fallBackFromWind(wind) {
+        if (sideWind !== wind) return;
+        stopSideWind();
+        startSideSwap(wind.track);
+    }
+
+    // Lining up can't be done (the page went into the background, say): straight over to the spare
+    // deck if it's going, otherwise the playing deck takes the new speed
+    function rescueSideWind(wind) {
+        if (!wind.start) {
+            fallBackFromWind(wind);
+            return;
+        }
+        if (wind.toGoing) {
+            wind.land = scratchAudio.context.currentTime;
+            landSideWind(wind);
+            return;
+        }
+        const track = wind.track;
+        stopSideWind();
+        applyTrackSpeed(player, track);
+    }
+
+    // Stopped part-way (another song, a pause, a scratch, a skip): the playing deck picks up from
+    // what you were hearing
+    function stopSideWind(options = {}) {
+        const wind = sideWind;
+        if (!wind) return;
+        sideWind = null;
+        if (wind.kind === "deck") {
+            cancelAnimationFrame(wind.frame);
+            clearTimeout(wind.fallback);
+            wind.deck.playbackRate = wind.rate;
+            return;
+        }
+        clearInterval(wind.timer);
+        const { from, to } = wind;
+        to.pause();
+        to.muted = false;
+        if (wind.start) {
+            const { context } = scratchAudio;
+            const clock = readAudioClock(context);
+            const heard = getWindPlace(wind, clock.context + ((performance.now() / 1000) - clock.page)).position;
+            const now = context.currentTime;
+            wind.gain.gain.cancelScheduledValues(now);
+            wind.gain.gain.setValueAtTime(wind.gain.gain.value, now);
+            wind.gain.gain.linearRampToValueAtTime(0, now + 0.02);
+            wind.source.stop(now + 0.04);
+            if (!options.keepPlace) {
+                try {
+                    from.currentTime = heard;
+                } catch (error) {
+                    // (it carries on from where it is)
+                }
+            }
+            if (options.pausing) from.pause();
+            // (a moment's quiet first, so a deck that's about to be stopped isn't heard)
+            if (wind.fromMuted) {
+                setTimeout(() => {
+                    from.muted = false;
+                }, from.paused ? 0 : 60);
+            }
+            scheduleScratchAudioSleep();
+        }
+        // Stopped on the other side: ready to play at its speed
+        if (from.paused && currentTrackData) applyTrackSpeed(from, currentTrackData);
+    }
+
+    // Where speed changes are smooth: the playing deck eases to `rate`
+    function windDeckTo(deck, rate) {
+        if (sideWind && sideWind.kind === "deck") {
+            cancelAnimationFrame(sideWind.frame);
+            clearTimeout(sideWind.fallback);
+            sideWind = null;
+        }
+        deck.defaultPlaybackRate = rate;
+        const fromRate = deck.playbackRate || 1;
+        if (Math.abs(fromRate - rate) < 0.001) {
+            deck.playbackRate = rate;
+            return;
+        }
+        const wind = { kind: "deck", deck, rate, fromRate, startedAt: performance.now(), frame: null, fallback: null };
+        sideWind = wind;
+        const finish = () => {
+            if (sideWind !== wind) return;
+            cancelAnimationFrame(wind.frame);
+            clearTimeout(wind.fallback);
+            sideWind = null;
+            deck.playbackRate = rate;
+            updateMediaSessionPosition();
+        };
+        const step = (time) => {
+            if (sideWind !== wind) return;
+            const progress = Math.min(1, (time - wind.startedAt) / (SIDE_WIND_SECONDS * 1000));
+            if (progress >= 1 || deck.paused || deck !== player) {
+                finish();
+                return;
+            }
+            deck.playbackRate = fromRate + ((rate - fromRate) * getWindEase(progress));
+            wind.frame = requestAnimationFrame(step);
+        };
+        wind.frame = requestAnimationFrame(step);
+        // (frames stop while the page is hidden: it gets there anyway)
+        wind.fallback = setTimeout(finish, (SIDE_WIND_SECONDS * 1000) + 250);
+    }
+
     // The record turns at the speed of the side that's on (slower on the slow side, like a record at
     // 33 instead of 45), winding over to it with a flip
     let recordSpinScale = 1;
@@ -2362,6 +2809,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function getRecordSpinScale() {
         const now = performance.now();
+        const winding = getSideWindRate();
+        if (winding !== null) {
+            recordSpinScale = winding;
+            recordSpinScaleAt = now;
+            return winding;
+        }
         const target = getTrackRate(currentTrackData);
         const seconds = (now - recordSpinScaleAt) / 1000;
         recordSpinScaleAt = now;
@@ -4152,7 +4605,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function scheduleScratchAudioSleep() {
         clearTimeout(scratchSleepTimer);
         scratchSleepTimer = setTimeout(() => {
-            if (scratchAudio && !scratch && scratchAudio.context.state === "running") {
+            if (scratchAudio && !scratch && !sideWind && scratchAudio.context.state === "running") {
                 scratchAudio.context.suspend().catch(() => {});
             }
         }, 4000);
@@ -5747,8 +6200,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // A stretch of the song, decoded: from memory when the whole song is here, otherwise fetched.
     // Resolves to the audio and the song time it starts at.
-    async function decodeSongSlice(file, duration, fromTime, toTime) {
-        const context = getAnalysisContext();
+    async function decodeSongSlice(file, duration, fromTime, toTime, decodeContext = null) {
+        const context = decodeContext || getAnalysisContext();
         let source = songSources.get(file);
         let info = null;
         if (!source) {
