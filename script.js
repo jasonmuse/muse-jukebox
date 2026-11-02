@@ -2524,16 +2524,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         return distance;
     }
 
-    // Web Audio's clock against the page's: the context time being heard at a page time (s)
+    // Web Audio's clock against the page's: the context time being heard at a page time (s). The
+    // output timestamp's only taken where it agrees with the context's own clock. (An iPhone's seems
+    // to start again from nothing once the context has slept and woken, which put the wind seconds
+    // out: the flip never seemed to happen.)
     function readAudioClock(context) {
+        const now = performance.now() / 1000;
         if (typeof context.getOutputTimestamp === "function") {
             const stamp = context.getOutputTimestamp();
             if (stamp && stamp.performanceTime > 0 && stamp.contextTime > 0) {
-                return { context: stamp.contextTime, page: stamp.performanceTime / 1000 };
+                const page = stamp.performanceTime / 1000;
+                const behind = context.currentTime - stamp.contextTime;
+                if (Math.abs(page - now) < 0.5 && behind > -0.01 && behind < 0.5) {
+                    return { context: stamp.contextTime, page };
+                }
             }
         }
         const latency = (context.baseLatency || 0) + (context.outputLatency || 0);
-        return { context: context.currentTime - latency, page: performance.now() / 1000 };
+        return { context: context.currentTime - latency, page: now };
     }
 
     // Where a deck is in the song at page time `at` (s): where its recent readings put it, at its speed
@@ -2699,7 +2707,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             wind.toReadings = [];
         }
         if (!wind.start) {
-            if (nowMs - wind.began > SIDE_WIND_GIVE_UP_MS) {
+            // (or sooner if Web Audio hasn't woken up: an iPhone can keep it waiting)
+            if (nowMs - wind.began > SIDE_WIND_GIVE_UP_MS || (nowMs - wind.began > 700 && scratchAudio.context.state !== "running")) {
                 fallBackFromWind(wind);
                 return;
             }
@@ -2725,6 +2734,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             return;
         }
+        // (however the clocks read, it's over by now: straight over to the spare deck)
+        if (nowMs - wind.begunAt > (SIDE_WIND_SECONDS * 1000) + 600) {
+            rescueSideWind(wind);
+            return;
+        }
         // (Web Audio's at full sound before the playing deck goes quiet, and the spare deck's on before
         // Web Audio fades: the overlap covers the 10ms between checks)
         if (!wind.fromMuted && nowMs >= (wind.startPage * 1000) + 4) {
@@ -2743,6 +2757,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         // (scheduled ahead of what the speakers are playing by however long sound takes to come out)
         const start = Math.max(clock.context + (wantedPage - clock.page), context.currentTime + SIDE_WIND_FADE + 0.03);
         const startPage = clock.page + (start - clock.context);
+        // (a wind that wouldn't start for a while yet: the clocks don't agree, so the silent hand-over)
+        if (startPage - (performance.now() / 1000) > 0.5) {
+            fallBackFromWind(wind);
+            return;
+        }
         const landPage = startPage + SIDE_WIND_SECONDS;
         const startPosition = getDeckPlace(wind.fromReadings, fromRate, startPage);
         // How much further (or less far) it has to go than the plain wind, made up by a smooth swell
@@ -2783,7 +2802,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         Object.assign(wind, {
             source, gain, start, startPage, startPosition, curve,
             distance: getCurveDistance(curve, start + SIDE_WIND_SECONDS),
-            land: start + SIDE_WIND_SECONDS, landPage
+            land: start + SIDE_WIND_SECONDS, landPage, begunAt: performance.now()
         });
     }
 
@@ -2813,11 +2832,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // No stretch of the song in time (or none at all): the silent hand-over instead
+    // No stretch of the song in time (or none at all): the silent hand-over instead. The spare deck
+    // carries on as it is: the flip's tap started it, and an iPhone mightn't let it start again now.
     function fallBackFromWind(wind) {
         if (sideWind !== wind) return;
-        stopSideWind();
+        sideWind = null;
+        clearInterval(wind.timer);
         startSideSwap(wind.track);
+        // (no hand-over after all: it stops)
+        if (!sideSwap || sideSwap.to !== wind.to) {
+            wind.to.pause();
+            wind.to.muted = false;
+        }
     }
 
     // Lining up can't be done (the page went into the background, say): straight over to the spare
