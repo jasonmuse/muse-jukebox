@@ -407,7 +407,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const coverModalOverlay = document.querySelector(".cover-modal-overlay");
     let activeModalCover = "";
     const FALLBACK_COVER = "images/cover.jpg";
-    const COVER_PLACEHOLDER = "images/static.gif";
+    // A cover's stand-in until it comes in: nothing at all, so its skeleton shows (styles.css)
+    const COVER_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
     const COVER_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
     const coverSourceCheckCache = new Map();
     const coverPreloadCache = new Set();
@@ -600,7 +601,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         }, {
             root: trackList,
-            rootMargin: "220px",
+            // (a screen or so ahead, so scrolling along at a normal pace hardly ever meets a skeleton)
+            rootMargin: "600px 0px",
             threshold: 0.01
         })
         : null;
@@ -661,8 +663,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         coverImage.decoding = "async";
         coverImage.loading = isTopPriority ? "eager" : "lazy";
         coverImage.fetchPriority = isTopPriority ? "high" : "low";
+        // It's a skeleton until the cover itself has come in (or the stand-in for a missing one): the
+        // placeholder it starts with loading doesn't count
         coverImage.classList.add("cover-loading");
-        coverImage.addEventListener("load", () => coverImage.classList.remove("cover-loading"), { once: true });
+        const coverArrived = () => {
+            if (coverImage.getAttribute("src") === COVER_PLACEHOLDER) return;
+            coverImage.classList.remove("cover-loading");
+            coverImage.removeEventListener("load", coverArrived);
+        };
+        coverImage.addEventListener("load", coverArrived);
 
         if (isTopPriority || !lazyCoverObserver) {
             setSafeImageSource(coverImage, previewCover);
@@ -1468,11 +1477,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updatePlaybackModeButtons() {
-        [trackList, nowPlaying, speakersPanel].forEach((element) => {
-            if (!element) return;
-            element.classList.toggle("continuous-on", continuousPlayEnabled);
-            element.classList.toggle("repeat-one", repeatOneEnabled);
-            element.classList.toggle("shuffle-on", shuffleEnabled);
+        // (keep playing brings the playing row's shuffle button out, or puts it away: the wave
+        // beside it glides over)
+        const playingRow = trackList && trackList.classList.contains("continuous-on") !== continuousPlayEnabled
+            ? trackList.querySelector(".track.track-modes-visible")
+            : null;
+        reshapeRow(playingRow, () => {
+            [trackList, nowPlaying, speakersPanel].forEach((element) => {
+                if (!element) return;
+                element.classList.toggle("continuous-on", continuousPlayEnabled);
+                element.classList.toggle("repeat-one", repeatOneEnabled);
+                element.classList.toggle("shuffle-on", shuffleEnabled);
+            });
         });
         const loopLabel = repeatOneEnabled ? "Repeat this song" : "Keep playing songs";
         let loopTitle = "Keep playing songs";
@@ -1524,11 +1540,132 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // A row opening up for the playing song (or closing again) changes shape smoothly: it grows or
-    // shrinks instead of jumping (the rows below glide along), and its wave slides from beside the
-    // Play button down onto its own line, or back up. Each row moves by transform from where it
-    // was, so the layout is final straight away and the sliding is left to the compositor.
+    // shrinks instead of jumping (the rows below glide along), and what's in it glides from where it
+    // was to where it is now: the cover grows or shrinks, the title, tags and buttons move over, the
+    // wave slides from beside the Play button down onto its own line, or back up. The layout is
+    // final straight away and everything moves by transform only, which the browser runs on its
+    // own, so it stays smooth however busy the page is getting the song going. (Nothing in a row
+    // animates its size or margins: that laid the page out again every frame, and redrew the wave.)
     const ROW_RESHAPE_MS = 420;
     const ROW_RESHAPE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+    // The parts that move about inside a row, and how: "scale" grows or shrinks to its new size,
+    // "stretch" just gets wider or narrower (Play / Pause), "end" keeps its right edge (the time),
+    // "fade" comes in gently when it's only just shown (the tags beside Now playing); the rest move
+    const ROW_PARTS = [
+        [":scope > img", "scale"],
+        [".side-switch", "move"],
+        [".title", "move"],
+        [".tags", "fade"],
+        [".play-button", "stretch"],
+        [".mode-button", "move"],
+        [".song-wave", "scale"],
+        [".song-time", "end"]
+    ];
+    const rowPartGlides = new WeakMap();
+
+    // Where a part of a row is laid out, from the row's top left: from the layout itself, so a
+    // button's own hover or press, or one still unfolding, doesn't throw it out
+    function getRowPartBox(part, row) {
+        let left = 0;
+        let top = 0;
+        let box = part;
+        while (box && box !== row) {
+            left += box.offsetLeft;
+            top += box.offsetTop;
+            box = box.offsetParent;
+        }
+        if (box !== row || !part.offsetWidth || !part.offsetHeight) return null;
+        return { left, top, width: part.offsetWidth, height: part.offsetHeight };
+    }
+
+    // Where each part is now, a part still gliding from a moment ago where it's got to so far (so a
+    // new glide carries on from there; `laidOut` is where it's going)
+    function measureRowParts(row) {
+        const parts = new Map();
+        ROW_PARTS.forEach(([selector]) => {
+            row.querySelectorAll(selector).forEach((part) => {
+                const laidOut = getRowPartBox(part, row);
+                const box = laidOut && { ...laidOut, laidOut };
+                if (box && rowPartGlides.has(part)) {
+                    const style = window.getComputedStyle(part);
+                    const [dx = 0, dy = 0] = style.translate === "none" ? [] : style.translate.split(" ").map(parseFloat);
+                    const [sx = 1, sy = sx] = style.scale === "none" ? [] : style.scale.split(" ").map(parseFloat);
+                    box.left += dx + ((box.width * (1 - sx)) / 2);
+                    box.top += dy + ((box.height * (1 - sy)) / 2);
+                    box.width *= sx;
+                    box.height *= sy;
+                }
+                parts.set(part, box);
+            });
+        });
+        return parts;
+    }
+
+    function isSameBox(a, b) {
+        return Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5
+            && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5;
+    }
+
+    // Each part starts where it was and glides into its new place. By the separate translate and
+    // scale properties, about its middle: they add to a button's own hover and press transforms,
+    // and a glide that's only translate and scale is one the browser can run by itself.
+    function glideRowParts(row, partsBefore) {
+        if (typeof Element.prototype.animate !== "function") return;
+        const timing = { duration: ROW_RESHAPE_MS, easing: ROW_RESHAPE_EASING };
+        ROW_PARTS.forEach(([selector, how]) => {
+            row.querySelectorAll(selector).forEach((part) => {
+                const from = partsBefore.get(part);
+                const to = getRowPartBox(part, row);
+                if (!to) return;
+                if (!from) {
+                    if (how === "fade" && partsBefore.has(part)) {
+                        part.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 90, easing: "ease-out", fill: "backwards" });
+                    }
+                    return;
+                }
+                const glide = rowPartGlides.get(part);
+                // (still on its way to where it's still going: it carries on as it was)
+                if (glide && isSameBox(from.laidOut, to)) return;
+                // What just moves goes by its top left (a title's text starts at its left, however
+                // wide its box has become); what's resized goes by its middle, which it's scaled about
+                let dx = from.left - to.left;
+                let dy = from.top - to.top;
+                let sx = 1;
+                let sy = 1;
+                if (how === "scale" || how === "stretch") {
+                    dx = (from.left + (from.width / 2)) - (to.left + (to.width / 2));
+                    dy = (from.top + (from.height / 2)) - (to.top + (to.height / 2));
+                    sx = from.width / to.width;
+                    if (how === "scale") sy = from.height / to.height;
+                } else if (how === "end") {
+                    dx = (from.left + from.width) - (to.left + to.width);
+                }
+                glide?.cancel();
+                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(sx - 1) < 0.005 && Math.abs(sy - 1) < 0.005) return;
+                const animation = part.animate([
+                    { translate: `${dx.toFixed(1)}px ${dy.toFixed(1)}px`, scale: `${sx.toFixed(4)} ${sy.toFixed(4)}` },
+                    { translate: "0px 0px", scale: "1 1" }
+                ], timing);
+                rowPartGlides.set(part, animation);
+                const done = () => {
+                    if (rowPartGlides.get(part) === animation) rowPartGlides.delete(part);
+                };
+                animation.finished.then(done, done);
+            });
+        });
+    }
+
+    // Something about a row is about to change its layout (a button comes or goes, Play turns to
+    // Pause): what's in it glides there instead of jumping
+    function reshapeRow(row, change) {
+        if (!row || !row.isConnected || prefersReducedMotion()) {
+            change();
+            return;
+        }
+        const partsBefore = measureRowParts(row);
+        change();
+        glideRowParts(row, partsBefore);
+    }
 
     function measureRowsInSight(openingRow) {
         const listRect = trackList.getBoundingClientRect();
@@ -1537,12 +1674,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const rect = row.getBoundingClientRect();
             if (!rect.height || rect.bottom < listRect.top - 160 || rect.top > listRect.bottom + 160) return;
             const reshaping = row === openingRow || row.classList.contains("track-modes-visible");
-            rows.push({
-                row,
-                rect,
-                wave: reshaping ? row.querySelector(".song-wave")?.getBoundingClientRect() : null,
-                time: reshaping ? row.querySelector(".song-time")?.getBoundingClientRect() : null
-            });
+            rows.push({ row, rect, parts: reshaping ? measureRowParts(row) : null });
         });
         return rows;
     }
@@ -1550,43 +1682,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     function slideRowsIntoPlace(rowsBefore) {
         if (typeof Element.prototype.animate !== "function") return;
         const timing = { duration: ROW_RESHAPE_MS, easing: ROW_RESHAPE_EASING };
-        rowsBefore.forEach((before) => {
+        // (every row's new place read first, then the animations started: reading each straight
+        // after starting the one before's laid the page out again for every row)
+        const placesNow = rowsBefore.map(({ row }) => (row.isConnected ? row.getBoundingClientRect() : null));
+        rowsBefore.forEach((before, index) => {
             const { row } = before;
-            if (!row.isConnected) return;
-            const now = row.getBoundingClientRect();
-            const wave = before.wave ? row.querySelector(".song-wave") : null;
-            const time = before.time ? row.querySelector(".song-time") : null;
-            const waveNow = wave?.getBoundingClientRect();
-            const timeNow = time?.getBoundingClientRect();
+            const now = placesNow[index];
+            if (!now) return;
             const moved = before.rect.top - now.top;
             const grown = now.height - before.rect.height;
 
-            // A row that grew keeps its new part hidden until the rows below have made room
-            if (Math.abs(moved) > 0.5 || grown > 1) {
-                const keyframes = [{ transform: `translateY(${moved.toFixed(1)}px)` }, { transform: "none" }];
-                if (grown > 1) {
-                    keyframes[0].clipPath = `inset(-24px -24px ${grown.toFixed(1)}px -24px)`;
-                    keyframes[1].clipPath = "inset(-24px -24px 0px -24px)";
-                }
-                row.animate(keyframes, timing);
+            if (Math.abs(moved) > 0.5) {
+                row.animate([{ transform: `translateY(${moved.toFixed(1)}px)` }, { transform: "none" }], timing);
             }
-
-            // Its wave (and the times) start where they were in the row, as big, then settle
-            const slide = (part, from, to, keepSize) => {
-                if (!part || !from || !to || !to.width || !to.height) return;
-                const dx = keepSize
-                    ? (from.right - before.rect.left) - (to.right - now.left)
-                    : (from.left - before.rect.left) - (to.left - now.left);
-                const dy = (from.top - before.rect.top) - (to.top - now.top);
-                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(from.width - to.width) < 0.5) return;
-                const scale = keepSize ? "" : ` scale(${(from.width / to.width).toFixed(3)}, ${(from.height / to.height).toFixed(3)})`;
-                part.animate([
-                    { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)${scale}`, transformOrigin: "0 0" },
-                    { transform: "none", transformOrigin: "0 0" }
+            // A row that grew keeps its new part hidden until the rows below have made room (an
+            // animation of its own, so the sliding above can be left to the browser even if this
+            // can't)
+            if (grown > 1) {
+                row.animate([
+                    { clipPath: `inset(-24px -24px ${grown.toFixed(1)}px -24px)` },
+                    { clipPath: "inset(-24px -24px 0px -24px)" }
                 ], timing);
-            };
-            slide(wave, before.wave, waveNow, false);
-            slide(time, before.time, timeNow, true);
+            }
+            if (before.parts) glideRowParts(row, before.parts);
         });
     }
 
@@ -3053,12 +3171,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (npWave) {
                 drawSongWave(npWave);
-                // The new song's shape grows out of the middle
+                // The new song's shape grows out of the middle. (The wave as a whole: the browser can
+                // run that by itself, where its drawings it can't, and it's just as a song starts.)
                 if (track && !prefersReducedMotion() && typeof npWave.animate === "function") {
-                    npWave.querySelectorAll(".song-wave-bars").forEach((bars) => bars.animate(
-                        [{ transform: "scaleY(0.15)", opacity: 0.3 }, { transform: "none", opacity: 1 }],
+                    npWave.animate(
+                        [{ scale: "1 0.15", opacity: 0.3 }, { scale: "1 1", opacity: 1 }],
                         { duration: 480, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
-                    ));
+                    );
                 }
             }
 
@@ -3589,41 +3708,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Add transitioning class to animate letters out (scale down)
         button.classList.add("transitioning");
         
-        // Wait for letters to animate out, then change text
+        // Wait for letters to animate out, then change text. (Pause is wider than Play: the button
+        // takes its new width at once and it, and what's beside it, glide there.)
         setTimeout(() => {
-            // Store current width
-            const currentWidth = button.offsetWidth;
-            
-            // Set explicit width to maintain current size
-            button.style.width = currentWidth + 'px';
-            
-            // Change text content
-            button.innerHTML = splitIntoLetters(newText);
-            
-            // Force reflow
-            void button.offsetWidth;
-            
+            reshapeRow(button.closest(".track"), () => {
+                button.innerHTML = splitIntoLetters(newText);
+            });
             // Remove transitioning class to trigger bounce-in animation
             button.classList.remove("transitioning");
-            
-            // Measure new width with auto, then animate to it
-            const tempWidth = button.style.width;
-            button.style.width = 'auto';
-            const newWidth = button.offsetWidth;
-            button.style.width = currentWidth + 'px';
-            
-            // Force reflow again
-            void button.offsetWidth;
-            
-            // Animate to new width
-            setTimeout(() => {
-                button.style.width = newWidth + 'px';
-                
-                // After transition, reset to auto
-                setTimeout(() => {
-                    button.style.width = '';
-                }, 300);
-            }, 50);
         }, 250);
     }
 
@@ -4020,47 +4112,53 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Titles (and lines of tags) too long for their row scroll to and fro. Every one's measured
+    // first and then only the ones that change are touched: measuring each straight after changing
+    // the one before laid the whole page out again for every song, just as a row opened up. (The
+    // scrolling doesn't change how wide anything is, so it can stay on while they're measured, and
+    // one already scrolling the right distance carries on undisturbed.)
+    function syncMarqueeState(entries, overflowingClass, distanceProperty, durationProperty) {
+        entries.forEach(([element, naturalOverflowDistance]) => {
+            const isOverflowing = element.classList.contains(overflowingClass);
+            if (naturalOverflowDistance <= 2) {
+                if (!isOverflowing) return;
+                element.classList.remove(overflowingClass);
+                element.style.removeProperty(distanceProperty);
+                element.style.removeProperty(durationProperty);
+                return;
+            }
+            const overflowDistance = naturalOverflowDistance + 2;
+            const distance = `${overflowDistance}px`;
+            if (isOverflowing && element.style.getPropertyValue(distanceProperty) === distance) return;
+            const durationSeconds = Math.max(12, Math.min(24, 9 + overflowDistance / 10));
+            element.classList.add(overflowingClass);
+            element.style.setProperty(distanceProperty, distance);
+            element.style.setProperty(durationProperty, `${durationSeconds}s`);
+        });
+    }
+
     function syncTitleMarquees() {
         if (deferWhileFrontHidden()) return;
+        const entries = [];
         trackList.querySelectorAll(".title").forEach((titleElement) => {
             const titleContent = titleElement.querySelector(".title-scroll-content");
-            if (!titleContent) return;
-
-            titleElement.classList.remove("title-overflowing");
-            titleElement.style.removeProperty("--title-scroll-distance");
-            titleElement.style.removeProperty("--title-scroll-duration");
-
-            const naturalOverflowDistance = Math.ceil(titleContent.scrollWidth - titleElement.clientWidth);
-            if (naturalOverflowDistance <= 2) return;
-
-            titleElement.classList.add("title-overflowing");
-            const overflowDistance = naturalOverflowDistance + 2;
-            const durationSeconds = Math.max(12, Math.min(24, 9 + overflowDistance / 10));
-            titleElement.style.setProperty("--title-scroll-distance", `${overflowDistance}px`);
-            titleElement.style.setProperty("--title-scroll-duration", `${durationSeconds}s`);
+            if (titleContent) entries.push([titleElement, Math.ceil(titleContent.scrollWidth - titleElement.clientWidth)]);
         });
+        syncMarqueeState(entries, "title-overflowing", "--title-scroll-distance", "--title-scroll-duration");
     }
 
     function syncTagMarquees() {
         if (deferWhileFrontHidden()) return;
+        const entries = [];
         trackList.querySelectorAll(".tags").forEach((tagsElement) => {
             const tagsContent = tagsElement.querySelector(".tags-scroll-content");
-            if (!tagsContent) return;
-
-            tagsElement.classList.remove("tags-overflowing");
-            tagsElement.style.removeProperty("--tag-scroll-distance");
-            tagsElement.style.removeProperty("--tag-scroll-duration");
-            tagsElement.scrollLeft = 0;
-
-            const naturalOverflowDistance = Math.ceil(tagsContent.scrollWidth - tagsElement.clientWidth);
-            if (naturalOverflowDistance <= 2) return;
-
-            tagsElement.classList.add("tags-overflowing");
-            const overflowDistance = naturalOverflowDistance + 2;
-            const durationSeconds = Math.max(12, Math.min(24, 9 + overflowDistance / 10));
-            tagsElement.style.setProperty("--tag-scroll-distance", `${overflowDistance}px`);
-            tagsElement.style.setProperty("--tag-scroll-duration", `${durationSeconds}s`);
+            if (tagsContent) entries.push([tagsElement, Math.ceil(tagsContent.scrollWidth - tagsElement.clientWidth), tagsElement.scrollLeft]);
         });
+        // (a line of tags dragged along goes back to its start)
+        entries.forEach(([tagsElement, , scrollLeft]) => {
+            if (scrollLeft) tagsElement.scrollLeft = 0;
+        });
+        syncMarqueeState(entries, "tags-overflowing", "--tag-scroll-distance", "--tag-scroll-duration");
     }
 
     function syncMarquees() {

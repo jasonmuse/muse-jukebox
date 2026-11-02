@@ -11,13 +11,6 @@
     initial-value: 0;
 }
 
-/* (a length, so a row's cover, its Side A / B label and what's beside it can glide to a new size) */
-@property --cover-size {
-    syntax: "<length>";
-    inherits: true;
-    initial-value: 88px;
-}
-
 :root {
     --app-height: 100vh;
     /* Follows the backdrop (script.js): purple with the gradient, night sky with the space gif.
@@ -1045,8 +1038,22 @@ box-shadow: 0 0 0 3px #ffffff;
     margin-bottom: 0;
 }
 
+/* A cover that hasn't come in yet (scrolled to quickly, or on a slow connection) is a skeleton of
+   one: a soft block that breathes while it's on its way. (By opacity, so the browser runs it by
+   itself. Only the ones asked for breathe: the rest are still the stand-in, out of sight further
+   down, and a pulse for every one of them kept the page busy for nothing.) */
 .track img.cover-loading {
-    filter: brightness(1.5);
+    background-color: rgba(214, 220, 255, 0.13);
+}
+
+.track img.cover-loading:not([src^="data:"]) {
+    animation: coverSkeletonPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes coverSkeletonPulse {
+    50% {
+        opacity: 0.45;
+    }
 }
 
 .track img.cover-grayscale,
@@ -1055,7 +1062,13 @@ box-shadow: 0 0 0 3px #ffffff;
 }
 
 .track img.cover-loading.cover-grayscale {
-    filter: url("#paused-cover-color-cycle") brightness(1.5);
+    filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .track img.cover-loading {
+        animation: none;
+    }
 }
 
 .track img:hover {
@@ -1374,7 +1387,7 @@ audio {
     letter-spacing: 0.3px;
     border-radius: 10px;
     cursor: pointer;
-    transition: transform 120ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out, width 300ms cubic-bezier(0.4, 0, 0.2, 1), min-width 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 120ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1488,8 +1501,6 @@ audio {
     pointer-events: none;
     transform: translateX(-10px) scale(0.6);
     transition:
-        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
-        margin-left 340ms cubic-bezier(0.4, 0, 0.2, 1),
         opacity 220ms ease-out,
         transform 380ms cubic-bezier(0.34, 1.4, 0.64, 1),
         background-color 180ms ease-out,
@@ -1521,8 +1532,6 @@ audio {
     pointer-events: auto;
     transform: none;
     transition:
-        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
-        margin-left 340ms cubic-bezier(0.4, 0, 0.2, 1),
         opacity 260ms ease-out 60ms,
         transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1),
         background-color 180ms ease-out,
@@ -1608,8 +1617,6 @@ audio {
     pointer-events: auto;
     transform: none;
     transition:
-        width 340ms cubic-bezier(0.4, 0, 0.2, 1),
-        margin 340ms cubic-bezier(0.4, 0, 0.2, 1),
         opacity 260ms ease-out 60ms,
         transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1),
         background-color 180ms ease-out,
@@ -3102,7 +3109,6 @@ html {
         --cover-size: 60px;
         --cover-gap: 12px;
         padding: 9px 8px;
-        transition: --cover-size 380ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .track:not(.track-modes-visible) .tags {
@@ -3158,15 +3164,16 @@ html {
 /* Desktop windows: keep the two panels well proportioned on big monitors, with some room round
    them, so they sit in the window instead of filling it edge to edge */
 @media (orientation: landscape) and (pointer: fine) and (min-width: 1000px) and (min-height: 560px) {
+    /* (it grows faster than the window does: snug in a small window, roomy on a big screen) */
     #jukebox-wrapper {
         align-items: center;
-        padding: clamp(14px, 4vh, 48px) clamp(20px, 4vw, 80px);
+        padding: clamp(16px, 7vh - 14px, 72px) clamp(24px, 8vw - 36px, 120px);
     }
 
     #jukebox-container {
         max-width: min(1600px, 175vh);
         max-height: 1100px;
-        gap: clamp(16px, 2.2vw, 32px);
+        gap: clamp(18px, 3vw - 8px, 44px);
     }
 
     /* A tall panel would leave a gap under the record: cap the turntable and centre the deck */
@@ -7591,6 +7598,12 @@ html.is-standalone .edge-blend {
     color: #ffd166;
 }
 
+.gold-record h1.jukebox-title::before {
+    --title-glow-left: 255, 209, 102;
+    --title-glow-right: 255, 209, 102;
+    --title-glow-middle: 255, 183, 3;
+}
+
 
 /* ───── NO DOUBLE-TAP ZOOM ─────
    Fast taps (play buttons, swatting bugs) shouldn't zoom the page on phones */
@@ -7684,11 +7697,38 @@ h1.jukebox-title {
     color: #ffffff;
 }
 
+/* The sign's light on the cabinet behind it: a soft haze, pink towards the left penguin and blue
+   towards the right (like their waves), lavender behind the wordmark (like JUKEBOX's lines), with
+   no edge to it anywhere. It takes no room and stays in the title's row (and nothing about it
+   moves, so it's only ever painted once). */
+h1.jukebox-title::before {
+    --title-glow-left: 255, 138, 216;
+    --title-glow-right: 142, 233, 255;
+    --title-glow-middle: 179, 155, 255;
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 50%;
+    top: -0.15em;
+    bottom: 0;
+    width: 7.8em;
+    translate: -50% 0;
+    background:
+        radial-gradient(closest-side at 30% 56%, rgba(var(--title-glow-left), 0.16), transparent),
+        radial-gradient(closest-side at 70% 56%, rgba(var(--title-glow-right), 0.13), transparent),
+        radial-gradient(closest-side at 50% 56%, rgba(var(--title-glow-middle), 0.13), transparent);
+    pointer-events: none;
+}
+
+/* (a size up from the penguins, filling the middle of the row: it grows up into the room under the
+   cabinet's top, so the row's no taller) */
 .title-wordmark {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-width: 0;
+    margin-top: -0.24em;
+    font-size: 1.2em;
 }
 
 /* "Muse" in a neon gradient that drifts from one end to the other. The drift is a second coat of
@@ -7765,14 +7805,23 @@ h1.jukebox-title {
     transform: scaleX(-1);
 }
 
+/* (a little way out from the wordmark, into the corners, the waves beside them moving out along) */
 .title-penguin {
     position: relative;
     flex: 0 0 auto;
-    width: 1.02em;
-    height: 1.02em;
+    width: 1.14em;
+    height: 1.14em;
     margin-bottom: 0.06em;
     transform-origin: 50% 100%;
     will-change: transform;
+}
+
+.title-penguin--left {
+    margin-right: 0.08em;
+}
+
+.title-penguin--right {
+    margin-left: 0.08em;
 }
 
 /* Little shadow under their feet */
@@ -8719,10 +8768,16 @@ html.viewport-shifted body {
     }
 }
 
-/* (a phone's title fills the cabinet's width: no corners to fill) */
+/* (a phone's title fills the cabinet's width: no corners to fill. Its wordmark is only a little
+   bigger than the penguins, so the waves keep their room, and the cabinet's top is nearer) */
 @media (max-width: 600px) {
     .title-waves {
         --wave-scale: 1;
+    }
+
+    .title-wordmark {
+        margin-top: -0.13em;
+        font-size: 1.1em;
     }
 }
 
@@ -8771,6 +8826,11 @@ html.viewport-shifted body {
 @media (orientation: landscape) and (pointer: coarse) and (max-height: 480px) {
     h1.jukebox-title {
         font-size: clamp(1.25rem, 8vh, 1.9rem);
+    }
+
+    .title-wordmark {
+        margin-top: -0.13em;
+        font-size: 1.1em;
     }
 }
 
