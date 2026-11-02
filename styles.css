@@ -8695,6 +8695,14 @@ html.viewport-shifted body {
         --wave-scale: 1.65;
     }
 
+    /* ...and the penguins are bigger too, filling the room between their waves and the title. They
+       grow up and out, so the row's no taller (any bigger and it would be), and at this size each
+       pixel of their 16px art is a whole number of screen pixels on a 3x screen, so they stay crisp. */
+    .title-penguin {
+        width: 1.3em;
+        height: 1.3em;
+    }
+
     .flip-sign {
         margin: 0 0 6px;
         padding: 4px 22px;
