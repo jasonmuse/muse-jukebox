@@ -7478,6 +7478,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         updateSideRailLayout();
         updateSideRailState();
+        // (the strip can come or change without the window changing size, a phone folding say, or
+        // settle a moment after the page opens: looked at again whenever it does, and once it's in)
+        if (typeof ResizeObserver === "function" && safeAreaProbe) {
+            new ResizeObserver(() => updateSideRailLayout()).observe(safeAreaProbe, { box: "border-box" });
+        }
+        window.addEventListener("load", () => setTimeout(updateSideRailLayout, 1200));
     }
 
     // ───── Back of the jukebox: flip animation (the Jukebot game lives in jukebot.js) ─────
