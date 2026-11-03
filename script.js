@@ -3145,6 +3145,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateWhereBackgroundFromPlayback();
     }
 
+    // A song that's been listened to for a while (20 seconds, or half of a short one) is kept whole
+    // by the service worker, so it plays without signal later. (Not where data's being saved.)
+    const SONG_KEEP_SECONDS = 20;
+    const songsAskedToKeep = new Set();
+
+    function keepSongForOffline() {
+        if (!currentTrackData || !("serviceWorker" in navigator) || (navigator.connection && navigator.connection.saveData)) return;
+        const file = getTrackAudio(currentTrackData);
+        if (songsAskedToKeep.has(file) || !(player.currentTime >= Math.min(SONG_KEEP_SECONDS, (player.duration || Infinity) / 2))) return;
+        songsAskedToKeep.add(file);
+        navigator.serviceWorker.ready
+            .then((registration) => {
+                if (registration.active) registration.active.postMessage({ type: "keep-song", url: new URL(file, location.href).href });
+            })
+            .catch(() => {});
+    }
+
     // Player events: keep the song card, deck and lock screen in sync
     function setUpPlayerEvents() {
         // Only the deck that's playing drives the UI (the other one is loading or fading out)
@@ -3164,6 +3181,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             rememberSongDuration(currentTrackData, player.duration);
         });
         onPlayingDeck("timeupdate", () => {
+            keepSongForOffline();
             updateNowPlayingProgress();
             checkAutoMix();
         });
@@ -8495,6 +8513,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if (window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches) {
         document.documentElement.classList.add("is-standalone");
+    }
+    // Offline: sw.js keeps the jukebox and the songs that have been listened to, so it opens without
+    // signal (from the home screen, say) and plays what it's kept
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+        window.addEventListener("load", () => {
+            navigator.serviceWorker.register("sw.js").catch(() => {});
+        });
     }
     setWhereBackgroundOpacity(0);
     updateWhereBackgroundFromPlayback();
