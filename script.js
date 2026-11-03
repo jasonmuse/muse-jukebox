@@ -6725,7 +6725,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // on the spare deck so there's no gap. Each song's ending is measured so that a long stretch of
     // silence at the end gets skipped, leaving just a short pause.
     const MIX_ANALYSIS_SECONDS = 20;
-    const MIX_HEAD_SECONDS = 4;
+    const MIX_HEAD_SECONDS = 8; // (how the song comes in, as well as any silence before it)
     const MIX_SILENCE_DB = -60; // quieter than this is silence; a fading reverb tail still counts as the song
     const MIX_LONG_SILENCE_SECONDS = 3; // a silent ending this long is empty space worth skipping
     const MIX_PAUSE_SECONDS = 1; // what's left of it, like the gap between tracks on an album
@@ -6766,9 +6766,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         return { levels, windowSeconds: windowLength / buffer.sampleRate, offset: firstSample / buffer.sampleRate };
     }
 
-    // Where only silence is left (song time), from a slice of the song's ending
+    // Where only silence is left (song time), from a slice of the song's ending; and how quiet it
+    // gets there, and at the start if there's a slice of that (for the needle's crackle)
     function measureMixInfo(tail, duration, head) {
-        const { levels, windowSeconds } = measureWindowLevels(tail);
+        const ending = measureWindowLevels(tail);
+        const { levels, windowSeconds } = ending;
         const sliceStart = duration - (levels.length * windowSeconds);
         let last = levels.length - 1;
         while (last >= 0 && levels[last] <= MIX_SILENCE_DB) last -= 1;
@@ -6779,14 +6781,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // A silent intro gets skipped when the song is mixed in (if there's enough of one to notice)
         let audibleStart = 0;
-        if (head) {
-            const intro = measureWindowLevels(head);
+        const intro = head ? measureWindowLevels(head) : null;
+        if (intro) {
             let first = 0;
             while (first < intro.levels.length && intro.levels[first] <= MIX_SILENCE_DB) first += 1;
             const start = intro.offset + (first * intro.windowSeconds) - 0.05;
             if (first < intro.levels.length && start >= 0.25) audibleStart = Math.min(start, silentFrom);
         }
-        return { silentFrom, audibleStart };
+        return { silentFrom, audibleStart, ...measureCrackleRoom(ending, sliceStart, intro) };
     }
 
     async function analyzeMixFromBytes(bytes, frames) {
@@ -7004,6 +7006,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (entry && entry.ready && !entry.starting && entry.track.file === track.file) {
             upNext = null;
             clearTimeout(autoMixTimer);
+            if (entry.crackle) fadeCrackle(entry.crackle, 0.25);
             return entry;
         }
         discardUpNext();
@@ -7052,22 +7055,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         if (plan && upNext && upNext.ready && !upNext.starting && !mixOut) {
-            const wait = (plan.mixAt - time) / (player.playbackRate || 1);
-            // (a gap with the needle in it: Web Audio's woken in good time, and the crackle comes up
-            // under the end of this one)
-            if (upNext.gap && wait <= CRACKLE_WAKE_SECONDS) wakeCrackle(upNext);
-            if (upNext.gap && !upNext.crackle && wait <= CRACKLE_IN_SECONDS) {
-                upNext.crackle = startCrackle(upNext.crackleSound);
+            const rate = player.playbackRate || 1;
+            const wait = (plan.mixAt - time) / rate;
+            // (a gap with the needle in it: the crackle comes up as this one gets quiet at its end,
+            // or under its last moment, with Web Audio woken in good time)
+            const crackleWait = (getCrackleFrom(info, plan) - time) / rate;
+            if (upNext.gap && crackleWait <= CRACKLE_WAKE_SECONDS) wakeCrackle(upNext);
+            if (upNext.gap && !upNext.crackle && crackleWait <= 0) {
+                startCrackle(upNext);
                 if (!upNext.crackle) upNext.gap = 0;
             }
             if (wait <= 0.02) {
-                if (upNext.crackle && upNext.crackle.heard && !document.hidden) {
+                if (upNext.crackle && upNext.crackle.heard && !upNext.crackle.fading && !document.hidden) {
                     startGapBefore(upNext, plan);
                 } else {
                     startAutoMix(upNext, plan);
                 }
             } else if (wait < 1.5) {
-                scheduleAutoMixCheck(upNext.gap && !upNext.crackle ? Math.max(0, wait - CRACKLE_IN_SECONDS) : wait);
+                scheduleAutoMixCheck(upNext.gap && !upNext.crackle ? Math.max(0, Math.min(wait, crackleWait)) : wait);
             }
             return;
         }
@@ -7144,12 +7149,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The queued song is playing: it becomes the current song while the last one plays out its
     // final moment
     function handOverToDeck(entry, outgoingPlan) {
-        if (entry.crackle) fadeCrackle(entry.crackle, CRACKLE_OUT_SECONDS);
         const outgoing = player;
         const previousElement = getCurrentTrackElement();
         player = entry.deck;
         currentTrackData = entry.track;
         syncDeckLooping();
+        if (entry.crackle) openCrackle(entry.crackle);
 
         mixOut = {
             deck: outgoing,
@@ -7215,22 +7220,87 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // ───── Between songs: the needle in the gap ─────
-    // Now and then, with keep-playing on, there's a moment between two songs with just the record's
-    // crackle in it, as between the tracks on an LP: it comes up under the end of one song, carries
-    // on by itself for a second or two, and fades away under the start of the next. It's made up
-    // afresh each time (no sound file): the groove's hiss, rising and falling a little as the record
-    // goes round, with ticks scattered through it (most faint, a few loud) and now and then a deeper
-    // pop. Only while the jukebox is in view, and only once Web Audio's going (the scratch's): with
-    // the screen off the next song starts the moment it can, as ever.
+    // Now and then, with keep-playing on, the record's crackle is heard between two songs, as
+    // between the tracks on an LP: it comes up as one song gets quiet at its end (as if it was there
+    // all along, under the music), carries on by itself for a second or two, and stays under the
+    // start of the next until that's got going (so not at all, for a song that comes in with a bang).
+    // How much of it comes through, moment by moment, goes by how quiet the song is just then,
+    // against its loudest and in itself; it's away as soon as the song's loud, and comes back gently.
+    // It's made up afresh each time (no sound file): the groove's hiss, rising and falling a little
+    // as the record goes round, with ticks scattered through it (most faint, a few loud) and now and
+    // then a deeper pop. Only while the jukebox is in view, and only once Web Audio's going (the
+    // scratch's): with the screen off the next song starts the moment it can, as ever.
     const CRACKLE_CHANCE = 0.4; // of the songs that follow on
     const CRACKLE_GAP_SECONDS = [1.2, 2.2]; // the crackle by itself, between
-    const CRACKLE_IN_SECONDS = 0.9; // up under the end of the song before
-    const CRACKLE_OUT_SECONDS = 1.6; // away under the start of the next
+    const CRACKLE_ENDING_SECONDS = 15; // under a song's quiet ending for at most this long...
+    const CRACKLE_EASE_SECONDS = 3; // ...coming up over a few seconds at first
+    const CRACKLE_IN_SECONDS = 0.9; // and all of it by the end, however loud that is
+    const CRACKLE_OPENING_SECONDS = [5, 7]; // under a quiet start for so long, then gone by this
+    const CRACKLE_OUT_SECONDS = 1.6; // away under the start of a song that couldn't be measured
+    const CRACKLE_HEARD_BELOW = [5, 20]; // dB under the song's loudest: coming through, all heard
+    const CRACKLE_HEARD_UNDER = [-20, -35]; // dBFS: the same, for a song that's quiet anyway
+    const CRACKLE_HEARD_LEAST = 0.1; // (any less than this, and the song's loud there)
+    const CRACKLE_RISE = 0.35; // s: how gently it comes up as the song gets quieter...
+    const CRACKLE_FALL = 0.06; // ...and how quickly it goes as the song gets louder
+    const CRACKLE_LOOP_SECONDS = 9; // made this long and played round and round (5 turns of the record)
     const CRACKLE_WAKE_SECONDS = 3; // Web Audio's woken this long before (it can take a moment)
     const CRACKLE_HISS = 0.012;
     const CRACKLE_TICKS_PER_SECOND = 28;
     const CRACKLE_POPS_PER_SECOND = 1.1;
     let crackleOn = null;
+    let crackleFollower = null;
+
+    // How much of the crackle would come through at each moment of a slice of a song (0 to 1, from
+    // its 50ms levels): none where it's loud, more the quieter it is than its loudest (or quiet
+    // anyway), all of it where it's nearly silent. A moment is as loud as the half second around it.
+    // The ending is quiet from the last moment it's loud.
+    function measureCrackleRoom(tail, tailFrom, intro) {
+        const around = (levels) => levels.map((level, index) => {
+            let power = 0;
+            let count = 0;
+            for (let other = Math.max(0, index - 5); other <= Math.min(levels.length - 1, index + 5); other += 1) {
+                power += Math.pow(10, levels[other] / 10);
+                count += 1;
+            }
+            return 10 * Math.log10((power / count) + 1e-12);
+        });
+        const loudAt = (levels) => Float32Array.from(levels).sort()[Math.floor(levels.length * 0.9)];
+        const ending = around(tail.levels);
+        const opening = intro && intro.levels.length ? around(intro.levels) : null;
+        const loudest = Math.max(loudAt(ending), opening ? loudAt(opening) : -Infinity);
+        const roomAt = (level) => {
+            const room = Math.max(
+                (loudest - level - CRACKLE_HEARD_BELOW[0]) / (CRACKLE_HEARD_BELOW[1] - CRACKLE_HEARD_BELOW[0]),
+                (CRACKLE_HEARD_UNDER[0] - level) / (CRACKLE_HEARD_UNDER[0] - CRACKLE_HEARD_UNDER[1])
+            );
+            return room < CRACKLE_HEARD_LEAST ? 0 : Math.min(1, room);
+        };
+        const room = ending.map(roomAt);
+        let loud = room.length - 1;
+        while (loud >= 0 && room[loud] > 0) loud -= 1;
+        return {
+            ending: { from: tailFrom, step: tail.windowSeconds, room, quietFrom: tailFrom + ((loud + 1) * tail.windowSeconds) },
+            opening: opening ? { from: intro.offset, step: intro.windowSeconds, room: opening.map(roomAt) } : null
+        };
+    }
+
+    function readCrackleRoom(part, time) {
+        const index = Math.floor((time - part.from) / part.step);
+        return part.room[Math.max(0, Math.min(part.room.length - 1, index))];
+    }
+
+    // When it comes in under a song's end (song time): once it's quiet there, but not too long
+    // before the end, and just before it at the latest
+    function getCrackleFrom(info, plan) {
+        const quietFrom = info.ending ? info.ending.quietFrom : plan.mixAt;
+        return Math.max(plan.mixAt - CRACKLE_ENDING_SECONDS, Math.min(quietFrom, plan.mixAt - CRACKLE_IN_SECONDS));
+    }
+
+    function getEndingCrackle(info, plan, time) {
+        const quiet = info.ending ? Math.min(readCrackleRoom(info.ending, time), (time - getCrackleFrom(info, plan)) / CRACKLE_EASE_SECONDS) : 0;
+        const last = 1 - ((plan.mixAt - time) / CRACKLE_IN_SECONDS);
+        return Math.max(0, Math.min(1, Math.max(quiet, last)));
+    }
 
     // Seconds of crackle, in stereo (a tick's louder on one side than the other)
     function makeCrackle(context, seconds) {
@@ -7283,43 +7353,108 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!audio) return;
         if (audio.context.state !== "running") audio.context.resume().catch(() => {});
         scheduleScratchAudioSleep();
-        entry.crackleSound = makeCrackle(audio.context, CRACKLE_IN_SECONDS + CRACKLE_GAP_SECONDS[1] + CRACKLE_OUT_SECONDS + 0.6);
+        entry.crackleSound = makeCrackle(audio.context, CRACKLE_LOOP_SECONDS);
     }
 
-    // Up under the end of the song that's playing; `heard` once Web Audio's actually going
-    function startCrackle(sound) {
-        if (document.hidden || !sound) return null;
+    // Up under the song that's playing, as it gets quiet; `heard` once Web Audio's actually going
+    function startCrackle(entry) {
+        if (document.hidden || !entry.crackleSound) return;
         const audio = getScratchAudio();
-        if (!audio) return null;
+        if (!audio) return;
         const { context } = audio;
         const source = context.createBufferSource();
-        source.buffer = sound;
-        const gain = context.createGain();
-        source.connect(gain);
-        gain.connect(context.destination);
-        const crackle = { context, source, gain, from: 0, heard: false, fading: false };
+        source.buffer = entry.crackleSound;
+        source.loop = true;
+        const level = context.createGain(); // (as much as the song lets through)
+        const fader = context.createGain(); // (and away at the end)
+        level.gain.value = 0;
+        source.connect(level);
+        level.connect(fader);
+        fader.connect(context.destination);
+        const crackle = { context, source, level, fader, entry, phase: "ending", target: 0, opening: null, openedAt: 0, lowest: 1, heard: false, fading: false };
         const begin = () => {
             if (crackle.fading) return;
-            crackle.from = context.currentTime;
-            gain.gain.setValueAtTime(0, crackle.from);
-            gain.gain.linearRampToValueAtTime(1, crackle.from + CRACKLE_IN_SECONDS);
-            source.start(crackle.from);
+            source.start(context.currentTime, Math.random() * CRACKLE_LOOP_SECONDS);
             crackle.heard = true;
+            followCrackle();
         };
         source.onended = () => {
             if (crackleOn === crackle) crackleOn = null;
             scheduleScratchAudioSleep();
         };
+        entry.crackle = crackle;
         crackleOn = crackle;
+        if (!crackleFollower) crackleFollower = setInterval(followCrackle, 100);
         if (context.state === "running") {
             begin();
         } else {
             context.resume().then(begin, () => {});
         }
-        return crackle;
     }
 
-    // Away over `seconds` (from wherever it's got to coming up)
+    // Ten times a second: as much of it as the song lets through just now
+    function followCrackle() {
+        const crackle = crackleOn;
+        if (!crackle) {
+            clearInterval(crackleFollower);
+            crackleFollower = null;
+            return;
+        }
+        if (!crackle.heard || crackle.fading) return;
+        const target = getCrackleLevel(crackle);
+        if (target === null) {
+            // Its moment's over (paused, skipped, the next song's got going...). Under a song's end it
+            // can come again, once the song's playing on into it.
+            if (crackle.phase === "ending" && crackle.entry.crackle === crackle) crackle.entry.crackle = null;
+            fadeCrackle(crackle, 0.25);
+            return;
+        }
+        if (Math.abs(target - crackle.target) < 0.01) return;
+        crackle.level.gain.setTargetAtTime(target, crackle.context.currentTime, target < crackle.target ? CRACKLE_FALL : CRACKLE_RISE);
+        crackle.target = target;
+    }
+
+    // How much of it there is now: under the end of a song, by itself between, or under the start
+    // of the next until that's got going (or it's been long enough); null once that's over
+    function getCrackleLevel(crackle) {
+        if (document.hidden || scratch || sideSwap || sideWind) return null;
+        const { entry } = crackle;
+        if (crackle.phase === "gap") return 1;
+        if (crackle.phase === "ending") {
+            if (upNext !== entry || entry.starting || player.paused || player.seeking) return null;
+            const info = mixInfoCache.get(getTrackAudio(currentTrackData));
+            if (!info || !Number.isFinite(player.duration)) return null;
+            const plan = computeMixPlan(info, player.duration);
+            const time = player.currentTime;
+            // (taken back from the end, it's gone)
+            return time < getCrackleFrom(info, plan) - 0.5 ? null : getEndingCrackle(info, plan, time);
+        }
+        const { deck } = entry;
+        if (deck !== player || deck.paused) return null;
+        const into = deck.currentTime - crackle.openedAt;
+        const level = crackle.opening
+            ? Math.min(readCrackleRoom(crackle.opening, deck.currentTime), (CRACKLE_OPENING_SECONDS[1] - into) / (CRACKLE_OPENING_SECONDS[1] - CRACKLE_OPENING_SECONDS[0]))
+            : 1 - (into / CRACKLE_OUT_SECONDS);
+        // (once it's gone down for the song it stays down)
+        crackle.lowest = Math.max(0, Math.min(crackle.lowest, level));
+        return crackle.lowest > 0 ? crackle.lowest : null;
+    }
+
+    // The next song's in: the crackle stays under its start for as long as that's quiet
+    function openCrackle(crackle) {
+        if (crackle.fading) return;
+        if (!crackle.heard) {
+            fadeCrackle(crackle, 0.1);
+            return;
+        }
+        const info = mixInfoCache.get(getTrackAudio(crackle.entry.track));
+        crackle.phase = "opening";
+        crackle.opening = (info && info.opening) || null;
+        crackle.openedAt = crackle.entry.deck.currentTime;
+        followCrackle();
+    }
+
+    // Away over `seconds`, from however much of it is coming through
     function fadeCrackle(crackle, seconds) {
         if (crackle.fading) return;
         crackle.fading = true;
@@ -7328,10 +7463,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         const now = crackle.context.currentTime;
-        const level = Math.min(1, Math.max(0, (now - crackle.from) / CRACKLE_IN_SECONDS));
-        const { gain } = crackle.gain;
-        gain.cancelScheduledValues(now);
-        gain.setValueAtTime(level, now);
+        const { gain } = crackle.fader;
+        gain.setValueAtTime(1, now);
         gain.linearRampToValueAtTime(0, now + seconds);
         try {
             crackle.source.stop(now + seconds + 0.05);
@@ -7345,6 +7478,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     function startGapBefore(entry, plan) {
         entry.starting = true;
         entry.gapPlan = plan;
+        entry.crackle.phase = "gap";
+        followCrackle();
         clearTimeout(autoMixTimer);
         entry.gapTimer = setTimeout(() => endGapBefore(entry), entry.gap * 1000);
     }
@@ -7356,9 +7491,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         startAutoMix(entry, entry.gapPlan);
     }
 
-    // (put away mid-gap, the next song starts now: with the screen off, it might not get to later)
+    // (put away mid-gap, the next song starts now: with the screen off, it might not get to later;
+    // and the crackle goes)
     document.addEventListener("visibilitychange", () => {
-        if (document.hidden && upNext && upNext.gapTimer) endGapBefore(upNext);
+        if (!document.hidden) return;
+        if (upNext && upNext.gapTimer) endGapBefore(upNext);
+        followCrackle();
     });
 
     // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
