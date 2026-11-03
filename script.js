@@ -4883,7 +4883,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function scheduleScratchAudioSleep() {
         clearTimeout(scratchSleepTimer);
         scratchSleepTimer = setTimeout(() => {
-            if (!scratchAudio || scratch || sideWind || scratchAudio.context.state !== "running") return;
+            if (!scratchAudio || scratch || sideWind || crackleOn || scratchAudio.context.state !== "running") return;
             if (speedChangesStutter && !document.hidden && isPlayerActive() && getOtherSide(currentTrackData)) {
                 readAudioClock(scratchAudio.context); // (how long sound takes to come out, for the next flip)
                 keepSongForFlips(currentTrackData);
@@ -6897,7 +6897,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const track = getTrackDataForElement(pickNextTrackElement(getCurrentTrackElement()));
         if (!deck || !track) return;
 
-        const entry = { track, deck, shuffled: shuffleEnabled, startAt: 0, ready: false, starting: false, controller: null };
+        const entry = {
+            track, deck, shuffled: shuffleEnabled, startAt: 0, ready: false, starting: false, controller: null,
+            gap: Math.random() < CRACKLE_CHANCE ? CRACKLE_GAP_SECONDS[0] + (Math.random() * (CRACKLE_GAP_SECONDS[1] - CRACKLE_GAP_SECONDS[0])) : 0,
+            crackle: null,
+            gapTimer: null
+        };
         upNext = entry;
         loadUpNext(entry).catch(() => {
             if (upNext !== entry) return;
@@ -6953,6 +6958,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!entry) return;
         upNext = null;
         clearTimeout(autoMixTimer);
+        clearTimeout(entry.gapTimer);
+        if (entry.crackle) fadeCrackle(entry.crackle, 0.25);
         if (entry.controller) entry.controller.abort();
         if (entry.deck !== player) {
             entry.deck.pause();
@@ -7015,10 +7022,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (plan && upNext && upNext.ready && !upNext.starting && !mixOut) {
             const wait = (plan.mixAt - time) / (player.playbackRate || 1);
+            // (a gap with the needle in it: Web Audio's woken in good time, and the crackle comes up
+            // under the end of this one)
+            if (upNext.gap && wait <= CRACKLE_WAKE_SECONDS) wakeCrackle(upNext);
+            if (upNext.gap && !upNext.crackle && wait <= CRACKLE_IN_SECONDS) {
+                upNext.crackle = startCrackle(upNext.crackleSound);
+                if (!upNext.crackle) upNext.gap = 0;
+            }
             if (wait <= 0.02) {
-                startAutoMix(upNext, plan);
+                if (upNext.crackle && upNext.crackle.heard && !document.hidden) {
+                    startGapBefore(upNext, plan);
+                } else {
+                    startAutoMix(upNext, plan);
+                }
             } else if (wait < 1.5) {
-                scheduleAutoMixCheck(wait);
+                scheduleAutoMixCheck(upNext.gap && !upNext.crackle ? Math.max(0, wait - CRACKLE_IN_SECONDS) : wait);
             }
             return;
         }
@@ -7095,6 +7113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The queued song is playing: it becomes the current song while the last one plays out its
     // final moment
     function handOverToDeck(entry, outgoingPlan) {
+        if (entry.crackle) fadeCrackle(entry.crackle, CRACKLE_OUT_SECONDS);
         const outgoing = player;
         const previousElement = getCurrentTrackElement();
         player = entry.deck;
@@ -7163,6 +7182,153 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         retireMixOut();
     }
+
+    // ───── Between songs: the needle in the gap ─────
+    // Now and then, with keep-playing on, there's a moment between two songs with just the record's
+    // crackle in it, as between the tracks on an LP: it comes up under the end of one song, carries
+    // on by itself for a second or two, and fades away under the start of the next. It's made up
+    // afresh each time (no sound file): the groove's hiss, rising and falling a little as the record
+    // goes round, with ticks scattered through it (most faint, a few loud) and now and then a deeper
+    // pop. Only while the jukebox is in view, and only once Web Audio's going (the scratch's): with
+    // the screen off the next song starts the moment it can, as ever.
+    const CRACKLE_CHANCE = 0.4; // of the songs that follow on
+    const CRACKLE_GAP_SECONDS = [1.2, 2.2]; // the crackle by itself, between
+    const CRACKLE_IN_SECONDS = 0.9; // up under the end of the song before
+    const CRACKLE_OUT_SECONDS = 1.6; // away under the start of the next
+    const CRACKLE_WAKE_SECONDS = 3; // Web Audio's woken this long before (it can take a moment)
+    const CRACKLE_HISS = 0.012;
+    const CRACKLE_TICKS_PER_SECOND = 28;
+    const CRACKLE_POPS_PER_SECOND = 1.1;
+    let crackleOn = null;
+
+    // Seconds of crackle, in stereo (a tick's louder on one side than the other)
+    function makeCrackle(context, seconds) {
+        const rate = context.sampleRate;
+        const length = Math.ceil(rate * seconds);
+        const buffer = context.createBuffer(2, length, rate);
+        const left = buffer.getChannelData(0);
+        const right = buffer.getChannelData(1);
+        // The hiss: noise with the rumble taken out, swelling with each turn (33 1/3 a minute)
+        const turn = (2 * Math.PI * (100 / 3 / 60)) / rate;
+        const sway = Math.random() * 2 * Math.PI;
+        let low = 0;
+        let soft = 0;
+        for (let index = 0; index < length; index += 1) {
+            const white = (Math.random() * 2) - 1;
+            soft += (white - soft) * 0.45; // (a little less fizz)
+            low += (soft - low) * 0.04;
+            const hiss = (soft - low) * CRACKLE_HISS * (1 + (0.35 * Math.sin((turn * index) + sway)));
+            left[index] = hiss;
+            right[index] = hiss;
+        }
+        // A tick or a pop: a bright little ring or a dull one, dying away fast
+        const strike = (count, quietest, loudest, decay, pitch) => {
+            for (let strikeIndex = 0; strikeIndex < count; strikeIndex += 1) {
+                const at = Math.floor(Math.random() * length);
+                const size = quietest * Math.pow(loudest / quietest, Math.pow(Math.random(), 1.6)) * (Math.random() < 0.5 ? -1 : 1);
+                const fade = rate * (decay[0] + (Math.random() * (decay[1] - decay[0])));
+                const step = (2 * Math.PI * (pitch[0] + (Math.random() * (pitch[1] - pitch[0])))) / rate;
+                const side = Math.random();
+                const toLeft = 0.55 + (0.45 * side);
+                const toRight = 1 - (0.45 * side);
+                const end = Math.min(length, at + Math.ceil(fade * 6));
+                for (let index = at; index < end; index += 1) {
+                    const sample = size * Math.exp(-(index - at) / fade) * Math.cos((index - at) * step);
+                    left[index] += sample * toLeft;
+                    right[index] += sample * toRight;
+                }
+            }
+        };
+        strike(Math.round(seconds * CRACKLE_TICKS_PER_SECOND), 0.004, 0.12, [0.00006, 0.00025], [2500, 7000]);
+        strike(Math.round(seconds * CRACKLE_POPS_PER_SECOND), 0.03, 0.2, [0.0006, 0.002], [300, 1100]);
+        return buffer;
+    }
+
+    // A few seconds before: Web Audio woken, and the crackle made ready
+    function wakeCrackle(entry) {
+        if (entry.woken || document.hidden) return;
+        entry.woken = true;
+        const audio = getScratchAudio();
+        if (!audio) return;
+        if (audio.context.state !== "running") audio.context.resume().catch(() => {});
+        scheduleScratchAudioSleep();
+        entry.crackleSound = makeCrackle(audio.context, CRACKLE_IN_SECONDS + CRACKLE_GAP_SECONDS[1] + CRACKLE_OUT_SECONDS + 0.6);
+    }
+
+    // Up under the end of the song that's playing; `heard` once Web Audio's actually going
+    function startCrackle(sound) {
+        if (document.hidden || !sound) return null;
+        const audio = getScratchAudio();
+        if (!audio) return null;
+        const { context } = audio;
+        const source = context.createBufferSource();
+        source.buffer = sound;
+        const gain = context.createGain();
+        source.connect(gain);
+        gain.connect(context.destination);
+        const crackle = { context, source, gain, from: 0, heard: false, fading: false };
+        const begin = () => {
+            if (crackle.fading) return;
+            crackle.from = context.currentTime;
+            gain.gain.setValueAtTime(0, crackle.from);
+            gain.gain.linearRampToValueAtTime(1, crackle.from + CRACKLE_IN_SECONDS);
+            source.start(crackle.from);
+            crackle.heard = true;
+        };
+        source.onended = () => {
+            if (crackleOn === crackle) crackleOn = null;
+            scheduleScratchAudioSleep();
+        };
+        crackleOn = crackle;
+        if (context.state === "running") {
+            begin();
+        } else {
+            context.resume().then(begin, () => {});
+        }
+        return crackle;
+    }
+
+    // Away over `seconds` (from wherever it's got to coming up)
+    function fadeCrackle(crackle, seconds) {
+        if (crackle.fading) return;
+        crackle.fading = true;
+        if (!crackle.heard) {
+            if (crackleOn === crackle) crackleOn = null;
+            return;
+        }
+        const now = crackle.context.currentTime;
+        const level = Math.min(1, Math.max(0, (now - crackle.from) / CRACKLE_IN_SECONDS));
+        const { gain } = crackle.gain;
+        gain.cancelScheduledValues(now);
+        gain.setValueAtTime(level, now);
+        gain.linearRampToValueAtTime(0, now + seconds);
+        try {
+            crackle.source.stop(now + seconds + 0.05);
+        } catch (error) {
+            // Already stopped
+        }
+    }
+
+    // The song before is over: the crackle carries on by itself for a moment, then the next song
+    // starts (meanwhile the one that's ended is left be: it's "on its way", see handleTrackFinished)
+    function startGapBefore(entry, plan) {
+        entry.starting = true;
+        entry.gapPlan = plan;
+        clearTimeout(autoMixTimer);
+        entry.gapTimer = setTimeout(() => endGapBefore(entry), entry.gap * 1000);
+    }
+
+    function endGapBefore(entry) {
+        clearTimeout(entry.gapTimer);
+        entry.gapTimer = null;
+        if (upNext !== entry) return;
+        startAutoMix(entry, entry.gapPlan);
+    }
+
+    // (put away mid-gap, the next song starts now: with the screen off, it might not get to later)
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden && upNext && upNext.gapTimer) endGapBefore(upNext);
+    });
 
     // ───── Side rail: controls in a screen's side strip (folded Duo cover screen) ─────
     const RAIL_RING_LENGTH = 2 * Math.PI * 20;
