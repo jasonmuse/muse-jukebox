@@ -8381,9 +8381,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // "Jukebot" is a sign: as big as the room beside its lights and buttons lets it be (a little short
-    // of filling it, so it isn't crowded), from its size in styles.css up to a cap (a wide desktop
-    // panel would make it huge), fitted afresh whenever that room changes or the writing loads
-    const BACK_TITLE_MAX_REM = 2.35;
+    // of filling it, so it isn't crowded), from its size in styles.css up to as tall as there's room
+    // for between the rim and the board (a wide panel's header is no taller), fitted afresh whenever
+    // that room changes or the writing loads
+    const BACK_TITLE_MAX_REM = 2.7;
 
     function setUpBackTitle() {
         const header = jukeboxPanel.querySelector(".back-header");
@@ -8396,18 +8397,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const style = getComputedStyle(child);
                 return child !== title && style.position !== "absolute" && style.display !== "none";
             });
+            // (the lamps' margin is the room left over, so it isn't counted)
             const gap = parseFloat(getComputedStyle(header).columnGap) || 0;
-            const taken = others.reduce((sum, child) => {
-                const style = getComputedStyle(child);
-                return sum + child.offsetWidth + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0) + gap;
-            }, 0);
+            const taken = others.reduce((sum, child) => sum + child.offsetWidth + gap, 0);
             const key = `${header.clientWidth}|${taken}`;
             if (key === fittedFor) return;
             fittedFor = key;
             title.style.fontSize = "";
             const base = parseFloat(getComputedStyle(title).fontSize);
             const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            const room = (header.clientWidth - taken) * 0.94;
+            const room = (header.clientWidth - taken) * 0.96;
             const size = Math.min(BACK_TITLE_MAX_REM * rem, Math.max(base, base * (room / title.offsetWidth)));
             title.style.fontSize = `${size.toFixed(1)}px`;
         };

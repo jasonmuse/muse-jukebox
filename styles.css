@@ -3591,10 +3591,11 @@ html {
     margin: 0 0 10px;
 }
 
-/* "Jukebot" in the neon script "Muse" is in on the front, drifting the same way and tipped up a
-   little like it: the back's sign matches the front's. script.js makes it as big as the room beside
-   its lights and buttons lets it be (this is its smallest); it grows up and down into the room
-   round the header, so the header's no taller than its buttons. */
+/* "Jukebot" is a neon sign in the script "Muse" is in on the front: a pink tube, glowing, drifting
+   towards violet and back, sat level with the buttons and only just tipped up. script.js makes it
+   as big as the room beside its lights and buttons lets it be (this is its smallest), up to as tall
+   as the room between the rim and the board allows; it grows up and down into that room, so the
+   header's no taller than its buttons. */
 .back-title {
     position: relative;
     margin: 0;
@@ -3602,9 +3603,9 @@ html {
     font-size: 1.7rem;
     font-weight: 400;
     line-height: 1.2;
-    transform: rotate(-3deg);
+    transform: translateY(0.08em) rotate(-1.5deg);
     transform-origin: left center;
-    filter: drop-shadow(0 0 0.09em rgba(255, 138, 216, 0.5)) drop-shadow(0 0.05em 0 rgba(18, 10, 58, 0.7));
+    filter: drop-shadow(0 0 0.04em rgba(255, 120, 220, 0.95)) drop-shadow(0 0 0.16em rgba(255, 70, 190, 0.55)) drop-shadow(0 0.04em 0 rgba(18, 10, 58, 0.75));
 }
 
 .back-title,
@@ -3612,7 +3613,7 @@ html {
     padding: 0 0.14em 0.06em;
     font-family: "Pacifico", "Brush Script MT", cursive;
     white-space: nowrap;
-    background: linear-gradient(100deg, #ff8ad8 0%, #ffb36b 34%, #fff1a8 52%, #8ee9ff 76%, #b39bff 100%);
+    background: linear-gradient(100deg, #ff7ad9 0%, #ff4fb3 30%, #d36bff 62%, #9a7bff 100%);
     background-size: 220% 100%;
     background-clip: text;
     -webkit-background-clip: text;
@@ -3796,7 +3797,6 @@ html {
 
     .back-header .jb-lights {
         gap: 4px;
-        margin-right: 0;
     }
 
     .back-flip-button {
@@ -4869,14 +4869,11 @@ html.is-standalone .edge-blend {
 }
 
 /* ───── JUKEBOT: the jukebox's rear panel + repair game ───── */
-.back-header .back-title {
-    margin-right: auto;
-}
-
+/* (the lamps go with the sign, straight after it: any room left over is between them and the buttons) */
 .jb-lights {
     display: inline-flex;
     gap: 6px;
-    margin-right: 4px;
+    margin-right: auto;
 }
 
 /* Jukebot's repair lights: little lamps in metal rings, their glass dark with a glint until they
@@ -9805,7 +9802,6 @@ html.viewport-shifted body {
 
     .back-header .jb-lights {
         gap: 3px;
-        margin-right: 0;
     }
 
     .back-header .jb-light {
