@@ -7392,7 +7392,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Only show the rail when the browser reports a wide side safe area to put it in
-    function updateSideRailLayout() {
+    function updateSideRailLayout(reason = "") {
         if (!sideRail || !safeAreaProbe) return;
 
         const probeStyles = window.getComputedStyle(safeAreaProbe);
@@ -7409,11 +7409,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.body.classList.toggle("has-side-rail", enabled);
         document.body.classList.toggle("side-rail-left", enabled && leftInset > rightInset);
         document.body.classList.toggle("side-rail-right", enabled && rightInset >= leftInset);
+        if (railDebug) {
+            const viewport = window.visualViewport;
+            showRailDebug(`${reason || "check"} at ${(performance.now() / 1000).toFixed(1)}s\n`
+                + `window ${window.innerWidth}x${window.innerHeight}${viewport ? `, seen ${Math.round(viewport.width)}x${Math.round(viewport.height)} down ${Math.round(viewport.offsetTop)}` : ""}`
+                + `${document.documentElement.classList.contains("is-standalone") ? ", home screen app" : ""}\n`
+                + `strip left ${leftInset}px right ${rightInset}px (needs ${RAIL_MIN_INSET})\n`
+                + `jukebox ${cabinet ? `${Math.round(cabinet.left)}-${Math.round(cabinet.right)}` : "-"}, room ${Math.round(room)}px (needs ${RAIL_MIN_INSET * 0.8})\n`
+                + `side by side ${isDeckLayout} -> rail ${enabled ? "ON" : "off"}`);
+        }
         if (!enabled) return;
 
         document.body.style.setProperty("--side-inset", `${inset}px`);
         positionSideRail();
         updatePlayingTrackStickyState();
+    }
+
+    // Looked at again now and a few times more over the next few seconds: a screen that changes
+    // (a phone folding or opening, Safari settling) can take a moment to say how it's ended up
+    let railRechecks = [];
+    function recheckSideRail(reason) {
+        railRechecks.forEach(clearTimeout);
+        updateSideRailLayout(reason);
+        railRechecks = [300, 1000, 2500].map((wait) => setTimeout(() => updateSideRailLayout(`${reason} +${wait}ms`), wait));
+    }
+
+    // With ?raildebug on the address, what the rail's check saw last is shown at the bottom of the
+    // screen (for screens like the Duo's, which can't be tried out here)
+    const railDebug = /[?&]raildebug\b/.test(location.search);
+
+    function showRailDebug(text) {
+        let panel = document.getElementById("rail-debug");
+        if (!panel) {
+            panel = document.createElement("pre");
+            panel.id = "rail-debug";
+            panel.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:2147483647;margin:0;padding:6px 8px;max-width:calc(100vw - 12px);box-sizing:border-box;"
+                + "font:10px/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:#fff;background:rgba(0,0,0,0.82);"
+                + "border-radius:8px;pointer-events:none";
+            document.body.appendChild(panel);
+        }
+        panel.textContent = text;
     }
 
     function updateSideRailState() {
@@ -7479,11 +7514,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateSideRailLayout();
         updateSideRailState();
         // (the strip can come or change without the window changing size, a phone folding say, or
-        // settle a moment after the page opens: looked at again whenever it does, and once it's in)
+        // settle a moment after the page opens: looked at again whenever anything about the screen
+        // changes, and once the page is in)
         if (typeof ResizeObserver === "function" && safeAreaProbe) {
-            new ResizeObserver(() => updateSideRailLayout()).observe(safeAreaProbe, { box: "border-box" });
+            new ResizeObserver(() => recheckSideRail("strip")).observe(safeAreaProbe, { box: "border-box" });
         }
-        window.addEventListener("load", () => setTimeout(updateSideRailLayout, 1200));
+        window.addEventListener("load", () => recheckSideRail("loaded"));
+        window.addEventListener("pageshow", () => recheckSideRail("shown"));
+        window.addEventListener("orientationchange", () => recheckSideRail("turned"));
+        if (screen.orientation && typeof screen.orientation.addEventListener === "function") {
+            screen.orientation.addEventListener("change", () => recheckSideRail("turned"));
+        }
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", () => recheckSideRail("seen size"), { passive: true });
+        }
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) recheckSideRail("back in view");
+        });
     }
 
     // ───── Back of the jukebox: flip animation (the Jukebot game lives in jukebot.js) ─────
@@ -7679,7 +7726,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function watchSidewaysGrab(event, edges) {
         if (handTurn || sidewaysGrab || isJukeboxFlipping || event.pointerType === "mouse" || !event.isPrimary) return;
         if (document.body.classList.contains("modal-open")) return;
-        if (event.target.closest(".jukebox-edge, .song-wave, select, input, textarea, .jb-screw, .cover-modal, .jb-back.is-playing")) return;
+        if (event.target.closest(".jukebox-edge, .song-wave, .led-sign, select, input, textarea, .jb-screw, .cover-modal, .jb-back.is-playing")) return;
         const rect = jukeboxPanel.getBoundingClientRect();
         const style = window.getComputedStyle(jukeboxPanel);
         const inset = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0);
@@ -7950,7 +7997,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             track.replaceChildren(lane);
             ticker = {
                 sign, track, lane, width: null, letters: "", key: "", items: [], next: 0, pieces: [], laidTo: 0, lastOffset: 0,
-                push: null, newWordsAt: 0, pushAgain: false, held: null
+                push: null, newWordsAt: 0, pushAgain: false, held: null, holds: new Set()
             };
             ledTickers.set(sign, ticker);
         }
@@ -7970,37 +8017,164 @@ document.addEventListener("DOMContentLoaded", async () => {
         return run ? ((Number(run.currentTime) || 0) / 1000) * LED_PIXELS_PER_SECOND : 0;
     }
 
-    // While the jukebox turns the signs hold still, their words drawn flat on the jukebox along with
-    // everything else on it: moving, they're a layer of their own (a long one), and Safari doesn't
-    // draw that at all while the jukebox is at an angle, so the sign went blank as it turned. Once
-    // it's square again they carry on from the same spot.
-    function holdLedSigns(hold) {
-        ledTickers.forEach((ticker) => {
-            if (hold === Boolean(ticker.held)) return;
-            if (hold) {
+    // While the jukebox turns, or a finger's dragging a sign along, the sign holds still, its words
+    // drawn flat on the jukebox with everything else: moving, they're a layer of their own (a long
+    // one), and Safari doesn't draw that at all while the jukebox is at an angle, so the sign went
+    // blank as it turned. Once it's let go it carries on scrolling from wherever it's got to.
+    function holdLedSign(ticker, reason, hold) {
+        if (hold) {
+            if (ticker.holds.has(reason)) return Boolean(ticker.held);
+            if (!ticker.held) {
                 const run = getLedRun(ticker);
-                if (!run) return; // (still anyway)
+                if (!run) return false; // (still anyway)
                 if (ticker.push) {
                     ticker.pushAgain = false;
                     settleLedPush(ticker, ticker.push);
                 }
-                const offset = getLedOffset(ticker);
-                ticker.held = { time: Number(run.currentTime) || 0, offset };
+                ticker.held = { offset: getLedOffset(ticker) };
                 ticker.track.style.animation = "none";
-                ticker.track.style.transform = `translateX(${-(offset % LED_TURN_PIXELS)}px)`;
                 ticker.lane.style.willChange = "auto";
-                return;
+                placeHeldLedSign(ticker);
             }
-            const { time } = ticker.held;
-            ticker.held = null;
-            ticker.track.style.animation = "";
-            ticker.track.style.transform = "";
-            ticker.lane.style.willChange = "";
-            const run = getLedRun(ticker);
-            if (run) run.currentTime = time;
-            layLedSign(ticker);
+            ticker.holds.add(reason);
+            return true;
+        }
+        if (!ticker.holds.delete(reason) || ticker.holds.size || !ticker.held) return false;
+        const { offset } = ticker.held;
+        ticker.held = null;
+        ticker.track.style.animation = "";
+        ticker.track.style.transform = "";
+        ticker.lane.style.willChange = "";
+        const run = getLedRun(ticker);
+        if (run) run.currentTime = (offset / LED_PIXELS_PER_SECOND) * 1000;
+        layLedSign(ticker);
+        return false;
+    }
+
+    function holdLedSigns(hold) {
+        ledTickers.forEach((ticker) => holdLedSign(ticker, "turn", hold));
+    }
+
+    function placeHeldLedSign(ticker) {
+        const at = ((ticker.held.offset % LED_TURN_PIXELS) + LED_TURN_PIXELS) % LED_TURN_PIXELS;
+        ticker.track.style.transform = `translateX(${-at}px)`;
+    }
+
+    // ───── Dragging an LED sign along ─────
+    // A finger (or the mouse) on an LED sign takes hold of its words: drag sideways and they go with
+    // it, either way, to read a tip again or skip on; let go and they carry on scrolling from there,
+    // gliding on a moment first if they were flicked. Up and down is left to the page, the jukebox
+    // isn't turned by it, and the front's sign isn't pressed by it (so it doesn't flip).
+    const LED_DRAG_SLOP = 6; // px a finger moves before it's plainly going sideways (or not)
+    const LED_GLIDE_FADE = 0.2; // s: how quickly a flicked sign slows
+    const LED_GLIDE_FASTEST = 1500; // px a second, however hard it's flicked
+    let ledDrag = null;
+    let ledGlide = null;
+
+    function setUpLedDragging() {
+        [coverLed, flipSignLed].forEach((sign) => {
+            if (sign) sign.addEventListener("pointerdown", (event) => beginLedDrag(event, sign));
         });
     }
+
+    function beginLedDrag(event, sign) {
+        const ticker = ledTickers.get(sign);
+        if (ledDrag || !ticker || !event.isPrimary || event.button !== 0 || isJukeboxFlipping || prefersReducedMotion()) return;
+        if (ledGlide && ledGlide.ticker === ticker) {
+            // (caught mid-glide: it's held where it is)
+            cancelAnimationFrame(ledGlide.frame);
+            ledGlide = null;
+        }
+        ledDrag = { sign, ticker, pointerId: event.pointerId, x: event.clientX, y: event.clientY, from: 0, dragging: false, moves: [] };
+        document.addEventListener("pointermove", moveLedDrag, true);
+        document.addEventListener("pointerup", endLedDrag, true);
+        document.addEventListener("pointercancel", endLedDrag, true);
+    }
+
+    function moveLedDrag(event) {
+        const drag = ledDrag;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const across = event.clientX - drag.x;
+        if (!drag.dragging) {
+            const down = event.clientY - drag.y;
+            if (Math.abs(across) < LED_DRAG_SLOP && Math.abs(down) < LED_DRAG_SLOP) return;
+            if (Math.abs(across) < Math.abs(down) || !holdLedSign(drag.ticker, "drag", true)) {
+                finishLedDrag(drag);
+                return;
+            }
+            drag.dragging = true;
+            drag.from = drag.ticker.held.offset + across;
+            try {
+                drag.sign.setPointerCapture(event.pointerId);
+            } catch (error) {
+                // The pointer's already gone
+            }
+        }
+        const offset = Math.max(0, drag.from - across);
+        moveHeldLedSign(drag.ticker, offset);
+        drag.moves.push([performance.now(), offset]);
+        while (drag.moves.length > 2 && drag.moves[0][0] < performance.now() - 100) drag.moves.shift();
+    }
+
+    function moveHeldLedSign(ticker, offset) {
+        ticker.held.offset = offset;
+        ticker.lastOffset = offset; // (a drag back isn't the sign starting over)
+        placeHeldLedSign(ticker);
+        layLedSign(ticker);
+        layLedSignBehind(ticker);
+    }
+
+    function endLedDrag(event) {
+        const drag = ledDrag;
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        finishLedDrag(drag);
+        if (!drag.dragging) return;
+        // (whatever it was on doesn't get a click out of it, the front's sign would flip the jukebox; a
+        // finger's drag makes no click, so the next touch is a fresh start)
+        const swallowClick = (click) => {
+            click.stopPropagation();
+            click.preventDefault();
+        };
+        const forgetClick = () => {
+            window.removeEventListener("click", swallowClick, { capture: true });
+            window.removeEventListener("pointerdown", forgetClick, { capture: true });
+        };
+        window.addEventListener("click", swallowClick, { capture: true, once: true });
+        window.addEventListener("pointerdown", forgetClick, { capture: true, once: true });
+        setTimeout(forgetClick, 600);
+        // How fast it was going at the end (px a second)
+        const [first, last] = [drag.moves[0], drag.moves[drag.moves.length - 1]];
+        const speed = first && last && last[0] > first[0] ? ((last[1] - first[1]) * 1000) / (last[0] - first[0]) : 0;
+        if (Math.abs(speed) < LED_PIXELS_PER_SECOND * 3 || event.type === "pointercancel") {
+            holdLedSign(drag.ticker, "drag", false);
+            return;
+        }
+        // Flicked: it glides on, slowing, then carries on scrolling
+        const glide = { ticker: drag.ticker, speed: Math.sign(speed) * Math.min(LED_GLIDE_FASTEST, Math.abs(speed)), last: performance.now(), frame: 0 };
+        ledGlide = glide;
+        const step = (now) => {
+            if (ledGlide !== glide) return;
+            const seconds = Math.min(0.05, (now - glide.last) / 1000);
+            glide.last = now;
+            glide.speed *= Math.exp(-seconds / LED_GLIDE_FADE);
+            moveHeldLedSign(glide.ticker, Math.max(0, glide.ticker.held.offset + (glide.speed * seconds)));
+            if (Math.abs(glide.speed) > LED_PIXELS_PER_SECOND && glide.ticker.held.offset > 0) {
+                glide.frame = requestAnimationFrame(step);
+                return;
+            }
+            ledGlide = null;
+            holdLedSign(glide.ticker, "drag", false);
+        };
+        glide.frame = requestAnimationFrame(step);
+    }
+
+    function finishLedDrag(drag) {
+        if (ledDrag === drag) ledDrag = null;
+        document.removeEventListener("pointermove", moveLedDrag, true);
+        document.removeEventListener("pointerup", endLedDrag, true);
+        document.removeEventListener("pointercancel", endLedDrag, true);
+    }
+
 
     // ...and how far a push has taken it on top of that
     function getLedPushed(ticker) {
@@ -8107,10 +8281,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             element.className = kind ? `led-sign-item is-${kind}` : "led-sign-item";
             element.textContent = text;
             ticker.lane.append(element);
-            const piece = { elements: [element], left: ticker.laidTo, right: ticker.laidTo + element.offsetWidth };
+            const piece = { elements: [element], left: ticker.laidTo, right: ticker.laidTo + element.offsetWidth, item: ticker.next - 1 };
             placeLedPiece(ticker, piece);
             ticker.pieces.push(piece);
             ticker.laidTo = piece.right;
+        }
+    }
+
+    // ...and behind it, for a drag back the other way (the words that went before, in turn)
+    function layLedSignBehind(ticker) {
+        const count = ticker.items.length;
+        if (!count) return;
+        const from = getLedOffset(ticker) - 60;
+        while (ticker.pieces.length && ticker.pieces[0].left > from) {
+            const first = ticker.pieces[0];
+            const item = (first.item || 0) - 1;
+            const [text, kind] = ticker.items[((item % count) + count) % count];
+            const element = document.createElement("span");
+            element.className = kind ? `led-sign-item is-${kind}` : "led-sign-item";
+            element.textContent = text;
+            ticker.lane.append(element);
+            const piece = { elements: [element], left: first.left - element.offsetWidth, right: first.left, item };
+            placeLedPiece(ticker, piece);
+            ticker.pieces.unshift(piece);
         }
     }
 
@@ -8708,6 +8901,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!jukeboxPanel) return;
         setUpBackTitle();
         setUpLedSigns();
+        setUpLedDragging();
         setUpBackTips();
         setUpHandTurning();
         setUpHistory();
@@ -8833,7 +9027,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             syncMarquees();
             syncPlayingTrackStickPosition();
             scheduleMobileViewportLock();
-            updateSideRailLayout();
+            recheckSideRail("resized");
             if (coverModal && coverModal.classList.contains("active")) {
                 updateModalImageFrameFromNaturalSize();
             }

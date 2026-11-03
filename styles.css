@@ -887,14 +887,14 @@ box-shadow: 0 0 0 3px #ffffff;
 /* Blinkies on the jukebox's back panel (Frog Quest, and a tip jar on Ko-fi), small and plain at
    their own size: side by side where there's room, one over the other where there isn't (never
    squeezed, which would smudge their pixels) */
+/* The badges side by side, always (never one above the other: where the panel's too narrow for
+   both at their own size, they shrink a little together) */
 .back-badges {
     flex: 0 0 auto;
-    align-self: center;
+    align-self: stretch;
     display: flex;
-    flex-wrap: wrap;
     justify-content: center;
-    gap: 6px 8px;
-    max-width: 100%;
+    gap: 8px;
     /* Down at the bottom of the back panel, however much is above it */
     margin: auto 0 0;
     padding: 0;
@@ -902,14 +902,16 @@ box-shadow: 0 0 0 3px #ffffff;
 }
 
 .blinkie-link {
-    flex: 0 0 auto;
+    flex: 0 1 150px;
+    min-width: 0;
     line-height: 0;
 }
 
 .blinkie {
     display: block;
-    width: 150px;
-    height: 20px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 150 / 20;
     image-rendering: pixelated;
 }
 
