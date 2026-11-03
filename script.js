@@ -8150,8 +8150,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ───── History: the jukebox's big moments, from the very first day ─────
     // A logbook on the back, a month at a time, newest first: each moment with a tiny picture of how
-    // the jukebox looked then (tap it for a bigger one). history.json and the pictures in history/
-    // come from tools/make-history.mjs.
+    // the jukebox looked then (tap it for the picture at about its real size, its writing and all).
+    // history.json and the pictures in history/ come from tools/make-history.mjs.
     const HISTORY_FILE = "history.json";
     const historyDialog = document.getElementById("history-dialog");
 
@@ -8177,6 +8177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const zoom = document.getElementById("history-zoom");
         const zoomPicture = document.getElementById("history-zoom-picture");
         const zoomCaption = document.getElementById("history-zoom-caption");
+        const zoomText = document.getElementById("history-zoom-text");
         const zoomClose = zoom.querySelector(".history-zoom-close");
         let moments = null;
         let loading = null;
@@ -8185,13 +8186,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const formatDate = (date, options) => parseHistoryDate(date).toLocaleDateString("en-US", options);
 
-        // A picture of how it looked, big, over the history (a tap anywhere puts it away)
+        // How it looked, over the history: as wide as the panel, scrolling down it, with what
+        // happened along the top (a tap anywhere puts it away)
         const showZoom = (moment, from) => {
             zoomedFrom = from;
             zoomPicture.src = moment.picture;
             zoomPicture.alt = `The jukebox on ${formatDate(moment.date, { month: "long", day: "numeric", year: "numeric" })}`;
             zoomCaption.textContent = `${formatDate(moment.date, { month: "short", day: "numeric", year: "numeric" })} · ${moment.title}`;
+            zoomText.textContent = moment.text;
             zoom.hidden = false;
+            zoom.scrollTop = 0;
             zoomClose.focus({ preventScroll: true });
         };
         const hideZoom = () => {

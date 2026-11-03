@@ -14,25 +14,26 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 
-// pose: "front" as it opens, "playing" with the first song on, "back" turned round
+// pose: "front" as it opens, "playing" with the first song on (and the record up), "record" with the
+// record big as well (the Now playing view on a phone), "back" turned round
 const MOMENTS = [
     { date: "2024-10-27", title: "The jukebox opens", commit: "6c20faa", pose: "front",
         text: "Four songs with plain players and no covers yet, a tag filter, and the frog quest badge." },
-    { date: "2024-10-30", title: "Penguins and covers", commit: "0b22a95", pose: "front",
+    { date: "2024-10-30", title: "Penguins and covers", commit: "0b22a95", pose: "playing",
         text: "The jukebox gets its look: two penguins keeping watch, a welcome note, cover art and Play buttons." },
-    { date: "2024-12-06", title: "Callout", commit: "bcf5a54", pose: "front",
+    { date: "2024-12-06", title: "Callout", commit: "bcf5a54", pose: "playing",
         text: "The first new song since opening week." },
-    { date: "2025-01-14", title: "Drift drops in", commit: "f9adf90", pose: "front",
+    { date: "2025-01-14", title: "Drift drops in", commit: "f9adf90", pose: "playing",
         text: "A new song to start 2025." },
-    { date: "2025-04-05", title: "Made for phones", commit: "9cc3742", pose: "front",
+    { date: "2025-04-05", title: "Made for phones", commit: "9cc3742", pose: "playing",
         text: "Rebuilt to fit properly on a phone." },
-    { date: "2025-11-17", title: "A new look", commit: "558338f", pose: "front",
+    { date: "2025-11-17", title: "A new look", commit: "558338f", pose: "playing",
         text: "Darker, starrier colors, a better fit on phones, and Dropoff." },
-    { date: "2026-02-18", title: "The overhaul", commit: "992da60", pose: "front",
+    { date: "2026-02-18", title: "The overhaul", commit: "992da60", pose: "playing",
         text: "Bigger cover art on every song, and three new ones: Runaway, Leafed and the Gallery remix." },
     { date: "2026-03-04", title: "A lotta lot", commit: "fc68342", pose: "front",
         text: "A whole catalog of older songs moves in, with sorting, a tag picker and 10-second skips." },
-    { date: "2026-07-31", title: "Countdown Island", commit: "04c200d", pose: "front",
+    { date: "2026-07-31", title: "Countdown Island", commit: "04c200d", pose: "playing",
         text: "Countdown Island arrives, along with its slowed-down twin." },
     { date: "2026-08-10", title: "Marquees and Exhale", commit: "3923ccd", pose: "front",
         text: "Long tags scroll along like marquees, and Exhale joins." },
@@ -44,7 +45,7 @@ const MOMENTS = [
         text: "A proper jukebox cabinet that turns round in 3D, speakers that pulse to the beat, songs that blend into each other, and a face for Jukebot." },
     { date: "2026-10-28", title: "Waves and lights", commit: "da3cc3b", pose: "playing",
         text: "Every song gets its own wave to scrub along, the lights and equalizer follow the music, and Jukebot's repair job gets an ending (and a secret)." },
-    { date: "2026-10-29", title: "Side A, side B", commit: "ed20642", pose: "playing",
+    { date: "2026-10-29", title: "Side A, side B", commit: "ed20642", pose: "record",
         text: "Countdown Island flips over to its slowed side B, an LED sign scrolls along the front, and the penguins can dance to the beat." },
     { date: "2026-10-31", title: "Turn it by hand", commit: "0699eaf", pose: "front",
         text: "Grab the jukebox by its side and turn it round yourself. Plus a new Queen Moth and a fresher record clack." },
@@ -57,7 +58,7 @@ const MOMENTS = [
 const WIDTH = 390;
 const HEIGHT = 844;
 const SMALL_WIDTH = 120; // px: the tiny picture in the list
-const PICTURE_WIDTH = 585; // px: the bigger one a tap shows (sharp enough at a phone's size)
+const PICTURE_WIDTH = 780; // px: the bigger one a tap shows, as wide as the screen (its writing sharp)
 const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
 const CHROME = process.env.CHROME || [
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -157,10 +158,11 @@ async function openChrome(profile) {
     return { chrome, socket, send, evaluate, load };
 }
 
-// The first of these on the page that's there gets a tap (they changed over the years)
-const tap = (selectors, text) => `(() => {
+// The first of these on the page that's there gets a tap (they changed over the years), or else the
+// first button with that text in it
+const tap = (selectors, text = "") => `(() => {
     let target = ${JSON.stringify(selectors)}.map((selector) => document.querySelector(selector)).find(Boolean);
-    if (!target) target = Array.from(document.querySelectorAll("button, [role=button], a")).find((element) => element.textContent.trim().toLowerCase().includes(${JSON.stringify(text)}));
+    if (!target && ${JSON.stringify(text)}) target = Array.from(document.querySelectorAll("button, [role=button], a")).find((element) => element.textContent.trim().toLowerCase().includes(${JSON.stringify(text)}));
     if (target) target.click();
     return Boolean(target);
 })()`;
@@ -184,9 +186,13 @@ async function main() {
             await page.load(`http://127.0.0.1:${server.address().port}/?photo=${Date.now()}`);
             await page.evaluate("document.fonts ? document.fonts.ready.then(() => true) : true");
             await sleep(3200);
-            if (moment.pose === "playing") {
+            if (moment.pose === "playing" || moment.pose === "record") {
                 await page.evaluate(tap(["#track-list .track .play-button", ".play-button", ".play-btn"], "play"));
                 await sleep(3200);
+                if (moment.pose === "record") {
+                    await page.evaluate(tap([".record"]));
+                    await sleep(1600);
+                }
             } else if (moment.pose === "back") {
                 await page.evaluate(tap(['[data-flip-jukebox="back"]', ".flip-sign"], "flip me"));
                 await sleep(1800);
