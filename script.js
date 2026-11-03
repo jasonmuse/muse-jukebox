@@ -2510,8 +2510,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SIDE_WIND_STEADY_MS = 2000; // the deck not going steadily again by then: its sound comes straight back
     let sideWind = null;
     let soundDelay = 0.02; // s: how long sound takes to come out (learnt from Web Audio as it goes)
-    let deckSwitchStop = 0.3; // s: how long a deck stops for as it changes speed and moves (learnt as it goes)
-    let deckMoveStop = 0.2; // s: and as it just moves
+    // s: how long a deck stops for as it changes speed and moves, and as it just moves (on an iPhone,
+    // about a tenth of a second each); learnt as it goes, and kept for next time
+    const FLIP_STORAGE_KEY = "museJukeboxFlipStops";
+    let deckSwitchStop = 0.12;
+    let deckMoveStop = 0.08;
+    try {
+        const kept = JSON.parse(localStorage.getItem(FLIP_STORAGE_KEY) || "null");
+        if (kept && kept.change >= 0.05 && kept.change <= 0.8) deckSwitchStop = kept.change;
+        if (kept && kept.move >= 0.05 && kept.move <= 0.8) deckMoveStop = kept.move;
+    } catch (error) {
+        // (nothing kept: it's learnt afresh)
+    }
 
     // With ?flipdebug on the address, what each flip did is listed at the top of the screen (a flip
     // on a phone can't be watched any other way)
@@ -2834,8 +2844,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // the wind waits a moment more, rather than the deck having to move again.)
     function sendSideWindDeck(wind, now, again = false) {
         const { deck, rate, fromRate } = wind;
-        const stop = Math.max(0.03, (again ? deckMoveStop : deckSwitchStop) + (rate < fromRate ? 0.08 : -0.08));
-        const wait = 0.28 + soundDelay;
+        const stop = Math.max(0.03, (again ? deckMoveStop : deckSwitchStop) + (rate < fromRate ? 0.03 : -0.03));
+        // (and the wind can start once the deck's been read going steadily for a moment, as long before
+        // it's heard as sound takes to come out)
+        const wait = 0.31 + soundDelay;
         const heard = wind.take.position + (fromRate * (now - wind.take.page));
         const target = heard + (fromRate * (stop + wait)) + wind.plainDistance - (rate * (wait + SIDE_WIND_SECONDS));
         wind.switched = { at: now, target: Math.max(0, Math.min(target, deck.duration - 1)), again, learnt: false };
@@ -2892,19 +2904,24 @@ document.addEventListener("DOMContentLoaded", async () => {
             const learnt = (stops) => Math.min(0.8, Math.max(0.05, (stops + stop) / 2));
             if (wind.switched.again) deckMoveStop = learnt(deckMoveStop);
             else deckSwitchStop = learnt(deckSwitchStop);
+            try {
+                localStorage.setItem(FLIP_STORAGE_KEY, JSON.stringify({ change: +deckSwitchStop.toFixed(3), move: +deckMoveStop.toFixed(3) }));
+            } catch (error) {
+                // (not kept: it's learnt again next time)
+            }
         }
         // The two close in on each other (Web Audio's still at the old speed, the deck at the new), so
         // there's a moment when the plain wind, started then, would land right where the deck is. Near
-        // enough to that moment it starts at once, making up the difference on the way (a little faster
-        // or slower through the middle of the wind: it just winds a touch later or sooner); otherwise it
-        // waits for the moment, or the deck moves again if that's a long way off.
+        // enough to that moment it starts at once, making up the little difference on the way (a touch
+        // faster or slower through the middle of the wind); otherwise it waits for the moment, or the
+        // deck moves again if that's a long way off.
         const fromOffset = wind.take.position - (fromRate * wind.take.page);
         const ideal = (fromOffset + wind.plainDistance - toOffset - (rate * SIDE_WIND_SECONDS)) / (rate - fromRate);
         // (the soonest it can be heard: as long from now as sound takes to come out, and a moment)
         const soonest = now + readAudioClock(scratchAudio.context).delay + SIDE_WIND_LEAD;
         // (what starting then would leave to make up, as a swell through the middle of the wind)
         const swell = Math.abs((rate - fromRate) * (soonest - ideal)) / (SIDE_WIND_SECONDS / 2);
-        if (swell <= 0.15 * Math.min(rate, fromRate) || ideal < soonest) {
+        if (swell <= 0.05 * Math.min(rate, fromRate) || ideal < soonest) {
             beginSideWind(wind, soonest);
         } else if (ideal - soonest > 0.85) {
             moveSideWindDeckAgain(wind, `${Math.round((ideal - soonest) * 1000)}ms to wait`);
