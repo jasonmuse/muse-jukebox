@@ -1,542 +1,130 @@
 {
- "eras": {
-  "2024-10": "The first jukebox",
-  "2024-12": "A new song",
-  "2025-01": "Drift drops in",
-  "2025-04": "Mobile, again",
-  "2025-11": "A new look",
-  "2026-02": "The overhaul",
-  "2026-03": "A lotta lot",
-  "2026-07": "Countdown Island",
-  "2026-08": "Marquees and Exhale",
-  "2026-10": "Jukebot moves in",
-  "2026-11": "The penguins dance"
- },
- "changes": [
+ "moments": [
   {
-   "sha": "6915e20",
    "date": "2026-11-02",
-   "text": "Tidy up: drop the unused static loader and a stray .DS_Store; sitemap date"
+   "title": "A history on the back",
+   "text": "This history, a bigger wordmark with a soft glow, and side flips that glide on iPhones.",
+   "picture": "history/2026-11-02.webp",
+   "small": "history/2026-11-02-small.webp"
   },
   {
-   "sha": "701f9ff",
-   "date": "2026-11-02",
-   "text": "Smoother song changes and covers that load ahead; a bigger wordmark with a soft glow behind it"
-  },
-  {
-   "sha": "6fd40ca",
-   "date": "2026-11-02",
-   "text": "Short rows beside the Now playing panel on short screens"
-  },
-  {
-   "sha": "840b2a2",
-   "date": "2026-11-02",
-   "text": "The back fits its panel without scrolling; Jukebot's smoke isn't cut off"
-  },
-  {
-   "sha": "b09b5a1",
-   "date": "2026-11-02",
-   "text": "Side flips wind smoothly between the two speeds again"
-  },
-  {
-   "sha": "59c7229",
-   "date": "2026-11-02",
-   "text": "Bigger penguins on short phones"
-  },
-  {
-   "sha": "36fc55c",
-   "date": "2026-11-02",
-   "text": "Bigger waves by the penguins on short phones"
-  },
-  {
-   "sha": "4c627ec",
-   "date": "2026-11-02",
-   "text": "Buttons beside the record fill the corners on short phones"
-  },
-  {
-   "sha": "03a0543",
    "date": "2026-11-01",
-   "text": "Room round the panels on desktop; waves fill the cabinet's top corners; a turn isn't cut off"
+   "title": "New menus",
+   "text": "New Sort and Tag menus, penguins that dance along with you, and the playing song's cover fills its row.",
+   "picture": "history/2026-11-01.webp",
+   "small": "history/2026-11-01-small.webp"
   },
   {
-   "sha": "4cd0c87",
-   "date": "2026-11-01",
-   "text": "The playing song's cover grows to fill its row; bigger waves by the penguins; ????? goes last"
-  },
-  {
-   "sha": "7999fcb",
-   "date": "2026-11-01",
-   "text": "No dark nub on top of the record while it turns"
-  },
-  {
-   "sha": "b1df11e",
-   "date": "2026-11-01",
-   "text": "Repeat and shuffle on the speaker panel on short phones"
-  },
-  {
-   "sha": "21d3ed1",
-   "date": "2026-11-01",
-   "text": "New Sort and Tag menus; penguins dance with you; Side A/B centred; tempo pass"
-  },
-  {
-   "sha": "0699eaf",
    "date": "2026-10-31",
-   "text": "Side lights keep whole bulbs on narrow screens"
+   "title": "Turn it by hand",
+   "text": "Grab the jukebox by its side and turn it round yourself. Plus a new Queen Moth and a fresher record clack.",
+   "picture": "history/2026-10-31.webp",
+   "small": "history/2026-10-31-small.webp"
   },
   {
-   "sha": "a6c9232",
-   "date": "2026-10-31",
-   "text": "The turning cabinet's sides wrap round its rounded corners"
-  },
-  {
-   "sha": "4111ceb",
-   "date": "2026-10-31",
-   "text": "\"Fix me again\" gets a little breakdown show; soldering is plain to see under a finger"
-  },
-  {
-   "sha": "6435524",
-   "date": "2026-10-31",
-   "text": "Shorter rows next to Now playing on tablets and desktop"
-  },
-  {
-   "sha": "13246aa",
-   "date": "2026-10-31",
-   "text": "Jukebot's HUD keeps clear of the screws while the panel's on"
-  },
-  {
-   "sha": "764318e",
-   "date": "2026-10-31",
-   "text": "Close-up step: no goo left where it can't be seen or scrubbed"
-  },
-  {
-   "sha": "73b313a",
-   "date": "2026-10-31",
-   "text": "Fresher record clack, a turn that ends without a snap, and a new Queen Moth"
-  },
-  {
-   "sha": "949b120",
-   "date": "2026-10-31",
-   "text": "Equaliser works where whole files come back; Side A label inside its row; hand turn fixes"
-  },
-  {
-   "sha": "9294ab8",
-   "date": "2026-10-31",
-   "text": "Flip icon back on the sign in place of the LED key"
-  },
-  {
-   "sha": "98bdb8c",
-   "date": "2026-10-31",
-   "text": "Turn the jukebox round by hand: grab either side and drag"
-  },
-  {
-   "sha": "5ad795e",
-   "date": "2026-10-31",
-   "text": "Front LED sign no longer lingers over the back after a flip in Safari"
-  },
-  {
-   "sha": "d48fee9",
-   "date": "2026-10-31",
-   "text": "LED flip key on the sign; one bolt at each end on phones"
-  },
-  {
-   "sha": "3553e05",
-   "date": "2026-10-31",
-   "text": "Whole record on small screens; the playing row stays short on short phones"
-  },
-  {
-   "sha": "ed20642",
    "date": "2026-10-29",
-   "text": "Lag pass on the jukebox and Jukebot; memory chips on the board from the start"
+   "title": "Side A, side B",
+   "text": "Countdown Island flips over to its slowed side B, an LED sign scrolls along the front, and the penguins can dance to the beat.",
+   "picture": "history/2026-10-29.webp",
+   "small": "history/2026-10-29-small.webp"
   },
   {
-   "sha": "74410b7",
-   "date": "2026-10-29",
-   "text": "Now playing view on portrait screens; the flip sign is an LED sign everywhere"
-  },
-  {
-   "sha": "3314c39",
-   "date": "2026-10-29",
-   "text": "Side flips hand over between decks instead of changing the playing speed"
-  },
-  {
-   "sha": "ff406a5",
-   "date": "2026-10-29",
-   "text": "Side B from one file, Rhythm on with a switch, LED signs that keep scrolling"
-  },
-  {
-   "sha": "841e789",
-   "date": "2026-10-29",
-   "text": "Rhythm: penguins dance on the beat, off until you ask; shorter rows"
-  },
-  {
-   "sha": "4b3d5c8",
-   "date": "2026-10-29",
-   "text": "Keep the jukebox lined up with Safari's screen"
-  },
-  {
-   "sha": "a53edb6",
-   "date": "2026-10-29",
-   "text": "Side A / side B for Countdown Island; LED sign on the front; smoother rows"
-  },
-  {
-   "sha": "da3cc3b",
    "date": "2026-10-28",
-   "text": "Roomier short screens; LED sign on Jukebot's panel"
+   "title": "Waves and lights",
+   "text": "Every song gets its own wave to scrub along, the lights and equalizer follow the music, and Jukebot's repair job gets an ending (and a secret).",
+   "picture": "history/2026-10-28.webp",
+   "small": "history/2026-10-28-small.webp"
   },
   {
-   "sha": "d41877b",
-   "date": "2026-10-28",
-   "text": "Tips card fills the rest of the back panel"
-  },
-  {
-   "sha": "d5f0d37",
-   "date": "2026-10-28",
-   "text": "Playhead glides instead of jumping; equaliser grows from the middle"
-  },
-  {
-   "sha": "ddcdb97",
-   "date": "2026-10-28",
-   "text": "Penguins sing sound waves; tips fill the room they have"
-  },
-  {
-   "sha": "8afc63e",
-   "date": "2026-10-28",
-   "text": "Jukebot becomes a repair job with an ending and a secret; tips go one at a time"
-  },
-  {
-   "sha": "24115c3",
-   "date": "2026-10-28",
-   "text": "Equaliser and lights follow the music; song rows get waves and a scrubber"
-  },
-  {
-   "sha": "d51b92d",
-   "date": "2026-10-28",
-   "text": "Play songs to their end; loop button adds repeat-one"
-  },
-  {
-   "sha": "7f7a9ad",
-   "date": "2026-10-27",
-   "text": "Smooth out the jukebox flip and the record's turn"
-  },
-  {
-   "sha": "e2ebc31",
    "date": "2026-10-26",
-   "text": "Jukebot 2.0: robot face, real circuit board, hold-to-unscrew, power + zap"
+   "title": "A real cabinet",
+   "text": "A proper jukebox cabinet that turns round in 3D, speakers that pulse to the beat, songs that blend into each other, and a face for Jukebot.",
+   "picture": "history/2026-10-26.webp",
+   "small": "history/2026-10-26-small.webp"
   },
   {
-   "sha": "ef48730",
-   "date": "2026-10-26",
-   "text": "Marquee lights beside the penguins; a little more room under \"Muse\""
-  },
-  {
-   "sha": "168029b",
-   "date": "2026-10-26",
-   "text": "Frog Quest blinkie back to its small, plain look"
-  },
-  {
-   "sha": "9fb472d",
-   "date": "2026-10-26",
-   "text": "Two-panel deck on desktop; Frog Quest blinkie moves to the back"
-  },
-  {
-   "sha": "0e92dea",
-   "date": "2026-10-26",
-   "text": "Browser strips follow the backdrop: night-sky navy with the space gif"
-  },
-  {
-   "sha": "990b366",
-   "date": "2026-10-26",
-   "text": "Keep-playing blends songs together and skips silent endings"
-  },
-  {
-   "sha": "7c8b2ff",
-   "date": "2026-10-26",
-   "text": "Jukebox cabinet redesign, 3D flip with depth, beat-synced speakers"
-  },
-  {
-   "sha": "79a2056",
    "date": "2026-10-25",
-   "text": "Skip glides the list to the new song; the jukebox itself is Jukebot"
+   "title": "Jukebot moves in",
+   "text": "The jukebox turns round, and on its back lives Jukebot: a little robot with bugs in his wiring for you to fix.",
+   "picture": "history/2026-10-25-2.webp",
+   "small": "history/2026-10-25-2-small.webp"
   },
   {
-   "sha": "e81e006",
    "date": "2026-10-25",
-   "text": "Add DJ scratching on the records"
+   "title": "Keep it playing",
+   "text": "Songs can play on one after another (shuffled, if you like), even with the screen off, and the record scratches like a DJ's.",
+   "picture": "history/2026-10-25.webp",
+   "small": "history/2026-10-25-small.webp"
   },
   {
-   "sha": "4147152",
-   "date": "2026-10-25",
-   "text": "Fix Jukebot repair game, record spins on flip, landscape + zoom fixes"
-  },
-  {
-   "sha": "93e3e84",
-   "date": "2026-10-25",
-   "text": "Skip buttons by the record, side-strip controls, home screen app"
-  },
-  {
-   "sha": "79cc85d",
-   "date": "2026-10-25",
-   "text": "Add clear button, flip-around back panel and battery bug hunt"
-  },
-  {
-   "sha": "4b91820",
-   "date": "2026-10-25",
-   "text": "Landscape jukebox deck, background continuous play, foldable fixes"
-  },
-  {
-   "sha": "9e4beb8",
-   "date": "2026-10-25",
-   "text": "Move keep-playing/shuffle into the playing song; polish mobile layout"
-  },
-  {
-   "sha": "a7afcfa",
-   "date": "2026-10-25",
-   "text": "Add keep-playing toggle with optional shuffle"
-  },
-  {
-   "sha": "3923ccd",
    "date": "2026-08-10",
-   "text": "Add Exhale track; rename Countdown Paused title"
+   "title": "Marquees and Exhale",
+   "text": "Long tags scroll along like marquees, and Exhale joins.",
+   "picture": "history/2026-08-10.webp",
+   "small": "history/2026-08-10-small.webp"
   },
   {
-   "sha": "1bdaed5",
-   "date": "2026-08-09",
-   "text": "Add animated tag marquees and sync behavior"
-  },
-  {
-   "sha": "04c200d",
    "date": "2026-07-31",
-   "text": "Add Countdown Island tracks and UI polish"
+   "title": "Countdown Island",
+   "text": "Countdown Island arrives, along with its slowed-down twin.",
+   "picture": "history/2026-07-31.webp",
+   "small": "history/2026-07-31-small.webp"
   },
   {
-   "sha": "bab8738",
-   "date": "2026-03-23",
-   "text": "staticloader / google cover"
-  },
-  {
-   "sha": "fc68342",
    "date": "2026-03-04",
-   "text": "horizontal scroll bar gone"
+   "title": "A lotta lot",
+   "text": "A whole catalog of older songs moves in, with sorting, a tag picker and 10-second skips.",
+   "picture": "history/2026-03-04.webp",
+   "small": "history/2026-03-04-small.webp"
   },
   {
-   "sha": "033a093",
-   "date": "2026-03-04",
-   "text": "added google verification"
-  },
-  {
-   "sha": "eedde4d",
-   "date": "2026-03-04",
-   "text": "10s controls fade better"
-  },
-  {
-   "sha": "ac1b52a",
-   "date": "2026-03-04",
-   "text": "metadata / new leafed"
-  },
-  {
-   "sha": "65a2090",
-   "date": "2026-03-04",
-   "text": "better mobile spacing 🐶"
-  },
-  {
-   "sha": "fa0d2b3",
-   "date": "2026-03-03",
-   "text": "idke prob sometinggood tho"
-  },
-  {
-   "sha": "9900099",
-   "date": "2026-03-03",
-   "text": "scroll / quicker pls"
-  },
-  {
-   "sha": "11f3bd7",
-   "date": "2026-03-03",
-   "text": "mobile scroll / sticky fix ?"
-  },
-  {
-   "sha": "2435fa5",
-   "date": "2026-03-03",
-   "text": "hopefully fix mobile scroll"
-  },
-  {
-   "sha": "44896e5",
-   "date": "2026-03-03",
-   "text": "mobile fixes pls"
-  },
-  {
-   "sha": "2135c4c",
-   "date": "2026-03-03",
-   "text": "more epic stuff"
-  },
-  {
-   "sha": "1482a89",
-   "date": "2026-03-02",
-   "text": "fixed tags popup"
-  },
-  {
-   "sha": "bed4c64",
-   "date": "2026-03-02",
-   "text": "fixed +/- 10s prob"
-  },
-  {
-   "sha": "f1f4c3c",
-   "date": "2026-03-02",
-   "text": "should be bettter"
-  },
-  {
-   "sha": "5c97c16",
-   "date": "2026-03-02",
-   "text": "fixed padding"
-  },
-  {
-   "sha": "8742408",
-   "date": "2026-03-02",
-   "text": "added a lotta lot"
-  },
-  {
-   "sha": "992da60",
    "date": "2026-02-18",
-   "text": "fixed padding / background"
+   "title": "The overhaul",
+   "text": "Bigger cover art on every song, and three new ones: Runaway, Leafed and the Gallery remix.",
+   "picture": "history/2026-02-18.webp",
+   "small": "history/2026-02-18-small.webp"
   },
   {
-   "sha": "6be861f",
-   "date": "2026-02-18",
-   "text": "Vertically center song year badge with song title"
-  },
-  {
-   "sha": "384bff7",
-   "date": "2026-02-18",
-   "text": "Size cover art to title-to-controls bounds without stretching rows"
-  },
-  {
-   "sha": "782f7a5",
-   "date": "2026-02-18",
-   "text": "jukebox overhaul"
-  },
-  {
-   "sha": "558338f",
    "date": "2025-11-17",
-   "text": "reorder"
+   "title": "A new look",
+   "text": "Darker, starrier colors, a better fit on phones, and Dropoff.",
+   "picture": "history/2025-11-17.webp",
+   "small": "history/2025-11-17-small.webp"
   },
   {
-   "sha": "99e39d9",
-   "date": "2025-11-17",
-   "text": "fix capitalizations"
-  },
-  {
-   "sha": "2555a2e",
-   "date": "2025-11-17",
-   "text": "mobile fix 100%+%"
-  },
-  {
-   "sha": "ecf4ec6",
-   "date": "2025-11-17",
-   "text": "mobile fixd pls"
-  },
-  {
-   "sha": "62fb633",
-   "date": "2025-11-17",
-   "text": "mobile fix !"
-  },
-  {
-   "sha": "9d3f52e",
-   "date": "2025-11-17",
-   "text": "hmm"
-  },
-  {
-   "sha": "269bc66",
-   "date": "2025-11-17",
-   "text": "mobile fix ?"
-  },
-  {
-   "sha": "136f86c",
-   "date": "2025-11-17",
-   "text": "new look, better mobile"
-  },
-  {
-   "sha": "819ffea",
-   "date": "2025-11-17",
-   "text": "new song lol"
-  },
-  {
-   "sha": "9cc3742",
    "date": "2025-04-05",
-   "text": "mobile v3"
+   "title": "Made for phones",
+   "text": "Rebuilt to fit properly on a phone.",
+   "picture": "history/2025-04-05.webp",
+   "small": "history/2025-04-05-small.webp"
   },
   {
-   "sha": "c6caa79",
-   "date": "2025-04-05",
-   "text": "mobile fix v2"
-  },
-  {
-   "sha": "bd76d6e",
-   "date": "2025-04-04",
-   "text": "yay"
-  },
-  {
-   "sha": "f9adf90",
    "date": "2025-01-14",
-   "text": "added DRIFT"
+   "title": "Drift drops in",
+   "text": "A new song to start 2025.",
+   "picture": "history/2025-01-14.webp",
+   "small": "history/2025-01-14-small.webp"
   },
   {
-   "sha": "bcf5a54",
    "date": "2024-12-06",
-   "text": "callout!!!"
+   "title": "Callout",
+   "text": "The first new song since opening week.",
+   "picture": "history/2024-12-06.webp",
+   "small": "history/2024-12-06-small.webp"
   },
   {
-   "sha": "0b22a95",
    "date": "2024-10-30",
-   "text": "Typo fix"
+   "title": "Penguins and covers",
+   "text": "The jukebox gets its look: two penguins keeping watch, a welcome note, cover art and Play buttons.",
+   "picture": "history/2024-10-30.webp",
+   "small": "history/2024-10-30-small.webp"
   },
   {
-   "sha": "9234a32",
-   "date": "2024-10-29",
-   "text": "Update Mobile Version"
-  },
-  {
-   "sha": "f6d6cf8",
-   "date": "2024-10-29",
-   "text": "Compatibility Fixes"
-  },
-  {
-   "sha": "1f7c4a6",
-   "date": "2024-10-29",
-   "text": "Muse Catalog v1"
-  },
-  {
-   "sha": "565e380",
-   "date": "2024-10-28",
-   "text": "Fixed Formatting; Song Order"
-  },
-  {
-   "sha": "8880061",
-   "date": "2024-10-28",
-   "text": "updated record mobile look"
-  },
-  {
-   "sha": "b28dde9",
-   "date": "2024-10-28",
-   "text": "change mobile version"
-  },
-  {
-   "sha": "0597d72",
-   "date": "2024-10-28",
-   "text": "35vh"
-  },
-  {
-   "sha": "fb807d6",
-   "date": "2024-10-28",
-   "text": "fix mobile version"
-  },
-  {
-   "sha": "030f8af",
-   "date": "2024-10-28",
-   "text": "almost final"
-  },
-  {
-   "sha": "6c20faa",
    "date": "2024-10-27",
-   "text": "Initial commit"
+   "title": "The jukebox opens",
+   "text": "Four songs with plain players and no covers yet, a tag filter, and the frog quest badge.",
+   "picture": "history/2024-10-27.webp",
+   "small": "history/2024-10-27-small.webp"
   }
  ]
 }

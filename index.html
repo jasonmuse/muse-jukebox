@@ -340,7 +340,7 @@
             <div class="back-header">
                 <h2 class="back-title">Jukebot</h2>
                 <span class="jb-lights" aria-hidden="true"><span class="jb-light"></span><span class="jb-light"></span><span class="jb-light"></span></span>
-                <!-- The jukebox's history: every change to it, from the very first day -->
+                <!-- The jukebox's history: its big moments, from the very first day -->
                 <button class="back-history-button" id="history-button" type="button" aria-haspopup="dialog" aria-controls="history-dialog" title="How the jukebox has changed">
                     <svg class="history-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 12a8.4 8.4 0 1 0 2.5-6"/><path d="M3.2 3.8v4.6h4.6"/><path d="M12 7.6V12l3 2.1"/></svg>
                     <span class="back-history-label">History</span>
@@ -548,21 +548,27 @@
     </nav>
     <div id="safe-area-probe" class="safe-area-probe" aria-hidden="true"></div>
 
-    <!-- The jukebox's history (opened from the back): every change, newest first, a month at a time.
-         script.js fills it in from history.json, and anything newer from GitHub. -->
+    <!-- The jukebox's history (opened from the back): its big moments, newest first, a month at a time,
+         each with a tiny picture of how it looked then (tap one for a bigger one). script.js fills it in
+         from history.json; tools/make-history.mjs makes that and the pictures in history/. -->
     <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-title">
         <div class="history-panel">
             <header class="history-head">
                 <svg class="history-icon history-head-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 12a8.4 8.4 0 1 0 2.5-6"/><path d="M3.2 3.8v4.6h4.6"/><path d="M12 7.6V12l3 2.1"/></svg>
                 <div class="history-heading">
                     <h2 id="history-title">Jukebox history</h2>
-                    <p class="history-summary" id="history-summary">Every change, from the very first day</p>
+                    <p class="history-summary" id="history-summary">How it's grown, from the very first day</p>
                 </div>
                 <button class="history-close" type="button" aria-label="Close the history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
             </header>
             <div class="history-scroll" id="history-scroll" tabindex="-1" autofocus>
                 <ol class="history-months" id="history-months"></ol>
                 <p class="history-status" id="history-status" role="status">Winding back the tape&hellip;</p>
+            </div>
+            <div class="history-zoom" id="history-zoom" hidden>
+                <button class="history-zoom-close" type="button" aria-label="Back to the history"></button>
+                <img class="history-zoom-picture" id="history-zoom-picture" alt="" width="390" height="844">
+                <p class="history-zoom-caption" id="history-zoom-caption"></p>
             </div>
         </div>
     </dialog>

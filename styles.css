@@ -3732,6 +3732,7 @@ html {
 }
 
 .history-panel {
+    position: relative;
     display: flex;
     flex-direction: column;
     max-height: min(720px, calc(100vh - 28px));
@@ -3788,7 +3789,9 @@ html {
     .history-dialog[open] .history-panel,
     .history-dialog[open]::backdrop,
     .history-dialog.is-closing .history-panel,
-    .history-dialog.is-closing::backdrop {
+    .history-dialog.is-closing::backdrop,
+    .history-zoom,
+    .history-zoom-picture {
         animation: none;
     }
 }
@@ -3827,6 +3830,7 @@ html {
 
 .history-summary {
     margin: 3px 0 0;
+    text-align: left;
     font-size: 0.82rem;
     color: rgba(228, 233, 255, 0.6);
 }
@@ -3875,14 +3879,13 @@ html {
 }
 
 .history-months,
-.history-days,
-.history-changes {
+.history-days {
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-/* Each month's name stays at the top while its days go by */
+/* Each month's name stays at the top while its moments go by */
 .history-month-head {
     position: sticky;
     top: 0;
@@ -3901,15 +3904,7 @@ html {
     color: #aebcff;
 }
 
-.history-era {
-    font-size: 0.84rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: rgba(228, 233, 255, 0.55);
-}
-
-/* The line the days sit on */
+/* The line the moments sit on */
 .history-days {
     margin-left: 5px;
     padding-left: 20px;
@@ -3921,7 +3916,7 @@ html {
     padding: 2px 0 14px;
 }
 
-/* (each month's line stops at its last day) */
+/* (each month's line stops at its last moment) */
 .history-day:last-child {
     padding-bottom: 4px;
 }
@@ -3938,7 +3933,7 @@ html {
     box-shadow: 0 0 0 2px #8ea1ff;
 }
 
-/* (the latest day's lit up, like the song that's on) */
+/* (the latest moment's lit up, like the song that's on) */
 .history-day.is-latest::before {
     background: #b5f3ff;
     box-shadow: 0 0 0 2px #8ee9ff, 0 0 10px rgba(90, 200, 255, 0.8);
@@ -3955,7 +3950,7 @@ html {
     text-shadow: 0 0 3px rgba(255, 190, 80, 0.6);
 }
 
-/* The very first day gets a sticker, like Jukebot's */
+/* The very first moment gets a sticker, like Jukebot's */
 .history-day.is-first .history-date::after {
     content: "Day one";
     padding: 2px 7px;
@@ -3969,29 +3964,138 @@ html {
     color: #3b3016;
 }
 
-.history-changes {
-    display: grid;
-    gap: 5px;
-    margin-top: 6px;
+/* What happened: a tiny picture of how the jukebox looked then (tap it for a bigger one) and the
+   gist of it */
+.history-moment {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 7px;
 }
 
-.history-changes li {
-    position: relative;
-    padding-left: 13px;
-    font-size: 0.92rem;
-    line-height: 1.35;
+.history-shot {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: #10121c;
+    box-shadow: 0 0 0 1.5px rgba(174, 188, 255, 0.32), 0 3px 10px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    cursor: zoom-in;
+    transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.history-shot img {
+    display: block;
+    width: 52px;
+    height: auto;
+}
+
+.history-shot:active {
+    transform: scale(0.95);
+}
+
+.history-shot:focus-visible {
+    outline: 2px solid #8ee9ff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .history-shot:hover {
+        transform: rotate(-2deg) scale(1.05);
+        box-shadow: 0 0 0 1.5px rgba(142, 233, 255, 0.6), 0 5px 14px rgba(0, 0, 0, 0.4);
+    }
+}
+
+.history-words {
+    min-width: 0;
+    padding-top: 1px;
+}
+
+.history-title {
+    display: block;
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #f2f4ff;
+}
+
+.history-text {
+    margin: 3px 0 0;
+    text-align: left;
+    font-size: 0.88rem;
+    line-height: 1.38;
+    color: rgba(228, 233, 255, 0.75);
     overflow-wrap: anywhere;
 }
 
-.history-changes li::before {
-    content: "";
+/* A picture big, over the history, with when it was: a tap anywhere puts it away */
+.history-zoom {
     position: absolute;
-    top: 0.58em;
-    left: 0;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: rgba(174, 188, 255, 0.6);
+    inset: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    justify-items: center;
+    gap: 10px;
+    padding: 18px 16px 14px;
+    background: rgba(14, 12, 34, 0.92);
+    cursor: zoom-out;
+    animation: historyBackdropIn 200ms ease-out;
+}
+
+.history-zoom[hidden] {
+    display: none;
+}
+
+/* (all of it is the button that puts it away, under the picture) */
+.history-zoom-close {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: inherit;
+}
+
+.history-zoom-close:focus-visible {
+    outline: 2px solid #8ee9ff;
+    outline-offset: -4px;
+    border-radius: 18px;
+}
+
+.history-zoom-picture {
+    position: relative;
+    align-self: center;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 14px;
+    box-shadow: 0 0 0 2px rgba(207, 214, 255, 0.4), 0 14px 40px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    animation: historyZoomIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-zoom-caption {
+    position: relative;
+    margin: 0;
+    text-align: center;
+    font: 800 0.76rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #ffc861;
+    text-shadow: 0 0 3px rgba(255, 190, 80, 0.6);
+    pointer-events: none;
+}
+
+@keyframes historyZoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
 }
 
 .history-status {

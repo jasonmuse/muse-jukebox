@@ -8148,63 +8148,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // ───── History: every change to the jukebox, from the very first day ─────
-    // A logbook on the back, a month at a time, newest first. history.json (tools/make-history.py)
-    // has every change up to when it was made; anything newer comes from GitHub as it opens (asked
-    // at most every ten minutes, and if GitHub doesn't answer, it just goes up to history.json).
+    // ───── History: the jukebox's big moments, from the very first day ─────
+    // A logbook on the back, a month at a time, newest first: each moment with a tiny picture of how
+    // the jukebox looked then (tap it for a bigger one). history.json and the pictures in history/
+    // come from tools/make-history.mjs.
     const HISTORY_FILE = "history.json";
-    const HISTORY_NEWER_URL = "https://api.github.com/repos/jasonmuse/muse-jukebox/commits?sha=main&per_page=100";
-    const HISTORY_NEWER_KEY = "museJukeboxHistoryNewer";
-    const HISTORY_NEWER_MS = 10 * 60 * 1000;
     const historyDialog = document.getElementById("history-dialog");
 
     // "2026-11-02" as that day here (not midnight in London)
     function parseHistoryDate(date) {
         const [year, month, day] = date.split("-").map(Number);
         return new Date(year, month - 1, day);
-    }
-
-    function toHistoryDate(time) {
-        const date = new Date(time);
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    }
-
-    // A change's parts (kept apart with semicolons), each starting with a capital
-    function splitHistoryChange(text) {
-        return text.split(/;\s+/)
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
-    }
-
-    // The changes since `newestDate` from GitHub (merges left out, as in history.json)
-    async function fetchNewerHistory(newestDate) {
-        try {
-            const kept = JSON.parse(sessionStorage.getItem(HISTORY_NEWER_KEY) || "null");
-            if (kept && kept.since === newestDate && Date.now() - kept.at < HISTORY_NEWER_MS) return kept.changes;
-        } catch (error) {
-            // Storage blocked: just ask
-        }
-        // (from the day before, in case the clocks differ: what's already there is dropped after)
-        const since = parseHistoryDate(newestDate);
-        since.setDate(since.getDate() - 1);
-        const response = await fetch(`${HISTORY_NEWER_URL}&since=${since.toISOString()}`);
-        if (!response.ok) return [];
-        const commits = await response.json();
-        const changes = (Array.isArray(commits) ? commits : [])
-            .filter((commit) => commit && commit.sha && commit.commit && (!commit.parents || commit.parents.length < 2))
-            .map((commit) => ({
-                sha: commit.sha.slice(0, 7),
-                date: toHistoryDate((commit.commit.author || commit.commit.committer).date),
-                text: String(commit.commit.message || "").split("\n")[0].trim()
-            }))
-            .filter((change) => change.text);
-        try {
-            sessionStorage.setItem(HISTORY_NEWER_KEY, JSON.stringify({ since: newestDate, at: Date.now(), changes }));
-        } catch (error) {
-            // Storage blocked: asked again next time
-        }
-        return changes;
     }
 
     function setUpHistory() {
@@ -8220,68 +8174,95 @@ document.addEventListener("DOMContentLoaded", async () => {
         const list = document.getElementById("history-months");
         const status = document.getElementById("history-status");
         const summary = document.getElementById("history-summary");
-        let history = null;
+        const zoom = document.getElementById("history-zoom");
+        const zoomPicture = document.getElementById("history-zoom-picture");
+        const zoomCaption = document.getElementById("history-zoom-caption");
+        const zoomClose = zoom.querySelector(".history-zoom-close");
+        let moments = null;
         let loading = null;
         let closeTimer = null;
+        let zoomedFrom = null;
 
         const formatDate = (date, options) => parseHistoryDate(date).toLocaleDateString("en-US", options);
 
-        // A month at a time, each day a stop on the line with what changed that day
+        // A picture of how it looked, big, over the history (a tap anywhere puts it away)
+        const showZoom = (moment, from) => {
+            zoomedFrom = from;
+            zoomPicture.src = moment.picture;
+            zoomPicture.alt = `The jukebox on ${formatDate(moment.date, { month: "long", day: "numeric", year: "numeric" })}`;
+            zoomCaption.textContent = `${formatDate(moment.date, { month: "short", day: "numeric", year: "numeric" })} · ${moment.title}`;
+            zoom.hidden = false;
+            zoomClose.focus({ preventScroll: true });
+        };
+        const hideZoom = () => {
+            if (zoom.hidden) return false;
+            zoom.hidden = true;
+            zoomPicture.removeAttribute("src");
+            if (zoomedFrom) zoomedFrom.focus({ preventScroll: true });
+            zoomedFrom = null;
+            return true;
+        };
+        zoom.addEventListener("click", hideZoom);
+
+        // A month at a time, each moment a stop on the line: its picture beside what happened
         const render = () => {
-            const { eras, changes } = history;
             const fragment = document.createDocumentFragment();
             let monthKey = "";
-            let dayKey = "";
-            let days = null;
-            let dayChanges = null;
-            changes.forEach((change) => {
-                const month = change.date.slice(0, 7);
+            let stops = null;
+            moments.forEach((moment) => {
+                const month = moment.date.slice(0, 7);
                 if (month !== monthKey) {
                     monthKey = month;
-                    dayKey = "";
                     const item = document.createElement("li");
                     item.className = "history-month";
                     const head = document.createElement("h3");
                     head.className = "history-month-head";
-                    const name = document.createElement("span");
-                    name.textContent = formatDate(`${month}-01`, { month: "long", year: "numeric" });
-                    head.append(name);
-                    if (eras[month]) {
-                        const era = document.createElement("span");
-                        era.className = "history-era";
-                        era.textContent = eras[month];
-                        head.append(era);
-                    }
-                    days = document.createElement("ol");
-                    days.className = "history-days";
-                    item.append(head, days);
+                    head.textContent = formatDate(`${month}-01`, { month: "long", year: "numeric" });
+                    stops = document.createElement("ol");
+                    stops.className = "history-days";
+                    item.append(head, stops);
                     fragment.append(item);
                 }
-                if (change.date !== dayKey) {
-                    dayKey = change.date;
-                    const day = document.createElement("li");
-                    day.className = "history-day";
-                    const time = document.createElement("time");
-                    time.className = "history-date";
-                    time.dateTime = change.date;
-                    time.textContent = formatDate(change.date, { month: "short", day: "numeric" });
-                    dayChanges = document.createElement("ul");
-                    dayChanges.className = "history-changes";
-                    day.append(time, dayChanges);
-                    days.append(day);
-                }
-                splitHistoryChange(change.text).forEach((part) => {
-                    const line = document.createElement("li");
-                    line.textContent = part;
-                    dayChanges.append(line);
-                });
+                const stop = document.createElement("li");
+                stop.className = "history-day";
+                const time = document.createElement("time");
+                time.className = "history-date";
+                time.dateTime = moment.date;
+                time.textContent = formatDate(moment.date, { month: "short", day: "numeric" });
+                const body = document.createElement("div");
+                body.className = "history-moment";
+                const shot = document.createElement("button");
+                shot.type = "button";
+                shot.className = "history-shot";
+                shot.setAttribute("aria-label", `See how the jukebox looked: ${moment.title}`);
+                const picture = document.createElement("img");
+                picture.src = moment.small;
+                picture.alt = "";
+                picture.width = 120;
+                picture.height = 260;
+                picture.loading = "lazy";
+                picture.decoding = "async";
+                shot.append(picture);
+                shot.addEventListener("click", () => showZoom(moment, shot));
+                const words = document.createElement("div");
+                words.className = "history-words";
+                const title = document.createElement("strong");
+                title.className = "history-title";
+                title.textContent = moment.title;
+                const text = document.createElement("p");
+                text.className = "history-text";
+                text.textContent = moment.text;
+                words.append(title, text);
+                body.append(shot, words);
+                stop.append(time, body);
+                stops.append(stop);
             });
-            const dayItems = fragment.querySelectorAll(".history-day");
-            dayItems[0].classList.add("is-latest");
-            dayItems[dayItems.length - 1].classList.add("is-first");
+            const stopItems = fragment.querySelectorAll(".history-day");
+            stopItems[0].classList.add("is-latest");
+            stopItems[stopItems.length - 1].classList.add("is-first");
             list.replaceChildren(fragment);
-            const first = changes[changes.length - 1];
-            summary.textContent = `${changes.length} changes since ${formatDate(first.date, { month: "short", day: "numeric", year: "numeric" })}`;
+            const first = moments[moments.length - 1];
+            summary.textContent = `${moments.length} big moments since ${formatDate(first.date, { month: "short", day: "numeric", year: "numeric" })}`;
             status.hidden = true;
         };
 
@@ -8289,26 +8270,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (loading) return;
             status.hidden = false;
             status.textContent = "Winding back the tape…";
-            loading = fetch(HISTORY_FILE)
+            // (asked afresh each time, so it never pairs a new page with old moments from the cache)
+            loading = fetch(HISTORY_FILE, { cache: "no-cache" })
                 .then((response) => {
                     if (!response.ok) throw new Error(`${HISTORY_FILE}: ${response.status}`);
                     return response.json();
                 })
                 .then((data) => {
-                    const changes = Array.isArray(data.changes) ? data.changes.filter((change) => change && change.sha && change.date && change.text) : [];
-                    if (!changes.length) throw new Error(`${HISTORY_FILE}: no changes`);
-                    history = { eras: data.eras || {}, changes };
+                    const found = Array.isArray(data.moments)
+                        ? data.moments.filter((moment) => moment && moment.date && moment.title && moment.text && moment.picture && moment.small)
+                        : [];
+                    if (!found.length) throw new Error(`${HISTORY_FILE}: no moments`);
+                    moments = found;
                     render();
-                    // Anything newer goes on top, if GitHub answers
-                    fetchNewerHistory(changes[0].date)
-                        .then((newer) => {
-                            const known = new Set(history.changes.map((change) => change.sha.slice(0, 7)));
-                            const added = newer.filter((change) => !known.has(change.sha));
-                            if (!added.length) return;
-                            history.changes = [...added, ...history.changes];
-                            render();
-                        })
-                        .catch(() => {});
                 })
                 .catch(() => {
                     // (it tries again the next time it's opened)
@@ -8318,11 +8292,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
         };
 
-        // It's fetched as the jukebox turns round, so it's all there (anything newer from GitHub
-        // too) by the time History is tapped, instead of changing under you just after it opens
+        // It's fetched as the jukebox turns round, so it's all there by the time History is tapped
         if (jukeboxPanel && typeof MutationObserver === "function") {
             const turnWatcher = new MutationObserver(() => {
-                if (history) {
+                if (moments) {
                     turnWatcher.disconnect();
                 } else if (jukeboxPanel.classList.contains("is-flipped")) {
                     load();
@@ -8335,9 +8308,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (historyDialog.open) return;
             clearTimeout(closeTimer);
             historyDialog.classList.remove("is-closing");
+            hideZoom();
             historyDialog.showModal();
             scroller.scrollTop = 0;
-            if (!history) load();
+            if (!moments) load();
         };
 
         const finishClosing = () => {
@@ -8363,15 +8337,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         historyDialog.addEventListener("close", () => {
             clearTimeout(closeTimer);
             historyDialog.classList.remove("is-closing");
+            hideZoom();
         });
 
         button.addEventListener("click", open);
         historyDialog.querySelector(".history-close").addEventListener("click", close);
-        // Escape closes it too, and so does a tap outside it (one that started outside it as well)
+        // Escape puts a big picture away first, then closes it, and so does a tap outside it (one
+        // that started outside it as well)
         historyDialog.addEventListener("cancel", (event) => {
             if (!event.cancelable) return;
             event.preventDefault();
-            close();
+            if (!hideZoom()) close();
         });
         let pressedOutside = false;
         historyDialog.addEventListener("pointerdown", (event) => {
