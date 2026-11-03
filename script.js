@@ -7684,9 +7684,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (turn.dropRecordAfter) turn.dropRecordAfter();
     }
 
-    // A record that's down pops up so you can see it flip, and drops again afterwards
+    // A record that's down while a song's on (between songs, say) pops up so you can see it flip, and
+    // drops again afterwards if the song's gone by then. With nothing playing it stays down.
     function liftRecordForFlip() {
-        if (!record || record.classList.contains("up")) return () => {};
+        if (!record || record.classList.contains("up") || !currentTrackData) return () => {};
         record.classList.add("up");
         return () => {
             setTimeout(() => {
@@ -8088,22 +8089,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         const setFitStep = (step) => {
             for (let index = 1; index <= FIT_STEPS; index += 1) scroller.classList.toggle(`fit-${index}`, index <= step);
         };
-        // (what the fit depends on: the panel's size, what Jukebot's sticker says, which grows and
-        // shrinks over a repair job, and the badge once it's loaded; not the changes fitting makes)
+        // (what the fit depends on: the panel's size, how big Jukebot's sticker is, and the badge once
+        // it's loaded; not the changes fitting makes. The sticker's the size of the longest thing it
+        // says, so what it says now doesn't come into it: it can change without the panel moving.)
         const getFitKey = () => [
             scroller.clientWidth, scroller.clientHeight,
-            sticker ? sticker.textContent : "", sticker ? sticker.querySelectorAll("button").length : 0,
+            sticker ? sticker.style.minHeight : "",
             below ? below.offsetHeight : 0
         ].join("|");
         let fitKey = "";
+        // (each step can change how big the sticker's writing is, so Jukebot sizes it afresh)
+        const sizeSticker = () => {
+            if (window.jukebot && window.jukebot.sizeSticker) window.jukebot.sizeSticker();
+        };
         const fitPanel = () => {
             if (!scroller.clientHeight) return;
             let step = 0;
             setFitStep(0);
+            sizeSticker();
             fitTips();
             while (scroller.scrollHeight - scroller.clientHeight > 1 && step < FIT_STEPS) {
                 step += 1;
                 setFitStep(step);
+                sizeSticker();
                 fitTips();
             }
             if ((step >= 4) !== tickerShowsWelcome) {

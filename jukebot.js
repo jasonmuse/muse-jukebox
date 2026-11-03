@@ -328,6 +328,7 @@
         const hudTime = document.getElementById("jb-time");
         const comboBadge = document.getElementById("jb-combo");
         const speech = document.getElementById("jb-speech");
+        const sticker = document.getElementById("jb-sticker");
         const stickerFace = document.getElementById("jb-sticker-face");
         const stickerBoop = document.getElementById("jb-sticker-boop");
         const stickerTitle = document.getElementById("jb-sticker-title");
@@ -631,28 +632,93 @@
             stickerActions.appendChild(button);
         }
 
+        // What the sticker says over a repair job, all here: it's always the size of the longest of it
+        const STICKER_SAYS = {
+            broken: { title: "Help! I'm glitching!", text: "Bugs got into my wiring. Hold my 4 corner screws to open me up and fix me." },
+            midJob: (step) => ({ title: "Repair in progress", text: `Next up: ${step.title}. My panel's just leaned on.` }),
+            unscrewing: { title: "That's it, keep going!", text: "Hold each corner screw to twist it out (or tap it twice)." },
+            screwsLeft: (left) => `${left} screw${left === 1 ? "" : "s"} to go...`,
+            screwingIn: { title: "Last bit!", text: "Hold each screw to tighten my panel back on." },
+            tightenLeft: (left) => `${left} more to tighten...`,
+            fixed: { title: "Good as new!", text: "Thanks for fixing me! (Psst... I'm ticklish.)" }
+        };
+
+        function setStickerWords(words) {
+            stickerTitle.textContent = words.title;
+            stickerText.textContent = words.text;
+        }
+
         // The sticker on the panel says how the job's going and what's next
         function updateSticker() {
             const index = progress.step;
             renderSteps(stickerSteps, index);
             stickerActions.textContent = "";
+            sticker.classList.toggle("is-fixed", index >= JOB_STEPS.length);
             if (index >= JOB_STEPS.length) {
-                stickerTitle.textContent = "Good as new!";
-                stickerText.textContent = "Thanks for fixing me! (Psst... I'm ticklish.)";
+                setStickerWords(STICKER_SAYS.fixed);
                 stickerNote.textContent = progress.blitzBest ? `Blitz best: ${progress.blitzBest}` : "All fixed";
                 addStickerButton("Bug blitz", startBlitz, true);
                 addStickerButton("Fix me again", restartJob);
             } else if (index > 0) {
-                stickerTitle.textContent = "Repair in progress";
-                stickerText.textContent = `Next up: ${JOB_STEPS[index].title}. My panel's just leaned on.`;
+                setStickerWords(STICKER_SAYS.midJob(JOB_STEPS[index]));
                 stickerNote.textContent = `Step ${index + 1} of ${JOB_STEPS.length}`;
                 addStickerButton("Keep fixing", continueJob, true);
             } else {
-                stickerTitle.textContent = "Help! I'm glitching!";
-                stickerText.textContent = "Bugs got into my wiring. Hold my 4 corner screws to open me up and fix me.";
+                setStickerWords(STICKER_SAYS.broken);
                 stickerNote.textContent = `${JOB_STEPS.length} steps to fix`;
             }
             stickerActions.hidden = !stickerActions.childElementCount;
+        }
+
+        // The sticker keeps one size whatever it says, so its words can change without it growing or
+        // shrinking (or the panel round it fitting itself afresh): it's as tall as the tallest it can
+        // look, at the width it has, measured on a hidden copy of it. Whatever it says sits in the
+        // middle of the room above its steps.
+        function getStickerLooks() {
+            const count = JOB_STEPS.length;
+            const looks = [
+                { ...STICKER_SAYS.broken, note: `${count} steps to fix` },
+                { ...STICKER_SAYS.unscrewing, note: `${count} steps to fix` },
+                { ...STICKER_SAYS.screwingIn, note: `Step ${count} of ${count}` },
+                { ...STICKER_SAYS.fixed, note: "Blitz best: 9999", buttons: ["Bug blitz", "Fix me again"], fixed: true }
+            ];
+            JOB_STEPS.slice(1).forEach((step, index) => {
+                looks.push({ ...STICKER_SAYS.midJob(step), note: `Step ${index + 2} of ${count}`, buttons: ["Keep fixing"] });
+            });
+            return looks;
+        }
+
+        function sizeSticker() {
+            const width = sticker.offsetWidth;
+            if (!width) return;
+            const copy = sticker.cloneNode(true);
+            copy.removeAttribute("id");
+            copy.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
+            copy.setAttribute("aria-hidden", "true");
+            copy.style.cssText = `position: absolute; left: 0; top: 0; width: ${width}px; min-height: 0; visibility: hidden; pointer-events: none;`;
+            sticker.after(copy);
+            const title = copy.querySelector(".jb-sticker-copy strong");
+            const text = copy.querySelector(".jb-sticker-copy span");
+            const note = copy.querySelector(".jb-sticker-note");
+            const actions = copy.querySelector(".jb-sticker-actions");
+            let tallest = 0;
+            getStickerLooks().forEach((look) => {
+                title.textContent = look.title;
+                text.textContent = look.text;
+                note.textContent = look.note;
+                actions.replaceChildren(...(look.buttons || []).map((label, index) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = `jb-sticker-button${index === 0 ? " is-main" : ""}`;
+                    button.textContent = label;
+                    return button;
+                }));
+                actions.hidden = !actions.childElementCount;
+                copy.classList.toggle("is-fixed", Boolean(look.fixed));
+                tallest = Math.max(tallest, copy.getBoundingClientRect().height);
+            });
+            copy.remove();
+            sticker.style.minHeight = `${Math.ceil(tallest)}px`;
         }
 
         // ───── The core chip: Jukebot's brain, with its screen face on top ─────
@@ -1142,8 +1208,7 @@
             if (step.id === "open") {
                 game.stage = "unscrew";
                 setTool("screwdriver");
-                stickerTitle.textContent = "That's it, keep going!";
-                stickerText.textContent = "Hold each corner screw to twist it out (or tap it twice).";
+                setStickerWords(STICKER_SAYS.unscrewing);
             } else if (step.id === "sweep" || step.id === "queen") {
                 startSwat(getBugConfig(step), step.id === "queen" ? "It's the Queen Moth! Bonk her!" : "Bugs! Get them off me!");
             } else if (step.id === "wiring") {
@@ -1347,7 +1412,7 @@
             if (typeof navigator.vibrate === "function") navigator.vibrate(10);
             const left = screws.filter((item) => !item.classList.contains("is-out")).length;
             if (left) {
-                stickerText.textContent = `${left} screw${left === 1 ? "" : "s"} to go...`;
+                stickerText.textContent = STICKER_SAYS.screwsLeft(left);
             }
             later(checkCoverOff, 160);
         }
@@ -1364,7 +1429,7 @@
             if (typeof navigator.vibrate === "function") navigator.vibrate(14);
             const left = screws.filter((item) => !item.classList.contains("is-in")).length;
             if (left) {
-                stickerText.textContent = `${left} more to tighten...`;
+                stickerText.textContent = STICKER_SAYS.tightenLeft(left);
             } else {
                 later(finishJob, 260);
             }
@@ -2475,8 +2540,7 @@
                 screw.style.setProperty("--turn", "-720deg");
                 screw.style.setProperty("--lift", "1");
             });
-            stickerTitle.textContent = "Last bit!";
-            stickerText.textContent = "Hold each screw to tighten my panel back on.";
+            setStickerWords(STICKER_SAYS.screwingIn);
             renderSteps(stickerSteps, JOB_STEPS.length - 1);
             stickerNote.textContent = `Step ${JOB_STEPS.length} of ${JOB_STEPS.length}`;
             stickerActions.hidden = true;
@@ -2858,8 +2922,11 @@
         rest();
         handleResize();
         scheduleBlink();
-        // Turning back to the songs puts the panel back (a step in progress starts over next time)
-        window.jukebot = { reset: rest, prepare: drawBoardIfDirty };
+        sizeSticker();
+        if (document.fonts) document.fonts.ready.then(sizeSticker);
+        // Turning back to the songs puts the panel back (a step in progress starts over next time).
+        // The panel round the sticker sizes it again each time it fits itself.
+        window.jukebot = { reset: rest, prepare: drawBoardIfDirty, sizeSticker };
     }
 
     if (document.readyState === "loading") {

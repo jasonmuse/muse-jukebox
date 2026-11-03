@@ -1566,7 +1566,7 @@ audio {
 }
 
 #track-list.shuffle-on .mode-button--shuffle svg {
-    transform: scaleX(-1);
+    transform: scaleY(-1);
 }
 
 /* The little 1 inside the loop when it's repeating one song */
@@ -2805,7 +2805,7 @@ html {
 }
 
 .now-playing.shuffle-on #np-shuffle svg {
-    transform: scaleX(-1);
+    transform: scaleY(-1);
 }
 
 /* Shuffle only appears once keep-playing is on (its slot stays reserved) */
@@ -5016,6 +5016,7 @@ html.viewport-short .jukebox-back {
     .jb-cover-scroll.fit-2 .jb-sticker:has(.jb-sticker-actions:not([hidden])) {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: 1fr auto;
     }
 
     .jb-cover-scroll.fit-2 .jb-sticker:has(.jb-sticker-actions:not([hidden])) .jb-sticker-top {
@@ -5035,11 +5036,11 @@ html.viewport-short .jukebox-back {
         border-top: 1px dashed rgba(59, 48, 22, 0.35);
     }
 
-    .jb-back.is-fixed .jb-cover-scroll.fit-2 .jb-sticker-bottom {
+    .jb-cover-scroll.fit-2 .jb-sticker.is-fixed .jb-sticker-bottom {
         display: none;
     }
 
-    .jb-back.is-fixed .jb-cover-scroll.fit-2 .jb-sticker-actions {
+    .jb-cover-scroll.fit-2 .jb-sticker.is-fixed .jb-sticker-actions {
         grid-column: 1 / -1;
         padding-left: 0;
     }
@@ -5203,10 +5204,13 @@ html.viewport-short .jukebox-back {
     outline-offset: 3px;
 }
 
-/* Service sticker on the panel */
+/* Service sticker on the panel. It keeps one size whatever it says (jukebot.js sizes it for the
+   longest), so what it says now sits in the middle of the room above its steps. */
 .jb-sticker {
     position: relative;
     flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
     padding: 12px 14px;
     border-radius: 10px;
     background: linear-gradient(180deg, #ffe58a, #ffd23f);
@@ -5216,6 +5220,7 @@ html.viewport-short .jukebox-back {
 }
 
 .jb-sticker-top {
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -8846,7 +8851,7 @@ button.title-penguin:focus-visible {
 }
 
 /* (the loop turns round as it goes on, and once more for repeat-one, so its little 1 lands the
-   right way up; shuffle's arrows swap over) */
+   right way up; shuffle turns over top to bottom, so its arrows swap over but still point ahead) */
 .jukebox-speakers.continuous-on .speaker-mode--loop svg {
     transform: rotate(180deg);
 }
@@ -8856,7 +8861,7 @@ button.title-penguin:focus-visible {
 }
 
 .jukebox-speakers.continuous-on.shuffle-on .speaker-mode--shuffle svg {
-    transform: scaleX(-1);
+    transform: scaleY(-1);
 }
 
 .jukebox-speakers.repeat-one #speaker-loop .loop-one {
