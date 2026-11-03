@@ -5582,16 +5582,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // With Rhythm on the whole song is gone through a stretch at a time (decoded off to the side:
     // phones won't let a page measure the audio it's playing without breaking background playback),
     // measuring 43 times a second how sharply the sound gets louder across the spectrum. From that
-    // the tempo is found the way librosa does it (the average of the autocorrelations in 8 second
-    // windows, leaning towards 120 BPM) and every beat is placed by dynamic programming (Ellis's beat
-    // tracker: beats on strong onsets, each about one beat after the last), so they stay on the
-    // music all the way through.
+    // the tempo is found the way librosa does it (the autocorrelations in 8 second windows, leaning
+    // towards 120 BPM), followed through the song as it goes (a song can change tempo, or switch
+    // between parts in different ones), and every beat is placed by dynamic programming (Ellis's
+    // beat tracker: beats on strong onsets, each about one beat after the last, at the tempo there),
+    // so they stay on the music all the way through.
     const BEAT_FFT_SIZE = 2048;
     const BEAT_HOP = 512; // at 22050 Hz: 43 measurements a second
     const BEAT_BAND_COUNT = 40; // from 30 Hz to 8 kHz, evenly spaced in pitch
     const BEAT_FLOOR_DB = -60;
     const BEAT_CHUNK_SECONDS = 20;
-    const BEAT_TIGHTNESS = 100; // how firmly the beats keep to the tempo
+    const BEAT_TIGHTNESS = 600; // how firmly the beats keep to the tempo (any looser and they'd wander
+    // onto a syncopated song's stronger off-beats, losing a beat every so often and falling behind)
     const BEAT_ONSET_LAG = 0.03; // seconds
     const BEAT_SLICE_MS = 5; // the longest the page works on it at a time
     const beatAnalyses = new Map();
@@ -5637,8 +5639,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 onsets: new Float32Array(frameCount),
                 chunkFrames,
                 chunksDone: new Uint8Array(Math.ceil(frameCount / chunkFrames)),
-                period: 0, // the tempo: a beat's length in frames
-                periodComplete: false, // (worked out from the whole song)
+                period: 0, // the tempo overall: a beat's length in frames
                 beats: null, // when each beat lands (seconds)
                 strengths: null, // and how hard it hits (0–1)
                 firstIndex: 0, // which beat of the song the first one is
@@ -5779,19 +5780,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const from = firstChunk * analysis.chunkFrames;
         const onsets = analysis.onsets.subarray(from, Math.min(analysis.onsets.length, (lastChunk + 1) * analysis.chunkFrames));
-        // The tempo from the first 40 seconds measured (20 can be all intro), and again once the whole
-        // song is in (in between the beats follow the music anyway)
+        // The tempo through all that's measured (once there's 40 seconds of it: 20 can be all intro),
+        // as it goes and overall, worked out again as more comes in
         const complete = chunks.indexOf(0) < 0;
         if (!complete && onsets.length < 2 * analysis.chunkFrames) return;
-        if (!analysis.period || (complete && !analysis.periodComplete)) {
-            const tempo = findBeatPeriod(onsets, analysis.rate);
-            analysis.period = tempo.period;
-            analysis.periodComplete = complete;
-            // (a song that changes tempo is followed through its changes, once it's all measured)
-            analysis.periods = complete && from === 0 ? findTempoMap(tempo, onsets.length, analysis.rate) : null;
-        }
-        const period = analysis.period;
-        const { frames, strengths } = trackBeats(onsets, period, analysis.periods);
+        const tempo = findBeatPeriod(onsets, analysis.rate);
+        const period = tempo.period;
+        analysis.period = period;
+        const { frames, strengths } = trackBeats(onsets, period, findTempoPath(tempo, onsets.length, analysis.rate));
         if (frames.length < 2) return;
         // A frame is the middle of the samples it looks at, and a sound starts showing in it a little
         // before it lands (30ms, measured with a click track), so beats are put that much later
@@ -5870,52 +5866,87 @@ document.addEventListener("DOMContentLoaded", async () => {
         return tempo;
     }
 
-    // Some songs change tempo part way (a remix of a few parts, say): then a beat's length for every
-    // frame, following the tempo through each part that keeps well away from the song's overall one
-    // for a good while (16s or more); null for a song that keeps to one tempo, beaten as before
-    function findTempoMap(tempo, frameCount, rate) {
-        const { windows, minLag, maxLag, period } = tempo;
-        if (windows.length < 8) return null;
-        const median = (list) => {
-            const sorted = list.slice().sort((a, b) => a - b);
-            return sorted[Math.floor(sorted.length / 2)];
-        };
-        const smooth = (list, reach) => list.map((unused, index) => median(list.slice(Math.max(0, index - reach), index + reach + 1)));
-        // Each window's own tempo, then smoothed over ~18 seconds (medians, so a stray window, or a
-        // stretch felt in threes for a few bars, doesn't count)
-        const raw = windows.map(({ correlation }) => pickBeatLag(correlation, 1, minLag, maxLag, rate));
-        const heard = smooth(smooth(raw, 2), 4);
-        // Split into parts that keep to one tempo (within 5%)
-        const parts = [];
-        heard.forEach((lag, index) => {
-            const part = parts[parts.length - 1];
-            if (part && Math.abs(Math.log(lag / part.first)) <= 0.05) {
-                part.lags.push(lag);
-            } else {
-                parts.push({ start: index, first: lag, lags: [lag] });
+    // The tempo as the song goes: for each window, the beat length that fits the music there best
+    // while keeping close to the windows either side (Viterbi through the windows'
+    // autocorrelations). A small change from one window to the next costs a little, so a slow drift
+    // is followed; a bigger one costs a set amount, however big, so a sudden switch is followed too
+    // (as between the parts of a remix, whatever the two tempos are to each other); but a window or
+    // two heard another way (in threes, say) isn't enough to pull it off. A beat length for every frame.
+    const TEMPO_PATH_STEP = 1.01; // the tempos tried, 1% apart (40 to 260 BPM)
+    const TEMPO_PATH_DRIFT = 2000; // a change costs this times its log squared, from one window to the next...
+    const TEMPO_PATH_JUMP = 1.5; // ...up to this
+    const TEMPO_PATH_PRIOR = 0.5; // leaning towards 120 BPM, as pickBeatLag does
+
+    function findTempoPath(tempo, frameCount, rate) {
+        const { windows, minLag, maxLag } = tempo;
+        if (windows.length < 3) return null;
+        const lags = [];
+        for (let bpm = 40; bpm <= 260; bpm *= TEMPO_PATH_STEP) {
+            const lag = (60 * rate) / bpm;
+            if (lag >= minLag && lag <= maxLag - 1) lags.push(lag);
+        }
+        const count = lags.length;
+        if (!count) return null;
+        // How well each tempo fits each window: its autocorrelation there, against the best there
+        const fits = windows.map(({ correlation }) => {
+            let best = 0;
+            for (let lag = minLag; lag <= maxLag; lag += 1) best = Math.max(best, correlation[lag]);
+            const fit = new Float32Array(count);
+            for (let state = 0; state < count; state += 1) {
+                const lag = lags[state];
+                const whole = Math.floor(lag);
+                const part = lag - whole;
+                const value = (correlation[whole] * (1 - part)) + (correlation[whole + 1] * part);
+                fit[state] = Math.log(Math.max(1e-3, best > 0 ? value / best : 0)) - (TEMPO_PATH_PRIOR * Math.pow(Math.log2(((60 * rate) / lag) / 120), 2));
             }
+            return fit;
         });
-        const lags = new Float32Array(windows.length).fill(period);
-        let changes = false;
-        const longEnough = Math.round(16 / 2); // (the windows are 2s apart)
-        // A part at a simple ratio to the song's tempo (half, two thirds, ...) is the same beat felt
-        // another way, not a new tempo
-        const related = (lag, to, ratios) => ratios.some((ratio) => Math.abs(Math.log((to / lag) / ratio)) < 0.04);
-        const isSameBeat = (lag) => related(lag, period, [0.5, 2 / 3, 0.75, 4 / 3, 1.5, 2]);
-        parts.forEach((part) => {
-            const lag = median(part.lags);
-            // (a few percent off is left to the beat tracker, which follows the music that closely anyway)
-            if (part.lags.length < longEnough || Math.abs(Math.log(lag / period)) <= 0.04 || isSameBeat(lag)) return;
-            // A new tempo is heard steadily all through its part (most windows agree, give or take
-            // the ones hearing it in threes or halves); a beatless stretch, like an ambient outro,
-            // gives all sorts and isn't one
-            const own = raw.slice(part.start, part.start + part.lags.length);
-            const agreeing = own.filter((heardLag) => related(heardLag, lag, [1, 2 / 3, 1.5, 0.5, 2])).length;
-            if (agreeing < own.length * 0.6) return;
-            changes = true;
-            lags.fill(lag, part.start, part.start + part.lags.length);
-        });
-        if (!changes) return null;
+        // (the changes that cost less than a jump: a few tempos either way)
+        const stepCosts = [];
+        for (let apart = 0; stepCosts.length < count; apart += 1) {
+            const cost = TEMPO_PATH_DRIFT * Math.pow(apart * Math.log(TEMPO_PATH_STEP), 2);
+            if (cost >= TEMPO_PATH_JUMP) break;
+            stepCosts.push(cost);
+        }
+        let totals = Float32Array.from(fits[0]);
+        const cameFrom = [];
+        for (let index = 1; index < fits.length; index += 1) {
+            let jumpFrom = 0;
+            for (let state = 1; state < count; state += 1) {
+                if (totals[state] > totals[jumpFrom]) jumpFrom = state;
+            }
+            const next = new Float32Array(count);
+            const back = new Int16Array(count);
+            for (let state = 0; state < count; state += 1) {
+                let best = totals[jumpFrom] - TEMPO_PATH_JUMP;
+                let bestFrom = jumpFrom;
+                for (let apart = 1 - stepCosts.length; apart < stepCosts.length; apart += 1) {
+                    const other = state + apart;
+                    if (other < 0 || other >= count) continue;
+                    const value = totals[other] - stepCosts[Math.abs(apart)];
+                    if (value > best) {
+                        best = value;
+                        bestFrom = other;
+                    }
+                }
+                next[state] = best + fits[index][state];
+                back[state] = bestFrom;
+            }
+            totals = next;
+            cameFrom.push(back);
+        }
+        // Back through the windows from the best ending
+        let state = 0;
+        for (let other = 1; other < count; other += 1) {
+            if (totals[other] > totals[state]) state = other;
+        }
+        const pathLags = new Float32Array(fits.length);
+        pathLags[fits.length - 1] = lags[state];
+        for (let index = fits.length - 1; index > 0; index -= 1) {
+            state = cameFrom[index - 1][state];
+            pathLags[index - 1] = lags[state];
+        }
+        // ...and from each window's middle to the next one's
         const periods = new Float32Array(frameCount);
         let at = 0;
         for (let frame = 0; frame < frameCount; frame += 1) {
@@ -5923,7 +5954,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const next = Math.min(windows.length - 1, at + 1);
             const span = windows[next].centre - windows[at].centre;
             const along = span > 0 ? Math.max(0, Math.min(1, (frame - windows[at].centre) / span)) : 0;
-            periods[frame] = lags[at] + ((lags[next] - lags[at]) * along);
+            periods[frame] = pathLags[at] + ((pathLags[next] - pathLags[at]) * along);
         }
         return periods;
     }
