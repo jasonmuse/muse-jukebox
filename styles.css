@@ -3592,10 +3592,13 @@ html {
 }
 
 /* "Jukebot" in the neon script "Muse" is in on the front, drifting the same way and tipped up a
-   little like it: the back's sign matches the front's */
+   little like it: the back's sign matches the front's. script.js makes it as big as the room beside
+   its lights and buttons lets it be (this is its smallest); it grows up and down into the room
+   round the header, so the header's no taller than its buttons. */
 .back-title {
     position: relative;
     margin: 0;
+    margin-block: min(0px, calc((34px - 1.26em) / 2));
     font-size: 1.7rem;
     font-weight: 400;
     line-height: 1.2;

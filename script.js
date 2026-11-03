@@ -8362,8 +8362,67 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // "Jukebot" is a sign: as big as the room beside its lights and buttons lets it be (a little short
+    // of filling it, so it isn't crowded), from its size in styles.css up to a cap (a wide desktop
+    // panel would make it huge), fitted afresh whenever that room changes or the writing loads
+    const BACK_TITLE_MAX_REM = 2.35;
+
+    function setUpBackTitle() {
+        const header = jukeboxPanel.querySelector(".back-header");
+        const title = header && header.querySelector(".back-title");
+        if (!title) return;
+        let fittedFor = "";
+        const fit = () => {
+            if (!header.clientWidth) return;
+            const others = Array.from(header.children).filter((child) => {
+                const style = getComputedStyle(child);
+                return child !== title && style.position !== "absolute" && style.display !== "none";
+            });
+            const gap = parseFloat(getComputedStyle(header).columnGap) || 0;
+            const taken = others.reduce((sum, child) => {
+                const style = getComputedStyle(child);
+                return sum + child.offsetWidth + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0) + gap;
+            }, 0);
+            const key = `${header.clientWidth}|${taken}`;
+            if (key === fittedFor) return;
+            fittedFor = key;
+            title.style.fontSize = "";
+            const base = parseFloat(getComputedStyle(title).fontSize);
+            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            const room = (header.clientWidth - taken) * 0.94;
+            const size = Math.min(BACK_TITLE_MAX_REM * rem, Math.max(base, base * (room / title.offsetWidth)));
+            title.style.fontSize = `${size.toFixed(1)}px`;
+        };
+        let fitFrame = null;
+        const scheduleFit = () => {
+            if (fitFrame !== null) return;
+            fitFrame = requestAnimationFrame(() => {
+                fitFrame = null;
+                fit();
+            });
+        };
+        if (typeof ResizeObserver === "function") {
+            new ResizeObserver(scheduleFit).observe(header);
+        } else {
+            window.addEventListener("resize", scheduleFit);
+        }
+        // (once the writing's loaded, everything's its real width)
+        if (document.fonts) {
+            document.fonts.addEventListener("loadingdone", () => {
+                fittedFor = "";
+                scheduleFit();
+            });
+            document.fonts.ready.then(() => {
+                fittedFor = "";
+                scheduleFit();
+            });
+        }
+        fit();
+    }
+
     function setUpJukeboxBack() {
         if (!jukeboxPanel) return;
+        setUpBackTitle();
         setUpLedSigns();
         setUpBackTips();
         setUpHandTurning();
