@@ -630,6 +630,8 @@
             button.textContent = label;
             button.addEventListener("click", action);
             stickerActions.appendChild(button);
+            // (it fades in, like the words)
+            if (!stillSticker()) button.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 240, easing: "ease-out" });
         }
 
         // What the sticker says over a repair job, all here: it's always the size of the longest of it
@@ -643,9 +645,45 @@
             fixed: { title: "Good as new!", text: "Thanks for fixing me! (Psst... I'm ticklish.)" }
         };
 
+        // What the sticker says changes with a quick crossfade, not a jump: the old words fade out
+        // lifting a touch, the new ones fade in settling down. (Changed again meanwhile, it lands
+        // on the latest; where motion's turned down, they just change.)
+        const stickerSwaps = new Map();
+
+        function stillSticker() {
+            return typeof document.body.animate !== "function"
+                || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        }
+
+        function swapStickerText(element, text) {
+            const swap = stickerSwaps.get(element);
+            if (swap) {
+                swap.text = text;
+                return;
+            }
+            if (element.textContent === text) return;
+            if (stillSticker()) {
+                element.textContent = text;
+                return;
+            }
+            const entry = { text };
+            stickerSwaps.set(element, entry);
+            const fadeOut = element.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-3px)" }], { duration: 120, easing: "ease-in", fill: "forwards" });
+            const land = () => {
+                stickerSwaps.delete(element);
+                element.textContent = entry.text;
+                fadeOut.cancel();
+                element.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" });
+            };
+            fadeOut.onfinish = land;
+            fadeOut.oncancel = () => {
+                if (stickerSwaps.get(element) === entry) land();
+            };
+        }
+
         function setStickerWords(words) {
-            stickerTitle.textContent = words.title;
-            stickerText.textContent = words.text;
+            swapStickerText(stickerTitle, words.title);
+            swapStickerText(stickerText, words.text);
         }
 
         // The sticker on the panel says how the job's going and what's next
@@ -656,16 +694,16 @@
             sticker.classList.toggle("is-fixed", index >= JOB_STEPS.length);
             if (index >= JOB_STEPS.length) {
                 setStickerWords(STICKER_SAYS.fixed);
-                stickerNote.textContent = progress.blitzBest ? `Blitz best: ${progress.blitzBest}` : "All fixed";
+                swapStickerText(stickerNote, progress.blitzBest ? `Blitz best: ${progress.blitzBest}` : "All fixed");
                 addStickerButton("Bug blitz", startBlitz, true);
                 addStickerButton("Fix me again", restartJob);
             } else if (index > 0) {
                 setStickerWords(STICKER_SAYS.midJob(JOB_STEPS[index]));
-                stickerNote.textContent = `Step ${index + 1} of ${JOB_STEPS.length}`;
+                swapStickerText(stickerNote, `Step ${index + 1} of ${JOB_STEPS.length}`);
                 addStickerButton("Keep fixing", continueJob, true);
             } else {
                 setStickerWords(STICKER_SAYS.broken);
-                stickerNote.textContent = `${JOB_STEPS.length} steps to fix`;
+                swapStickerText(stickerNote, `${JOB_STEPS.length} steps to fix`);
             }
             stickerActions.hidden = !stickerActions.childElementCount;
         }
@@ -1412,7 +1450,7 @@
             if (typeof navigator.vibrate === "function") navigator.vibrate(10);
             const left = screws.filter((item) => !item.classList.contains("is-out")).length;
             if (left) {
-                stickerText.textContent = STICKER_SAYS.screwsLeft(left);
+                swapStickerText(stickerText, STICKER_SAYS.screwsLeft(left));
             }
             later(checkCoverOff, 160);
         }
@@ -1429,7 +1467,7 @@
             if (typeof navigator.vibrate === "function") navigator.vibrate(14);
             const left = screws.filter((item) => !item.classList.contains("is-in")).length;
             if (left) {
-                stickerText.textContent = STICKER_SAYS.tightenLeft(left);
+                swapStickerText(stickerText, STICKER_SAYS.tightenLeft(left));
             } else {
                 later(finishJob, 260);
             }
@@ -2542,7 +2580,7 @@
             });
             setStickerWords(STICKER_SAYS.screwingIn);
             renderSteps(stickerSteps, JOB_STEPS.length - 1);
-            stickerNote.textContent = `Step ${JOB_STEPS.length} of ${JOB_STEPS.length}`;
+            swapStickerText(stickerNote, `Step ${JOB_STEPS.length} of ${JOB_STEPS.length}`);
             stickerActions.hidden = true;
         }
 
