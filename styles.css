@@ -4766,7 +4766,8 @@ body.has-side-rail .side-rail.is-dragging {
     filter: brightness(0.55) grayscale(1);
 }
 
-.rail-ring {
+/* (.rail-button svg sizes the icons, and would shrink the ring into the button's corner) */
+.rail-play .rail-ring {
     position: absolute;
     inset: 0;
     width: 100%;
