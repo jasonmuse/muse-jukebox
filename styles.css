@@ -3616,31 +3616,60 @@ html {
     transform: scale(0.95);
 }
 
-/* ───── HISTORY: every change to the jukebox, from the very first day ─────
-   Its button sits beside "Songs" on the back, a ghost of it (just its clock on phones, where the
-   header has no room for more). It opens a logbook: a month at a time, newest first, each day a
-   stop on a line with its date lit up like the LED signs. */
+/* ───── HISTORY: the jukebox's big moments, from the very first day ─────
+   Its button sits beside "Songs" on the back: a little LED readout, its clock and name lit up amber
+   like the signs (just its clock on phones, where the header has no room for more). Now and then,
+   while the back's showing, the clock winds itself back (straight away, under a pointer). It opens
+   a logbook: a month at a time, newest first, each moment a stop on a line with its date lit up. */
 .back-history-button {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 7px;
     min-width: 34px;
     min-height: 34px;
     padding: 0 12px 0 10px;
     border: 0;
     border-radius: 10px;
-    background-color: rgba(255, 255, 255, 0.1);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
-    color: #e4e9ff;
-    font: inherit;
-    font-size: 0.9rem;
-    font-weight: 600;
+    background: linear-gradient(180deg, #1d1b33, #110f20);
+    box-shadow: inset 0 0 0 1.5px rgba(255, 200, 97, 0.3), inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.25);
+    color: #ffc861;
+    font: 800 0.74rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 4px rgba(255, 190, 80, 0.65);
     cursor: pointer;
-    transition: transform 140ms ease-out, background-color 160ms ease-out;
+    transition: transform 140ms ease-out, box-shadow 160ms ease-out, text-shadow 160ms ease-out;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+}
+
+.back-history-button .history-icon {
+    width: 18px;
+    height: 18px;
+    filter: drop-shadow(0 0 3px rgba(255, 170, 60, 0.6));
+}
+
+.history-hands {
+    transform-box: view-box;
+    transform-origin: 12px 12px;
+}
+
+#jukebox.is-flipped .back-history-button .history-hands {
+    animation: historyRewind 9s ease-in-out 2.5s infinite;
+}
+
+/* (once round, backwards, then a rest) */
+@keyframes historyRewind {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    12%,
+    100% {
+        transform: rotate(-360deg);
+    }
 }
 
 .back-history-button:active {
@@ -3666,11 +3695,30 @@ html {
 
 @media (hover: hover) and (pointer: fine) {
     .back-history-button:hover {
-        background-color: rgba(255, 255, 255, 0.16);
+        box-shadow: inset 0 0 0 1.5px rgba(255, 200, 97, 0.55), inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(255, 170, 60, 0.18);
+        text-shadow: 0 0 6px rgba(255, 190, 80, 0.85);
+    }
+
+    #jukebox.is-flipped .back-history-button:hover .history-hands {
+        animation: historyRewindNow 800ms cubic-bezier(0.45, 0, 0.25, 1);
+    }
+
+    @keyframes historyRewindNow {
+        to {
+            transform: rotate(-360deg);
+        }
     }
 
     .history-close:hover {
         background-color: rgba(255, 255, 255, 0.18);
+    }
+}
+
+/* (the clock keeps still where motion's turned down) */
+@media (prefers-reduced-motion: reduce) {
+    #jukebox.is-flipped .back-history-button .history-hands,
+    #jukebox.is-flipped .back-history-button:hover .history-hands {
+        animation: none;
     }
 }
 
