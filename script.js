@@ -8417,35 +8417,62 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // "Jukebot" is a sign: as big as the room beside its lights and buttons lets it be (a little short
+    // "Jukebot" is a sign: as big as the room beside its lamps and buttons lets it be (a little short
     // of filling it, so it isn't crowded), from its size in styles.css up to as tall as there's room
-    // for between the rim and the board (a wide panel's header is no taller), fitted afresh whenever
-    // that room changes or the writing loads
+    // for between the rim and the board (a wide panel's header is no taller). Its lamps stand in a
+    // column beside it, as tall as its letters. The buttons are named where there's room once the
+    // sign's had its share (History only beside a sign that's about as big as it gets; Songs unless
+    // the sign would be small for it), and they take whatever room's left. Fitted afresh whenever
+    // the header's width changes or the writing loads.
     const BACK_TITLE_MAX_REM = 2.7;
+    const BACK_TITLE_NAMED_HISTORY_SHARE = 0.92; // of its biggest: the sign at least this big with History named
+    const BACK_TITLE_NAMED_SONGS_MIN_PX = 30; // and at least this with Songs named, or it's just the arrows
+    const BACK_LAMP_EM = 0.3; // a lamp, of the sign's size
+    const BACK_LAMP_GAP_EM = 0.07;
+    const BACK_LAMP_MIN_PX = 8;
 
     function setUpBackTitle() {
         const header = jukeboxPanel.querySelector(".back-header");
         const title = header && header.querySelector(".back-title");
-        if (!title) return;
+        const lamps = header && header.querySelector(".jb-lights");
+        if (!title || !lamps) return;
         let fittedFor = "";
         const fit = () => {
             if (!header.clientWidth) return;
-            const others = Array.from(header.children).filter((child) => {
-                const style = getComputedStyle(child);
-                return child !== title && style.position !== "absolute" && style.display !== "none";
-            });
-            // (the lamps' margin is the room left over, so it isn't counted)
-            const gap = parseFloat(getComputedStyle(header).columnGap) || 0;
-            const taken = others.reduce((sum, child) => sum + child.offsetWidth + gap, 0);
-            const key = `${header.clientWidth}|${taken}`;
+            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            const key = `${header.clientWidth}|${rem}`;
             if (key === fittedFor) return;
             fittedFor = key;
+            // (measured with the buttons at their own widths)
+            header.classList.add("is-fitting");
             title.style.fontSize = "";
             const base = parseFloat(getComputedStyle(title).fontSize);
-            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            const room = (header.clientWidth - taken) * 0.96;
-            const size = Math.min(BACK_TITLE_MAX_REM * rem, Math.max(base, base * (room / title.offsetWidth)));
+            const widthPerPx = title.offsetWidth / base;
+            const biggest = Math.max(base, BACK_TITLE_MAX_REM * rem);
+            const gap = parseFloat(getComputedStyle(header).columnGap) || 0;
+            const buttons = Array.from(header.children).filter((child) => {
+                const style = getComputedStyle(child);
+                return child !== title && child !== lamps && style.position !== "absolute" && style.display !== "none";
+            });
+            // How big the sign can be with the buttons named so (its lamps a share of its size)
+            const sizeWith = (historyNamed, songsNamed) => {
+                header.classList.toggle("history-unnamed", !historyNamed);
+                header.classList.toggle("songs-unnamed", !songsNamed);
+                const taken = buttons.reduce((sum, child) => sum + child.offsetWidth + gap, gap);
+                const room = (header.clientWidth - taken) * 0.96;
+                let size = room / (widthPerPx + BACK_LAMP_EM);
+                if (size * BACK_LAMP_EM < BACK_LAMP_MIN_PX) size = (room - BACK_LAMP_MIN_PX) / widthPerPx;
+                return Math.min(biggest, Math.max(base, size));
+            };
+            let size = sizeWith(true, true);
+            if (size < biggest * BACK_TITLE_NAMED_HISTORY_SHARE) {
+                size = sizeWith(false, true);
+                if (size < BACK_TITLE_NAMED_SONGS_MIN_PX) size = sizeWith(false, false);
+            }
+            header.classList.remove("is-fitting");
             title.style.fontSize = `${size.toFixed(1)}px`;
+            header.style.setProperty("--lamp-size", `${Math.max(BACK_LAMP_MIN_PX, size * BACK_LAMP_EM).toFixed(1)}px`);
+            header.style.setProperty("--lamp-gap", `${(size * BACK_LAMP_GAP_EM).toFixed(1)}px`);
         };
         let fitFrame = null;
         const scheduleFit = () => {

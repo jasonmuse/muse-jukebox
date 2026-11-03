@@ -3769,22 +3769,6 @@ html {
     }
 }
 
-/* (its name's still there for screen readers) */
-@media (max-width: 480px) {
-    .back-history-button {
-        padding: 0;
-    }
-
-    .back-history-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
-}
-
 /* (the narrowest phones: the header's a little closer together, so it all still fits) */
 @media (max-width: 340px) {
     .back-header {
@@ -3793,10 +3777,6 @@ html {
 
     .back-header .back-title {
         font-size: 1.28rem;
-    }
-
-    .back-header .jb-lights {
-        gap: 4px;
     }
 
     .back-flip-button {
@@ -4869,11 +4849,47 @@ html.is-standalone .edge-blend {
 }
 
 /* ───── JUKEBOT: the jukebox's rear panel + repair game ───── */
-/* (the lamps go with the sign, straight after it: any room left over is between them and the buttons) */
+/* The lamps go with the sign: a column of them beside it, as tall as its letters (script.js sizes
+   them along with it), reaching up and down into the room round the header as the sign does. They
+   come on from the bottom up, like his power coming back. */
 .jb-lights {
+    flex: 0 0 auto;
     display: inline-flex;
-    gap: 6px;
-    margin-right: auto;
+    flex-direction: column-reverse;
+    gap: var(--lamp-gap, 3px);
+    margin-block: min(0px, calc((34px - (3 * var(--lamp-size, 13px)) - (2 * var(--lamp-gap, 3px))) / 2));
+}
+
+/* The buttons take whatever room the sign leaves (script.js fits the sign first, with them at their
+   own widths, and names them or not to suit) */
+.back-header .back-history-button,
+.back-header .back-flip-button {
+    flex: 1 0 auto;
+}
+
+.back-header.is-fitting .back-history-button,
+.back-header.is-fitting .back-flip-button {
+    flex-grow: 0;
+}
+
+/* (a name left out for the room is still there for screen readers) */
+.back-header.history-unnamed .back-history-button {
+    padding: 0;
+}
+
+.back-header.songs-unnamed .back-flip-button {
+    width: 34px;
+    padding: 0;
+}
+
+.back-header.history-unnamed .back-history-label,
+.back-header.songs-unnamed .back-flip-button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* Jukebot's repair lights: little lamps in metal rings, their glass dark with a glint until they
@@ -4881,8 +4897,8 @@ html.is-standalone .edge-blend {
    sign's song */
 .jb-light {
     position: relative;
-    width: 13px;
-    height: 13px;
+    width: var(--lamp-size, 13px);
+    height: var(--lamp-size, 13px);
     border-radius: 50%;
     background: linear-gradient(160deg, #dfe3f8, #6c7296 72%);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
@@ -4892,7 +4908,7 @@ html.is-standalone .edge-blend {
 .jb-light::after {
     content: "";
     position: absolute;
-    inset: 2px;
+    inset: calc(var(--lamp-size, 13px) * 0.15);
     border-radius: 50%;
 }
 
@@ -9790,38 +9806,14 @@ html.viewport-shifted body {
         min-width: 1.5px;
     }
 
-    /* The back: Songs is just its flip arrows (the ones on the sign that turned the jukebox round),
-       and the rest is a little smaller and closer, so it all fits across */
+    /* The back: a little smaller and closer, so it all fits across (Songs is just its flip arrows
+       here: see script.js) */
     .back-header {
         gap: 5px;
     }
 
     .back-header .back-title {
         font-size: 1.12rem;
-    }
-
-    .back-header .jb-lights {
-        gap: 3px;
-    }
-
-    .back-header .jb-light {
-        width: 10px;
-        height: 10px;
-    }
-
-    .back-flip-button {
-        width: 34px;
-        padding: 0;
-    }
-
-    /* (its name's still there for screen readers) */
-    .back-flip-button span {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
     }
 
     /* (too few words to a line to spread them out evenly) */
