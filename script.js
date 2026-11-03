@@ -7424,6 +7424,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fitCabinetDepth();
         jukeboxPanel.classList.remove("powered-up");
         jukeboxPanel.classList.add("is-flipping", "flip-out");
+        holdLedSigns(true);
         // A frame into the turn (so it starts straight away), draw the side that's coming round,
         // still hidden, so it's ready by the time the jukebox is edge-on
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -7437,6 +7438,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             turnRecords(recordTarget, FLIP_IN_MS, FLIP_IN_EASING);
             whenJukeboxTurnEnds("jukeboxTurnBack", FLIP_IN_MS, () => {
                 jukeboxPanel.classList.remove("is-flipping", "flip-in", "is-turning");
+                holdLedSigns(false);
                 setJukeboxSide(showBack);
                 isJukeboxFlipping = false;
                 dropRecordAfterFlip();
@@ -7600,6 +7602,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         jukeboxPanel.classList.remove("powered-up");
         // Both sides drawn, the cabinet with its depth, as in the button's turn
         jukeboxPanel.classList.add("is-flipping", "is-turning", "is-hand-turning");
+        holdLedSigns(true);
     }
 
     function setHandTurnAngle(turn, angle) {
@@ -7695,6 +7698,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         jukeboxPanel.style.transform = "";
         jukeboxPanel.classList.remove("is-flipping", "is-turning", "is-hand-turning");
         jukeboxPanel.classList.toggle("is-flipped", showBack);
+        holdLedSigns(false);
         // The record ends B-side out with the back, A-side with the front, whichever way it went
         turnRecords((((turn.recordFrom + (target * turn.direction)) % 360) + 360) % 360, 0);
         if (showBack !== turn.fromBack) setJukeboxSide(showBack);
@@ -7743,7 +7747,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             track.replaceChildren(lane);
             ticker = {
                 sign, track, lane, width: null, letters: "", key: "", items: [], next: 0, pieces: [], laidTo: 0, lastOffset: 0,
-                push: null, newWordsAt: 0, pushAgain: false
+                push: null, newWordsAt: 0, pushAgain: false, held: null
             };
             ledTickers.set(sign, ticker);
         }
@@ -7758,8 +7762,41 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // How far the sign has scrolled, all told (px)
     function getLedOffset(ticker) {
+        if (ticker.held) return ticker.held.offset;
         const run = getLedRun(ticker);
         return run ? ((Number(run.currentTime) || 0) / 1000) * LED_PIXELS_PER_SECOND : 0;
+    }
+
+    // While the jukebox turns the signs hold still, their words drawn flat on the jukebox along with
+    // everything else on it: moving, they're a layer of their own (a long one), and Safari doesn't
+    // draw that at all while the jukebox is at an angle, so the sign went blank as it turned. Once
+    // it's square again they carry on from the same spot.
+    function holdLedSigns(hold) {
+        ledTickers.forEach((ticker) => {
+            if (hold === Boolean(ticker.held)) return;
+            if (hold) {
+                const run = getLedRun(ticker);
+                if (!run) return; // (still anyway)
+                if (ticker.push) {
+                    ticker.pushAgain = false;
+                    settleLedPush(ticker, ticker.push);
+                }
+                const offset = getLedOffset(ticker);
+                ticker.held = { time: Number(run.currentTime) || 0, offset };
+                ticker.track.style.animation = "none";
+                ticker.track.style.transform = `translateX(${-(offset % LED_TURN_PIXELS)}px)`;
+                ticker.lane.style.willChange = "auto";
+                return;
+            }
+            const { time } = ticker.held;
+            ticker.held = null;
+            ticker.track.style.animation = "";
+            ticker.track.style.transform = "";
+            ticker.lane.style.willChange = "";
+            const run = getLedRun(ticker);
+            if (run) run.currentTime = time;
+            layLedSign(ticker);
+        });
     }
 
     // ...and how far a push has taken it on top of that
