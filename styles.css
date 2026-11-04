@@ -4816,14 +4816,6 @@ body.has-side-rail .side-rail.is-dragging {
     transform: none;
 }
 
-/* With the rail showing what's playing, the song card no longer needs to stick */
-body.has-side-rail .track.track-playing.track-playing-stick-top,
-body.has-side-rail .track.track-playing.track-playing-stick-bottom {
-    position: relative;
-    top: auto;
-    bottom: auto;
-}
-
 /* ───── EDGE BLEND ─────
    Phone browsers paint their toolbars / side strips with the page's theme colour
    (--backdrop-color). Fading the page edges into that colour makes them read as one surface;
