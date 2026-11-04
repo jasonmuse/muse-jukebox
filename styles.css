@@ -8538,7 +8538,9 @@ h1.jukebox-title::before {
     transform: scaleX(-1);
 }
 
-/* (a little way out from the wordmark, into the corners, the waves beside them moving out along) */
+/* (a little way out from the wordmark, into the corners, the waves beside them moving out along.
+   On phones, where the waves are close beside them, they step in towards "Muse" by --penguin-step
+   to sit halfway between their waves and the title; it moves only them, so the waves stay put) */
 .title-penguin {
     position: relative;
     flex: 0 0 auto;
@@ -8550,10 +8552,12 @@ h1.jukebox-title::before {
 }
 
 .title-penguin--left {
+    left: var(--penguin-step, 0px);
     margin-right: 0.08em;
 }
 
 .title-penguin--right {
+    left: calc(-1 * var(--penguin-step, 0px));
     margin-left: 0.08em;
 }
 
@@ -9504,6 +9508,13 @@ html.viewport-shifted body {
 /* (a phone's title fills the cabinet's width: no corners to fill. Its wordmark is only a little
    bigger than the penguins, so the waves keep their room, and the cabinet's top is nearer) */
 @media (max-width: 600px) {
+    /* (the full step while the waves are packed in beside the penguins; on wider phones they have
+       room to spread out, sitting in the middle of it, so the penguins step in less, by an eighth
+       of the extra width, until they're halfway already) */
+    h1.jukebox-title {
+        --penguin-step: clamp(0px, 0.24em - (var(--safe-width) - 428px) / 8, 0.24em);
+    }
+
     .title-waves {
         --wave-scale: 1;
     }
@@ -9516,6 +9527,7 @@ html.viewport-shifted body {
 
 @media (max-width: 370px) {
     h1.jukebox-title {
+        --penguin-step: clamp(0px, (382px - var(--safe-width)) / 8, 0.24em);
         font-size: 2rem;
     }
 }
@@ -9655,7 +9667,9 @@ html.viewport-shifted body {
         padding-top: 8px;
     }
 
+    /* (the bigger waves are packed in beside the penguins only on the narrowest of these) */
     h1.jukebox-title {
+        --penguin-step: clamp(0px, (380px - var(--safe-width)) / 8, 0.21em);
         margin-bottom: 6px;
         font-size: 1.8rem;
     }
@@ -9806,6 +9820,11 @@ html.viewport-shifted body {
    wrapped beside its cover, and the speakers' right cone and the back's Songs button stuck out
    past the cabinet. Last in the file, so it wins over the sizes above. */
 @media (max-width: 310px) {
+    /* (barely room for a wave by the penguins: they stay by the title) */
+    h1.jukebox-title {
+        --penguin-step: 0px;
+    }
+
     /* The pills' arrows go, so what they're set to still fits (their icons say which is which) */
     #filters {
         gap: 5px;
