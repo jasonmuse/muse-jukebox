@@ -884,11 +884,9 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
-/* Blinkies on the jukebox's back panel (Frog Quest, and a tip jar on Ko-fi), small and plain at
-   their own size: side by side where there's room, one over the other where there isn't (never
-   squeezed, which would smudge their pixels) */
-/* The badges side by side, always (never one above the other: where the panel's too narrow for
-   both at their own size, they shrink a little together) */
+/* Blinkies on the jukebox's back panel (Frog Quest, and a tip jar on Ko-fi), side by side always,
+   sharing the row: bigger on a wide panel (up to twice their own size, their pixels kept sharp), a
+   little smaller together on a narrow one */
 .back-badges {
     flex: 0 0 auto;
     align-self: stretch;
@@ -902,7 +900,8 @@ box-shadow: 0 0 0 3px #ffffff;
 }
 
 .blinkie-link {
-    flex: 0 1 150px;
+    flex: 1 1 0;
+    max-width: 300px;
     min-width: 0;
     line-height: 0;
 }
@@ -3596,11 +3595,10 @@ html {
     margin: 0 0 10px;
 }
 
-/* "Jukebot" is a neon sign in the script "Muse" is in on the front: a pink tube, glowing, drifting
-   towards violet and back, sat level with the buttons and only just tipped up. script.js makes it
-   as big as the room beside its lights and buttons lets it be (this is its smallest), up to as tall
-   as the room between the rim and the board allows; it grows up and down into that room, so the
-   header's no taller than its buttons. */
+/* "Jukebot" is in the script and the pastels "Muse" is in on the front, drifting along the same way
+   and glowing as softly, sat level with the buttons and only just tipped up. script.js makes it as
+   big as the room beside its lights and buttons lets it be (this is its smallest), up to about as
+   tall as the buttons; it reaches up and down past them, so the header's no taller than they are. */
 .back-title {
     position: relative;
     margin: 0;
@@ -3610,7 +3608,7 @@ html {
     line-height: 1.2;
     transform: translateY(0.08em) rotate(-1.5deg);
     transform-origin: left center;
-    filter: drop-shadow(0 0 0.04em rgba(255, 120, 220, 0.95)) drop-shadow(0 0 0.16em rgba(255, 70, 190, 0.55)) drop-shadow(0 0.04em 0 rgba(18, 10, 58, 0.75));
+    filter: drop-shadow(0 0 0.09em rgba(255, 138, 216, 0.55)) drop-shadow(0 0.05em 0 rgba(18, 10, 58, 0.7));
 }
 
 .back-title,
@@ -3618,7 +3616,7 @@ html {
     padding: 0 0.14em 0.06em;
     font-family: "Pacifico", "Brush Script MT", cursive;
     white-space: nowrap;
-    background: linear-gradient(100deg, #ff7ad9 0%, #ff4fb3 30%, #d36bff 62%, #9a7bff 100%);
+    background: linear-gradient(100deg, #ff8ad8 0%, #ffb36b 34%, #fff1a8 52%, #8ee9ff 76%, #b39bff 100%);
     background-size: 220% 100%;
     background-clip: text;
     -webkit-background-clip: text;
@@ -4437,6 +4435,16 @@ html {
 
 .back-tips.is-paged .back-tip:not(.is-shown) {
     display: none;
+}
+
+/* Just the one tip, without the heading, where that's all there's room for (it still turns by
+   itself, or at a tap) */
+.back-tips.is-compact .back-tips-head {
+    display: none;
+}
+
+.back-tips.is-compact .back-tips-list {
+    margin-top: 0;
 }
 
 /* On the LED sign instead (a short panel): the card is only there for screen readers */
@@ -9804,8 +9812,8 @@ html.viewport-shifted body {
         min-width: 1.5px;
     }
 
-    /* The back: a little smaller and closer, so it all fits across (Songs is just its flip arrows
-       here: see script.js) */
+    /* The back: a little smaller and closer, so it all fits across (Songs can be just its flip
+       arrows here: see script.js) */
     .back-header {
         gap: 5px;
     }

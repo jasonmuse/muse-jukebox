@@ -8534,7 +8534,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // all fit they come a page at a time: tap for the next page, and they move on by themselves
     // while the back is out (unless a pointer or focus is on them)
     const TIP_PAGE_SECONDS = 8;
-    const MIN_TIPS_PER_PAGE = 2;
+    const MIN_TIPS_PER_PAGE = 1;
     const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
     const TIP_MAX_SPREAD = 18; // px: the most extra room between two tips when there's space to fill
     let syncBackTips = () => {};
@@ -8546,6 +8546,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const scroller = tipsBox?.parentElement;
         if (!tips.length || !scroller) return;
         const count = tipsBox.querySelector(".back-tips-count");
+        const head = tipsBox.querySelector(".back-tips-head");
         const below = tipsBox.nextElementSibling; // the Frog Quest badge, down at the bottom
         let perPage = tips.length;
         let page = 0;
@@ -8586,8 +8587,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         // size as they turn.
         const fitTips = () => {
             if (!scroller.clientHeight) return;
-            // (measured with the card in its place)
-            tipsBox.classList.remove("is-ticker");
+            // (measured with the card in its place, heading and all)
+            tipsBox.classList.remove("is-ticker", "is-compact");
             scroller.classList.remove("has-tip-ticker");
             const gap = parseFloat(getComputedStyle(scroller).rowGap) || 0;
             const spare = below ? below.offsetTop - (tipsBox.offsetTop + tipsBox.offsetHeight) - gap : 0;
@@ -8617,20 +8618,26 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             }
-            // Not even a page of two fits (a short screen): they go along the LED sign instead, and
-            // the card's only kept for screen readers
-            const onSign = room + 1 < smallestPage && !prefersReducedMotion();
+            // Not even one tip fits under the card's heading: the card does without it (one tip at a
+            // time, still turning by itself or at a tap), and the list has the heading's room too.
+            // Not even that (a short screen): they go along the LED sign instead, and the card's only
+            // kept for screen readers
+            const headRoom = head ? head.offsetHeight + (parseFloat(listStyle.marginTop) || 0) : 0;
+            const compact = room + 1 < smallestPage;
+            const onSign = compact && room + headRoom + 1 < smallestPage && !prefersReducedMotion();
             if (onSign) best = { columns: 1, pages: 1, pageSize: tips.length, height: 0 };
+            const listRoom = compact ? room + headRoom : room;
 
             // The card fills the rest of the panel, and the tips spread out over it (up to a point) so
             // it isn't left with an empty end
             const rows = Math.ceil((best.pages > 1 ? best.pageSize : tips.length) / best.columns);
-            const spreadGap = onSign ? rowGap : rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, room - best.height) / (rows + 1));
+            const spreadGap = onSign ? rowGap : rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, listRoom - best.height) / (rows + 1));
             list.style.gridTemplateColumns = best.columns > 1 ? `repeat(${best.columns}, minmax(0, 1fr))` : "";
             list.style.rowGap = spreadGap > rowGap ? `${spreadGap.toFixed(1)}px` : "";
             list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height + ((rows - 1) * (spreadGap - rowGap)))}px` : "";
             tipsBox.classList.toggle("is-paged", best.pages > 1);
             tipsBox.classList.toggle("is-ticker", onSign);
+            tipsBox.classList.toggle("is-compact", compact && !onSign);
             scroller.classList.toggle("has-tip-ticker", onSign);
             if (onSign !== tickerShowsTips) {
                 tickerShowsTips = onSign;
@@ -8952,15 +8959,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // "Jukebot" is a sign: as big as the room beside its lamps and buttons lets it be (a little short
-    // of filling it, so it isn't crowded), from its size in styles.css up to as tall as there's room
-    // for between the rim and the board (a wide panel's header is no taller). Its lamps stand in a
-    // column beside it, as tall as its letters. The buttons are named where there's room once the
-    // sign's had its share (History only beside a sign that's about as big as it gets; Songs unless
-    // the sign would be small for it), and they take whatever room's left. Fitted afresh whenever
-    // the header's width changes or the writing loads.
-    const BACK_TITLE_MAX_REM = 2.7;
-    const BACK_TITLE_NAMED_HISTORY_SHARE = 0.92; // of its biggest: the sign at least this big with History named
-    const BACK_TITLE_NAMED_SONGS_MIN_PX = 30; // and at least this with Songs named, or it's just the arrows
+    // of filling it, so it isn't crowded), from its size in styles.css up to about as tall as the
+    // buttons (it's a name on the back, not a headline). Its lamps stand in a column beside it, as
+    // tall as its letters. The buttons are named where there's room once the sign's had its share
+    // (History beside a sign that's nearly as big as it gets; Songs unless the sign would be small
+    // for it), and they take whatever room's left. Fitted afresh whenever the header's width changes
+    // or the writing loads.
+    const BACK_TITLE_MAX_REM = 1.8;
+    const BACK_TITLE_NAMED_HISTORY_SHARE = 0.85; // of its biggest: the sign at least this big with History named
+    const BACK_TITLE_NAMED_SONGS_MIN_PX = 20; // and at least this with Songs named, or it's just the arrows
     const BACK_LAMP_EM = 0.3; // a lamp, of the sign's size
     const BACK_LAMP_GAP_EM = 0.07;
     const BACK_LAMP_MIN_PX = 8;
@@ -8988,7 +8995,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const style = getComputedStyle(child);
                 return child !== title && child !== lamps && style.position !== "absolute" && style.display !== "none";
             });
-            // How big the sign can be with the buttons named so (its lamps a share of its size)
+            // How big the sign could be with the buttons named so (its lamps a share of its size;
+            // not yet held to its smallest and biggest, so a squeeze shows)
             const sizeWith = (historyNamed, songsNamed) => {
                 header.classList.toggle("history-unnamed", !historyNamed);
                 header.classList.toggle("songs-unnamed", !songsNamed);
@@ -8996,13 +9004,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const room = (header.clientWidth - taken) * 0.96;
                 let size = room / (widthPerPx + BACK_LAMP_EM);
                 if (size * BACK_LAMP_EM < BACK_LAMP_MIN_PX) size = (room - BACK_LAMP_MIN_PX) / widthPerPx;
-                return Math.min(biggest, Math.max(base, size));
+                return size;
             };
             let size = sizeWith(true, true);
             if (size < biggest * BACK_TITLE_NAMED_HISTORY_SHARE) {
                 size = sizeWith(false, true);
                 if (size < BACK_TITLE_NAMED_SONGS_MIN_PX) size = sizeWith(false, false);
             }
+            size = Math.min(biggest, Math.max(base, size));
             header.classList.remove("is-fitting");
             title.style.fontSize = `${size.toFixed(1)}px`;
             header.style.setProperty("--lamp-size", `${Math.max(BACK_LAMP_MIN_PX, size * BACK_LAMP_EM).toFixed(1)}px`);
