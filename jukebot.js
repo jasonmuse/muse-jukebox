@@ -24,6 +24,7 @@
     const SIZZLE_LINES = ["Sizzle!", "Zapped!", "Tssss!"];
     const CHEW_LINES = ["Ow! It's chewing me!", "Hey! That's my core!", "Get it off me!"];
     const BOOP_LINES = ["Boop!", "Hehe, that tickles!", "Beep?"];
+    const OUCH_LINES = ["Ow! Help me!", "Ouch! Please fix me!", "Ow! My wiring!", "Owie! Not the face!"];
     const MEMORY_LINES = ["Got it!", "Yes! It's coming back!", "Beep! More!"];
     const MOODS = ["broken", "worried", "scared", "ouch", "happy", "excited"];
     // The repair job, step by step
@@ -408,10 +409,16 @@
             return "broken";
         }
 
-        // A quick reaction, then back to the resting expression
+        // A quick reaction, then back to the resting expression (the repair job's loop puts it back
+        // while a job's on; otherwise this does)
+        let moodTimer = null;
         function react(mood, holdMs) {
             setMoodClass(mood);
             moodHoldUntil = performance.now() + holdMs;
+            clearTimeout(moodTimer);
+            moodTimer = setTimeout(() => {
+                if (!game) setMoodClass(getBaseMood());
+            }, holdMs);
         }
 
         function setTool(name) {
@@ -2726,11 +2733,19 @@
 
         function boopSticker() {
             const now = performance.now();
+            // Still glitching, it hurts: he flinches, and it's no smile till he's fixed
+            const hurting = progress.step < JOB_STEPS.length;
+            stickerBoop.classList.remove("is-booped", "is-ouched");
+            void stickerBoop.offsetWidth;
+            stickerBoop.classList.add(hurting ? "is-ouched" : "is-booped");
+            if (hurting) {
+                boops = [];
+                react("ouch", 900);
+                say(pick(OUCH_LINES), 1100, true);
+                return;
+            }
             boops = boops.filter((time) => now - time < 2600);
             boops.push(now);
-            stickerBoop.classList.remove("is-booped");
-            void stickerBoop.offsetWidth;
-            stickerBoop.classList.add("is-booped");
             react("happy", 700);
             if (game || progress.step < JOB_STEPS.length || boops.length < SECRET_BOOPS) {
                 say(pick(BOOP_LINES), 900, true);
