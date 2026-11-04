@@ -28,6 +28,7 @@ const SHELL = [
     "images/itchyscratchy.gif",
     "images/frogblinkie.gif",
     "images/kofiblinkie.gif",
+    "images/labsblinkie.gif",
     "images/app-icon-180.png",
     "images/app-icon-192.png",
     "images/app-icon-512.png",

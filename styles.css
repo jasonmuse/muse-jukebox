@@ -884,9 +884,9 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
-/* Blinkies on the jukebox's back panel (Frog Quest, and a tip jar on Ko-fi), side by side always,
-   sharing the row: bigger on a wide panel (up to twice their own size, their pixels kept sharp), a
-   little smaller together on a narrow one */
+/* Blinkies on the jukebox's back panel (Frog Quest, a tip jar on Ko-fi, Muse Labs), side by side
+   always, sharing the row: bigger on a wide panel (up to twice their own size, their pixels kept
+   sharp), smaller together on a narrow one */
 .back-badges {
     flex: 0 0 auto;
     align-self: stretch;
