@@ -7940,6 +7940,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setJukeboxSide(showBack) {
         jukeboxPanel.classList.toggle("is-flipped", showBack);
         syncBackTips();
+        syncBlinkies();
         if (!showBack) {
             if (window.jukebot) {
                 window.jukebot.reset();
@@ -8774,6 +8775,72 @@ document.addEventListener("DOMContentLoaded", async () => {
     const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
     const TIP_MAX_SPREAD = 18; // px: the most extra room between two tips when there's space to fill
     let syncBackTips = () => {};
+    let syncBlinkies = () => {};
+
+    // The blinkies along the bottom of the back, two at a time: every now and then the row moves
+    // along one, the first sliding out to the left as the next comes in from the right, round and
+    // round. Only while the back's showing, and not while a pointer or focus is on them; one tabbed
+    // to that's out of sight comes round into view. (With reduced motion they all share the row.)
+    const BLINKIE_STEP_SECONDS = 7;
+    const BLINKIE_SLIDE_MS = 700;
+
+    function setUpBlinkies() {
+        const row = document.querySelector(".back-badges");
+        const track = row?.querySelector(".back-badges-track");
+        if (!track || track.children.length < 3) return;
+        let timer = null;
+        let held = false;
+        let sliding = null;
+
+        // The first one's slid out: it goes round to the end, and the row's back where it began
+        const settle = () => {
+            if (!sliding) return;
+            clearTimeout(sliding);
+            sliding = null;
+            track.style.transition = "none";
+            track.append(track.firstElementChild);
+            track.style.transform = "";
+            void track.offsetWidth;
+            track.style.transition = "";
+        };
+
+        const moveAlong = () => {
+            if (sliding || document.hidden) return;
+            const distance = track.firstElementChild.offsetWidth + (parseFloat(getComputedStyle(track).columnGap) || 0);
+            if (!distance) return;
+            track.style.transition = `transform ${BLINKIE_SLIDE_MS}ms cubic-bezier(0.45, 0, 0.25, 1)`;
+            track.style.transform = `translateX(${-distance}px)`;
+            // (settled when the slide's done, or just after if that's never heard)
+            sliding = setTimeout(settle, BLINKIE_SLIDE_MS + 150);
+        };
+        track.addEventListener("transitionend", (event) => {
+            if (event.target === track) settle();
+        });
+
+        syncBlinkies = () => {
+            clearInterval(timer);
+            timer = null;
+            if (held || document.hidden || prefersReducedMotion() || !jukeboxPanel.classList.contains("is-flipped")) return;
+            timer = setInterval(moveAlong, BLINKIE_STEP_SECONDS * 1000);
+        };
+        const hold = (isHeld) => {
+            held = isHeld;
+            syncBlinkies();
+        };
+        row.addEventListener("pointerenter", () => hold(true));
+        row.addEventListener("pointerleave", () => hold(row.contains(document.activeElement)));
+        row.addEventListener("focusin", (event) => {
+            settle();
+            const link = event.target.closest(".blinkie-link");
+            for (let turns = 0; link && turns < track.children.length && track.children[0] !== link && track.children[1] !== link; turns += 1) {
+                track.append(track.firstElementChild);
+            }
+            hold(true);
+        });
+        row.addEventListener("focusout", (event) => hold(row.contains(event.relatedTarget)));
+        document.addEventListener("visibilitychange", () => syncBlinkies());
+        syncBlinkies();
+    }
 
     function setUpBackTips() {
         const tipsBox = document.querySelector(".back-tips");
@@ -9316,6 +9383,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         setUpLedSigns();
         setUpLedDragging();
         setUpBackTips();
+        setUpBlinkies();
         setUpHandTurning();
         setUpHistory();
 

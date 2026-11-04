@@ -884,26 +884,37 @@ box-shadow: 0 0 0 3px #ffffff;
     }
 }
 
-/* Blinkies on the jukebox's back panel (Frog Quest, a tip jar on Ko-fi, Muse Labs), side by side
-   always, sharing the row: bigger on a wide panel (up to twice their own size, their pixels kept
-   sharp), smaller together on a narrow one */
+/* Blinkies on the jukebox's back panel (Frog Quest, a tip jar on Ko-fi, Muse Labs), two at a time
+   sharing the row: bigger on a wide panel (up to twice their own size, their pixels kept sharp),
+   smaller together on a narrow one. Now and then the row moves along one, the first sliding out as
+   the next comes in (script.js). */
 .back-badges {
     flex: 0 0 auto;
-    align-self: stretch;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
+    align-self: center;
+    width: min(100%, 608px);
     /* Down at the bottom of the back panel, however much is above it */
     margin: auto 0 0;
     padding: 0;
+    overflow: hidden;
     line-height: 0;
 }
 
+.back-badges-track {
+    display: flex;
+    gap: 8px;
+}
+
 .blinkie-link {
-    flex: 1 1 0;
-    max-width: 300px;
+    flex: 0 0 calc((100% - 8px) / 2);
     min-width: 0;
     line-height: 0;
+}
+
+/* (with reduced motion nothing moves along: all three share the row) */
+@media (prefers-reduced-motion: reduce) {
+    .blinkie-link {
+        flex: 1 1 0;
+    }
 }
 
 .blinkie {
@@ -914,9 +925,10 @@ box-shadow: 0 0 0 3px #ffffff;
     image-rendering: pixelated;
 }
 
+/* (inside the blinkie: the row cuts off anything outside it) */
 .blinkie-link:focus-visible {
     outline: 2px solid #d6e6ff;
-    outline-offset: 3px;
+    outline-offset: -2px;
 }
 
 .track {
