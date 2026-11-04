@@ -4400,9 +4400,9 @@ html {
     }
 }
 
-/* As many tips as there's room for. When they don't all fit they come a page at a time, and the
-   card keeps its height from page to page (script.js picks the page size, and two columns on a
-   wide panel when that fits more) */
+/* As many tips as there's room for. When they don't all fit they come a page at a time, each page
+   as many as fit on it (script.js plans the pages, with two columns on a wide panel when that
+   needs fewer); the card keeps its height from page to page, and each page sits in the middle */
 .back-tips-list {
     flex: 1 0 auto;
     display: grid;
@@ -4439,6 +4439,11 @@ html {
     display: none;
 }
 
+/* (in two columns, a tip by itself on a page's last row has the whole row) */
+.back-tip.is-alone {
+    grid-column: 1 / -1;
+}
+
 /* (on the narrowest panels a tip's words have its icon's room too, so they take fewer lines) */
 @container jb-panel (max-width: 200px) {
     .back-tip-icon {
@@ -4446,8 +4451,8 @@ html {
     }
 }
 
-/* Just the one tip, without the heading, where that's all there's room for (it still turns by
-   itself, or at a tap) */
+/* The tips without the heading, where there isn't room for even one under it (they still turn by
+   themselves, or at a tap) */
 .back-tips.is-compact .back-tips-head {
     display: none;
 }

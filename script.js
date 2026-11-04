@@ -8771,7 +8771,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // all fit they come a page at a time: tap for the next page, and they move on by themselves
     // while the back is out (unless a pointer or focus is on them)
     const TIP_PAGE_SECONDS = 8;
-    const MIN_TIPS_PER_PAGE = 1;
     const TIP_COLUMN_MIN_WIDTH = 230; // px: two columns of tips on panels at least twice this wide
     const TIP_MAX_SPREAD = 18; // px: the most extra room between two tips when there's space to fill
     let syncBackTips = () => {};
@@ -8785,43 +8784,71 @@ document.addEventListener("DOMContentLoaded", async () => {
         const count = tipsBox.querySelector(".back-tips-count");
         const head = tipsBox.querySelector(".back-tips-head");
         const below = tipsBox.nextElementSibling; // the Frog Quest badge, down at the bottom
-        let perPage = tips.length;
+        let pages = [[0, tips.length]]; // each page's tips: from, up to
+        let pageColumns = 1;
         let page = 0;
         let timer = null;
         let held = false;
 
-        const pageCount = () => Math.ceil(tips.length / perPage);
+        const pageCount = () => pages.length;
         const showPage = (index, direction) => {
             page = (index + pageCount()) % pageCount();
+            const [from, to] = pages[page];
             list.dataset.direction = direction < 0 ? "back" : "forward";
             tips.forEach((tip, tipIndex) => {
-                const order = tipIndex - (page * perPage);
-                const shown = order >= 0 && order < perPage;
+                const shown = tipIndex >= from && tipIndex < to;
                 tip.classList.toggle("is-shown", shown);
                 tip.classList.toggle("is-entering", shown && direction !== 0);
-                tip.style.setProperty("--tip-order", shown ? order : 0);
+                // (in two columns, one by itself on the last row has the row)
+                tip.classList.toggle("is-alone", shown && pageColumns > 1 && tipIndex === to - 1 && (tipIndex - from) % pageColumns === 0);
+                tip.style.setProperty("--tip-order", shown ? tipIndex - from : 0);
             });
             if (count) count.textContent = `${page + 1} / ${pageCount()}`;
         };
 
-        // The tallest page if the tips go so many to a page, in so many columns
-        const tallestPage = (heights, pageSize, columns, rowGap) => {
-            let tallest = 0;
-            for (let first = 0; first < heights.length; first += pageSize) {
-                const last = Math.min(first + pageSize, heights.length);
-                let height = -rowGap;
-                for (let row = first; row < last; row += columns) {
-                    height += rowGap + Math.max(...heights.slice(row, Math.min(row + columns, last)));
-                }
-                tallest = Math.max(tallest, height);
+        // How tall a page of the tips from `from` up to `to` is, in so many columns (`heights` has
+        // each tip's height in one column, and in these columns: one alone on a row has the row)
+        const pageHeight = (heights, from, to, columns, rowGap) => {
+            let height = -rowGap;
+            for (let row = from; row < to; row += columns) {
+                const end = Math.min(row + columns, to);
+                height += rowGap + (end - row === 1 ? heights.single[row] : Math.max(...heights.columned.slice(row, end)));
             }
-            return tallest;
+            return height;
         };
 
-        // How many tips fit: the list gets the room it has now plus the space left over below the
+        // The tips onto as few pages as fit in `room`, each holding as many as fit there (so short
+        // tips share a page), and of those ways the evenest (the one whose tallest page is shortest).
+        // A tip too tall for the room has a page to itself.
+        const planPages = (heights, columns, rowGap, room) => {
+            const total = heights.single.length;
+            const best = [{ count: 0, tallest: 0, from: 0 }];
+            for (let to = 1; to <= total; to += 1) {
+                let choice = null;
+                for (let from = to - 1; from >= 0; from -= 1) {
+                    const height = pageHeight(heights, from, to, columns, rowGap);
+                    if (height > room + 1 && to - from > 1) continue;
+                    const pageTotal = best[from].count + 1;
+                    const tallest = Math.max(best[from].tallest, height);
+                    if (!choice || pageTotal < choice.count || (pageTotal === choice.count && tallest < choice.tallest)) {
+                        choice = { count: pageTotal, tallest, from };
+                    }
+                }
+                best[to] = choice;
+            }
+            const planned = [];
+            for (let to = total; to > 0; to = best[to].from) planned.unshift([best[to].from, to]);
+            return {
+                columns,
+                pages: planned,
+                heights: planned.map(([from, to]) => pageHeight(heights, from, to, columns, rowGap)),
+                rows: planned.map(([from, to]) => Math.ceil((to - from) / columns))
+            };
+        };
+
+        // How the tips fit: the list gets the room it has now plus the space left over below the
         // card (less anything already overflowing). They go in one column, or two on a wide panel
-        // if that needs fewer pages, and the card takes the tallest page's height so it keeps its
-        // size as they turn.
+        // if that needs fewer pages, and the card keeps its height as they turn.
         const fitTips = () => {
             if (!scroller.clientHeight) return;
             // (measured with the card in its place, heading and all)
@@ -8838,41 +8865,41 @@ document.addEventListener("DOMContentLoaded", async () => {
             const listStyle = getComputedStyle(list);
             const rowGap = parseFloat(listStyle.rowGap) || 0;
             const maxColumns = list.clientWidth >= (2 * TIP_COLUMN_MIN_WIDTH) + (parseFloat(listStyle.columnGap) || 0) ? 2 : 1;
-            let best = null;
-            let smallestPage = 0;
-            for (let columns = 1; columns <= maxColumns; columns += 1) {
-                list.style.gridTemplateColumns = columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : "";
-                const heights = tips.map((tip) => tip.offsetHeight);
-                if (columns === 1) smallestPage = tallestPage(heights, MIN_TIPS_PER_PAGE, 1, rowGap);
-                for (let pages = 1; pages <= tips.length; pages += 1) {
-                    // Pages as even as they can be (not a last page with one tip on it)
-                    const pageSize = Math.ceil(tips.length / pages);
-                    if (Math.ceil(tips.length / pageSize) !== pages) continue;
-                    const height = tallestPage(heights, pageSize, columns, rowGap);
-                    if (height <= room + 1 || pageSize <= MIN_TIPS_PER_PAGE) {
-                        if (!best || pages < best.pages) best = { columns, pages, pageSize, height };
-                        break;
-                    }
-                }
-            }
-            // Not even one tip fits under the card's heading: the card does without it (one tip at a
-            // time, still turning by itself or at a tap), and the list has the heading's room too.
-            // Not even that (a short screen): they go along the LED sign instead, and the card's only
-            // kept for screen readers
+            // Not even one tip fits under the card's heading: the card does without it, and the list
+            // has the heading's room too. Not even that (a short screen): they go along the LED sign
+            // instead, and the card's only kept for screen readers
             const headRoom = head ? head.offsetHeight + (parseFloat(listStyle.marginTop) || 0) : 0;
-            const compact = room + 1 < smallestPage;
-            const onSign = compact && room + headRoom + 1 < smallestPage && !prefersReducedMotion();
-            if (onSign) best = { columns: 1, pages: 1, pageSize: tips.length, height: 0 };
+            tips.forEach((tip) => tip.classList.remove("is-alone"));
+            list.style.gridTemplateColumns = "";
+            const single = tips.map((tip) => tip.offsetHeight);
+            const tallestTip = Math.max(...single);
+            let plan = null;
+            let compactPlan = null;
+            for (let columns = 1; columns <= maxColumns; columns += 1) {
+                if (columns > 1) list.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+                const heights = { single, columned: columns > 1 ? tips.map((tip) => tip.offsetHeight) : single };
+                const option = planPages(heights, columns, rowGap, room);
+                const compactOption = planPages(heights, columns, rowGap, room + headRoom);
+                if (!plan || option.pages.length < plan.pages.length) plan = option;
+                if (!compactPlan || compactOption.pages.length < compactPlan.pages.length) compactPlan = compactOption;
+            }
+            const compact = room + 1 < tallestTip;
+            const onSign = compact && room + headRoom + 1 < tallestTip && !prefersReducedMotion();
+            if (onSign) plan = { columns: 1, pages: [[0, tips.length]], heights: [0], rows: [1] };
+            else if (compact) plan = compactPlan;
             const listRoom = compact ? room + headRoom : room;
 
             // The card fills the rest of the panel, and the tips spread out over it (up to a point) so
-            // it isn't left with an empty end
-            const rows = Math.ceil((best.pages > 1 ? best.pageSize : tips.length) / best.columns);
-            const spreadGap = onSign ? rowGap : rowGap + Math.min(TIP_MAX_SPREAD, Math.max(0, listRoom - best.height) / (rows + 1));
-            list.style.gridTemplateColumns = best.columns > 1 ? `repeat(${best.columns}, minmax(0, 1fr))` : "";
-            list.style.rowGap = spreadGap > rowGap ? `${spreadGap.toFixed(1)}px` : "";
-            list.style.minHeight = best.pages > 1 ? `${Math.ceil(best.height + ((rows - 1) * (spreadGap - rowGap)))}px` : "";
-            tipsBox.classList.toggle("is-paged", best.pages > 1);
+            // a page isn't left with an empty end; each page sits in the middle of it
+            let spread = onSign ? 0 : TIP_MAX_SPREAD;
+            plan.heights.forEach((height, index) => {
+                spread = Math.min(spread, Math.max(0, listRoom - height) / (plan.rows[index] + 1));
+            });
+            const tallest = Math.max(...plan.heights.map((height, index) => height + ((plan.rows[index] - 1) * spread)));
+            list.style.gridTemplateColumns = plan.columns > 1 ? `repeat(${plan.columns}, minmax(0, 1fr))` : "";
+            list.style.rowGap = spread > 0 ? `${(rowGap + spread).toFixed(1)}px` : "";
+            list.style.minHeight = plan.pages.length > 1 ? `${Math.ceil(tallest)}px` : "";
+            tipsBox.classList.toggle("is-paged", plan.pages.length > 1);
             tipsBox.classList.toggle("is-ticker", onSign);
             tipsBox.classList.toggle("is-compact", compact && !onSign);
             scroller.classList.toggle("has-tip-ticker", onSign);
@@ -8880,12 +8907,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 tickerShowsTips = onSign;
                 refreshLedSigns();
             }
-            if (best.pageSize !== perPage) {
-                const firstShown = page * perPage;
-                perPage = best.pageSize;
-                showPage(Math.floor(firstShown / perPage), 0);
-                syncBackTips();
-            }
+            const samePages = plan.columns === pageColumns && plan.pages.length === pages.length
+                && plan.pages.every(([from, to], index) => pages[index][0] === from && pages[index][1] === to);
+            // (staying with the tip that was showing first)
+            const firstShown = pages[page] ? pages[page][0] : 0;
+            pages = plan.pages;
+            pageColumns = plan.columns;
+            showPage(Math.max(0, pages.findIndex(([from, to]) => firstShown >= from && firstShown < to)), 0);
+            if (!samePages) syncBackTips();
         };
 
         syncBackTips = () => {
