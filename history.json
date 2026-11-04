@@ -45,7 +45,7 @@
   {
    "date": "2026-10-25",
    "title": "Jukebot moves in",
-   "text": "Songs play on one after another, even with the screen off, and the jukebox turns round to show Jukebot: a little robot with bugs in his wiring for you to fix.",
+   "text": "Songs keep playing one after another (shuffled, if you like), even with the screen off, and the jukebox turns round to show Jukebot: a little robot with bugs in his wiring for you to fix.",
    "picture": "history/2026-10-25.webp",
    "small": "history/2026-10-25-small.webp"
   },
@@ -58,8 +58,8 @@
   },
   {
    "date": "2026-03-04",
-   "title": "Sort, tag, skip",
-   "text": "Songs can be sorted, there's a tag picker, and you can skip 10 seconds either way.",
+   "title": "Sort, tag, roll the dice",
+   "text": "Songs can be sorted, there's a tag picker, the dice plays a random song, and you can skip 10 seconds either way.",
    "picture": "history/2026-03-04.webp",
    "small": "history/2026-03-04-small.webp"
   },
