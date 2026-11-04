@@ -3596,7 +3596,8 @@ html {
 }
 
 /* "Jukebot" is in the script and the pastels "Muse" is in on the front, drifting along the same way
-   and glowing as softly, sat level with the buttons and only just tipped up. script.js makes it as
+   and glowing as softly, sat level with the buttons, drawn a little tall and only just tipped up
+   (the stretch is only drawn, so it takes no more room). script.js makes it as
    big as the room beside its lights and buttons lets it be (this is its smallest), up to about as
    tall as the buttons; it reaches up and down past them, so the header's no taller than they are. */
 .back-title {
@@ -3606,7 +3607,7 @@ html {
     font-size: 1.7rem;
     font-weight: 400;
     line-height: 1.2;
-    transform: translateY(0.08em) rotate(-1.5deg);
+    transform: translateY(0.08em) rotate(-1.5deg) scaleY(1.18);
     transform-origin: left center;
     filter: drop-shadow(0 0 0.09em rgba(255, 138, 216, 0.55)) drop-shadow(0 0.05em 0 rgba(18, 10, 58, 0.7));
 }
@@ -4349,6 +4350,7 @@ html {
 
 .back-tips-count {
     margin-right: 4px;
+    white-space: nowrap;
     font-size: 0.74rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -4435,6 +4437,13 @@ html {
 
 .back-tips.is-paged .back-tip:not(.is-shown) {
     display: none;
+}
+
+/* (on the narrowest panels a tip's words have its icon's room too, so they take fewer lines) */
+@container jb-panel (max-width: 200px) {
+    .back-tip-icon {
+        display: none;
+    }
 }
 
 /* Just the one tip, without the heading, where that's all there's room for (it still turns by
@@ -5062,11 +5071,33 @@ html.viewport-short .jukebox-back {
     background-position: center 6px;
 }
 
-/* (the narrowest phones: closer letters, so the model plate keeps to one line) */
+/* (the narrowest phones: the plate's words a little closer to its screws) */
 @media (max-width: 340px) {
     .jb-cover-band--top {
         padding: 0 38px;
+    }
+}
+
+/* The model plate keeps to one line between its screws: its letters closer where it's narrow, and
+   where even that won't fit, it's just the model */
+.jb-cover-band--top {
+    container-type: inline-size;
+    white-space: nowrap;
+}
+
+@container (max-width: 220px) {
+    .jb-plate {
         letter-spacing: 0.06em;
+    }
+}
+
+@container (max-width: 192px) {
+    .jb-plate {
+        letter-spacing: inherit;
+    }
+
+    .jb-plate-brand {
+        display: none;
     }
 }
 
