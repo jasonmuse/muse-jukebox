@@ -350,9 +350,9 @@
                     <svg class="flip-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6"/><path d="M18.5 2.5V6.5H14.5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.5 6"/><path d="M5.5 21.5V17.5H9.5"/></svg>
                     <span>Songs</span>
                 </button>
-                <!-- Smoke from the broken jukebox, rising off the top of the panel below (out here, so
-                     the panel's edge doesn't cut it off) -->
-                <span class="jb-smoke" aria-hidden="true"><span></span><span></span><span></span></span>
+                <!-- Smoke from the broken jukebox, curling out of the vents along the top of the panel
+                     below (out here, so the panel's edge doesn't cut it off) -->
+                <span class="jb-smoke" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></span>
             </div>
 
             <div class="jb-back is-broken mood-broken" id="jukebot">
@@ -383,6 +383,11 @@
                 <!-- Rear panel: unscrew the four corner screws to take it off -->
                 <div class="jb-cover" id="jb-cover">
                     <div class="jb-cover-band jb-cover-band--top"><span class="jb-plate"><span class="jb-plate-brand">MUSE JUKEBOX &middot; </span>MODEL JKB-01</span></div>
+                    <!-- While he's broken: soot round the vents the smoke comes out of, and a crack from the
+                         top edge into the top right screw (it's worked loose), sparking now and then -->
+                    <span class="jb-soot" aria-hidden="true"></span>
+                    <svg class="jb-panel-crack" viewBox="0 0 42 22" aria-hidden="true"><path class="jb-panel-crack-light" d="M1 0.5 8.5 5.5 14 3.5 21 10.5 27.5 8.5 35 15.5 41 17.5M21 10.5 23.5 18.5"/><path class="jb-panel-crack-line" d="M1 0.5 8.5 5.5 14 3.5 21 10.5 27.5 8.5 35 15.5 41 17.5M21 10.5 23.5 18.5"/></svg>
+                    <span class="jb-panel-spark" aria-hidden="true"></span>
                     <div class="jb-cover-scroll">
                         <p class="jukebox-description">
                             <span class="sign-bolt sign-bolt--tl" aria-hidden="true"></span>
@@ -420,7 +425,7 @@
                         <!-- Tips: as many as there's room for (a page at a time when they don't all fit) -->
                         <section class="back-tips" aria-label="Tips">
                             <div class="back-tips-head">
-                                <h3>Tips</h3>
+                                <h3><svg class="back-tips-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 18.2h5.6"/><path d="M10.2 21.5h3.6"/><path d="M12 2.5a6.4 6.4 0 0 0-3.9 11.5c.6.5 1 1.2 1 2v.5h5.8v-.5c0-.8.4-1.5 1-2A6.4 6.4 0 0 0 12 2.5Z"/></svg><span>Tips</span></h3>
                                 <span class="back-tips-count" aria-hidden="true"></span>
                                 <button class="back-tips-step" type="button" data-tip-step="-1" aria-label="Previous tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
                                 <button class="back-tips-step" type="button" data-tip-step="1" aria-label="More tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
