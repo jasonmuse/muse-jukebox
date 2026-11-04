@@ -8784,7 +8784,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     const BLINKIE_STEP_SECONDS = 7;
     const BLINKIE_SLIDE_MS = 700;
 
+    // An iPhone or iPad (iPadOS asks as a Mac, but one with a touchscreen)
+    function isAppleTouchDevice() {
+        return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    }
+
     function setUpBlinkies() {
+        // A blinkie for a game that's on the App Store too (Frog Quest) goes there on an iPhone or
+        // iPad, where it can be played, and to itch.io anywhere else
+        if (isAppleTouchDevice()) {
+            document.querySelectorAll(".blinkie-link[data-app-store]").forEach((link) => {
+                link.href = link.dataset.appStore;
+                if (link.dataset.appStoreTitle) link.title = link.dataset.appStoreTitle;
+            });
+        }
         const row = document.querySelector(".back-badges");
         const track = row?.querySelector(".back-badges-track");
         if (!track || track.children.length < 3) return;
