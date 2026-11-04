@@ -873,7 +873,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let npShownTrack;
     let playingRowParts = null; // the playing song's row: its wave, times and progress line
     let waveScrub = null; // a finger or mouse dragging along the playing song's wave
-    let trackStartOffset = 0; // where the playing song was started (shown while it loads)
+    let trackStartOffset = 0; // where the playing song was started (shown while it loads; Back's 3 seconds go from here)
     let songSettleAt = 0; // measuring a new song's sound waits until its row has finished opening
     const TRACK_PLAYING_FADE_OUT_MS = 220;
     // Keep in sync with the full-height layout media queries in styles.css
@@ -1327,25 +1327,146 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    async function playRandomVisibleTrack(excludedTrack = null, options = {}) {
-        const visibleTracks = getVisibleTracks();
+    // ───── What's played, and the shuffle's memory ─────
+    // Back goes to the song that played before this one (shuffled or not), and Next, after going
+    // back, comes forward again through the same songs before anything new, like a browser's back
+    // and forward. That's the lock screen's buttons and the headphones' presses too (AirPods: twice
+    // for the next song, three times for back). A two-sided song is one song, whichever side played.
+    const PLAYED_KEEP = 100;
+    const playedSongs = []; // songs (side A's file), in the order they played
+    let playedAt = -1; // the one playing, or played last
+    let playedBackTo = -1; // where Back is going, until the song starts
 
-        if (visibleTracks.length === 0) {
+    function getSongKey(track) {
+        return track ? track.sideA || track.file : "";
+    }
+
+    function getSongRow(key) {
+        if (!key) return null;
+        const file = CSS.escape(key);
+        return trackList.querySelector(`.track[data-file="${file}"]`) || trackList.querySelector(`.track[data-sides~="${file}"]`);
+    }
+
+    // The nearest of the songs played, back (-1) or forward (1) from `from`, that's in the list (the
+    // tag picker may be hiding some): where it is in playedSongs, or -1
+    function findPlayed(from, step) {
+        for (let index = from + step; index >= 0 && index < playedSongs.length; index += step) {
+            if (getSongRow(playedSongs[index])) return index;
+        }
+        return -1;
+    }
+
+    // Every song that starts, however it started
+    function notePlayed(track) {
+        const key = getSongKey(track);
+        const backTo = playedBackTo;
+        playedBackTo = -1;
+        if (!key) return;
+        rememberHeard(key);
+        if (backTo >= 0 && playedSongs[backTo] === key) {
+            playedAt = backTo;
             return;
         }
-
-        const blockedTrack = excludedTrack || getCurrentTrackElement();
-
-        let candidates = visibleTracks;
-        if (blockedTrack && visibleTracks.length > 1) {
-            const nonBlockedTracks = visibleTracks.filter((trackElement) => trackElement !== blockedTrack);
-            if (nonBlockedTracks.length > 0) {
-                candidates = nonBlockedTracks;
-            }
+        if (playedSongs[playedAt] === key) return;
+        const ahead = findPlayed(playedAt, 1);
+        if (ahead >= 0 && playedSongs[ahead] === key) {
+            playedAt = ahead;
+            return;
         }
+        // Somewhere new: the way forward is forgotten
+        playedSongs.splice(playedAt + 1);
+        playedSongs.push(key);
+        if (playedSongs.length > PLAYED_KEEP) playedSongs.splice(0, playedSongs.length - PLAYED_KEEP);
+        playedAt = playedSongs.length - 1;
+    }
 
-        const targetTrack = candidates[Math.floor(Math.random() * candidates.length)];
-        await playTrackElement(targetTrack, options);
+    // Shuffle plays every song in the list once before any comes round again, and doesn't start the
+    // next round with one it's only just played. It keeps the songs from a game, and the ones from
+    // the archive, apart. It remembers what's been heard between visits, and counts every song that
+    // starts, so one you've picked yourself won't come straight back either. The dice goes by it too.
+    const SHUFFLE_MEMORY_KEY = "museJukeboxShuffleMemory";
+    const SHUFFLE_KEEP = 200; // songs heard, remembered
+    const SHUFFLE_REST = 8; // a new round doesn't start with any of the songs heard last (fewer in a short list)
+    const shuffleMemory = readShuffleMemory(); // heard: songs, oldest first; round: where in heard this round began
+
+    function readShuffleMemory() {
+        try {
+            const stored = JSON.parse(localStorage.getItem(SHUFFLE_MEMORY_KEY) || "null");
+            if (stored && Array.isArray(stored.heard) && stored.heard.every((key) => typeof key === "string")) {
+                const heard = stored.heard.slice(-SHUFFLE_KEEP);
+                const round = Number.isInteger(stored.round) ? stored.round - (stored.heard.length - heard.length) : heard.length;
+                return { heard, round: Math.min(heard.length, Math.max(0, round)) };
+            }
+        } catch (error) {
+            // Storage blocked, or nothing there yet
+        }
+        return { heard: [], round: 0 };
+    }
+
+    function saveShuffleMemory() {
+        try {
+            localStorage.setItem(SHUFFLE_MEMORY_KEY, JSON.stringify(shuffleMemory));
+        } catch (error) {
+            // Storage blocked: it remembers for this visit
+        }
+    }
+
+    function rememberHeard(key) {
+        const { heard } = shuffleMemory;
+        if (heard[heard.length - 1] === key) return;
+        heard.push(key);
+        if (heard.length > SHUFFLE_KEEP) {
+            const over = heard.length - SHUFFLE_KEEP;
+            heard.splice(0, over);
+            shuffleMemory.round = Math.max(0, shuffleMemory.round - over);
+        }
+        saveShuffleMemory();
+    }
+
+    function hasHeardThisRound(key) {
+        return shuffleMemory.heard.indexOf(key, shuffleMemory.round) !== -1;
+    }
+
+    // What a song's kept apart from: the rest of its game's songs, or the rest of the archive
+    function getShuffleGroup(track) {
+        if (!track) return "";
+        if (track.game) return `game ${track.game.name}`;
+        return track.tags.includes("Archive") ? "archive" : "";
+    }
+
+    // A song to shuffle to from `currentElement` (or to start with)
+    function pickShuffledTrackElement(currentElement, visibleTracks = getVisibleTracks()) {
+        const others = visibleTracks.filter((trackElement) => trackElement !== currentElement);
+        if (others.length === 0) return visibleTracks[0] || null;
+        const keyOf = (trackElement) => getSongKey(getTrackDataForElement(trackElement));
+
+        let unheard = others.filter((trackElement) => !hasHeardThisRound(keyOf(trackElement)));
+        if (unheard.length === 0) {
+            // All heard: round again
+            shuffleMemory.round = shuffleMemory.heard.length;
+            saveShuffleMemory();
+            unheard = others;
+        }
+        // (none of the songs heard last, while a round's just begun)
+        const restCount = Math.min(SHUFFLE_REST, Math.floor(others.length / 2));
+        const resting = new Set(restCount > 0 ? shuffleMemory.heard.slice(-restCount) : []);
+        let pool = unheard.filter((trackElement) => !resting.has(keyOf(trackElement)));
+        if (pool.length === 0) pool = unheard;
+
+        const group = getShuffleGroup(getTrackDataForElement(currentElement));
+        if (group) {
+            const apart = pool.filter((trackElement) => getShuffleGroup(getTrackDataForElement(trackElement)) !== group);
+            if (apart.length > 0) pool = apart;
+        }
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    // The dice, and Play with shuffle on: the shuffle's pick
+    async function playRandomVisibleTrack(excludedTrack = null, options = {}) {
+        const visibleTracks = getVisibleTracks();
+        if (visibleTracks.length === 0) return;
+        const targetTrack = pickShuffledTrackElement(excludedTrack || getCurrentTrackElement(), visibleTracks);
+        if (targetTrack) await playTrackElement(targetTrack, options);
     }
 
     function getVisibleTracks() {
@@ -1382,17 +1503,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         scheduleMobileViewportLock();
     }
 
-    // The song after `currentElement`: the next one down the list, or a random one on shuffle
+    // The song after `currentElement`: after going back, the one that came next before; otherwise
+    // the next one down the list, or the shuffle's pick
     function pickNextTrackElement(currentElement) {
         const visibleTracks = getVisibleTracks();
         if (visibleTracks.length === 0) return null;
 
-        if (shuffleEnabled) {
-            const candidates = visibleTracks.length > 1
-                ? visibleTracks.filter((trackElement) => trackElement !== currentElement)
-                : visibleTracks;
-            return candidates[Math.floor(Math.random() * candidates.length)];
-        }
+        const ahead = findPlayed(playedAt, 1);
+        if (ahead >= 0) return getSongRow(playedSongs[ahead]);
+
+        if (shuffleEnabled) return pickShuffledTrackElement(currentElement, visibleTracks);
 
         const currentIndex = visibleTracks.indexOf(currentElement);
         return visibleTracks[(currentIndex + 1) % visibleTracks.length];
@@ -1428,18 +1548,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Back: partway into a song, to its start (as other players do; again goes back a song);
+    // otherwise to the song that played before it. With none before it, on shuffle that's this one
+    // from the start, and otherwise the song above it in the list.
     function playPreviousTrack() {
-        if (currentTrackData && player.currentTime > 3) {
+        if (currentTrackData && player.currentTime - trackStartOffset > 3) {
             finishAutoMixNow();
+            trackStartOffset = 0;
             player.currentTime = 0;
             updateNowPlayingProgress();
+            return;
+        }
+
+        // (with nothing playing, the one that played last)
+        const back = findPlayed(currentTrackData ? playedAt : playedAt + 1, -1);
+        if (back >= 0) {
+            playedBackTo = back;
+            playTrackElement(getSongRow(playedSongs[back]), { immediate: true });
             return;
         }
 
         const visibleTracks = getVisibleTracks();
         if (visibleTracks.length === 0) return;
 
-        const currentIndex = visibleTracks.indexOf(getCurrentTrackElement());
+        const currentElement = getCurrentTrackElement();
+        if (shuffleEnabled && currentElement) {
+            finishAutoMixNow();
+            trackStartOffset = 0;
+            player.currentTime = 0;
+            updateNowPlayingProgress();
+            return;
+        }
+        const currentIndex = visibleTracks.indexOf(currentElement);
         const previousIndex = currentIndex <= 0 ? visibleTracks.length - 1 : currentIndex - 1;
         playTrackElement(visibleTracks[previousIndex], { immediate: true });
     }
@@ -2104,6 +2244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         isSwitchingTrack = true;
         currentTrackData = track;
+        notePlayed(track);
         const trackElement = getCurrentTrackElement();
         showModeButtonsOnTrack(trackElement);
         setPlayButtonLabel(trackElement?.querySelector(".play-button"), "Pause");
@@ -5637,6 +5778,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 sampleRate,
                 rate,
                 onsets: new Float32Array(frameCount),
+                loudness: new Float32Array(frameCount).fill(NaN), // how loud each moment is (dB), once measured
+                hushes: [], // where it goes quiet: [from, to (seconds), whether that's only as far as measured]
                 chunkFrames,
                 chunksDone: new Uint8Array(Math.ceil(frameCount / chunkFrames)),
                 period: 0, // the tempo overall: a beat's length in frames
@@ -5686,6 +5829,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             })
             .finally(() => {
                 analysis.busy = false;
+                findSongHushes(analysis);
                 setTimeout(() => continueSongBeats(analysis), 40);
             });
     }
@@ -5725,6 +5869,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
                 analysis.onsets[frame] = rise / BEAT_BAND_COUNT;
+                let power = 0;
+                for (let band = 0; band < BEAT_BAND_COUNT; band += 1) {
+                    power += Math.pow(10, levels[band] / 10);
+                }
+                analysis.loudness[frame] = 10 * Math.log10(power / BEAT_BAND_COUNT);
             }
             previous = previous || new Float32Array(BEAT_BAND_COUNT);
             previous.set(levels);
@@ -6089,11 +6238,61 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
+    // ───── Hushes: where a song goes quiet ─────
+    // Where a song goes (nearly) silent for a moment, the penguins stop dancing and wait for the
+    // music to come back, like a crowd before the drop. A hush is at least half a second at 20dB or
+    // more under the song's loud moments (its loudest tenth), with nothing louder within 0.15s
+    // either side (so the gaps between the notes of a soft bit don't count).
+    const HUSH_DEPTH_DB = 20;
+    const HUSH_MIN_SECONDS = 0.5;
+    const HUSH_EDGE_SECONDS = 0.15;
+    const HUSH_LEAP_SECONDS = 0.5; // the leap when the music's back
+
+    function findSongHushes(analysis) {
+        const { loudness, rate } = analysis;
+        const measured = loudness.filter((value) => !Number.isNaN(value));
+        if (measured.length < rate * 10) return;
+        measured.sort();
+        const quietBelow = measured[Math.floor(measured.length * 0.9)] - HUSH_DEPTH_DB;
+        const edge = Math.max(1, Math.round(HUSH_EDGE_SECONDS * rate));
+        const hushes = [];
+        // Every quiet run, less the edge at each end (a moment's in a hush when all within the
+        // edge of it is quiet). Where measuring hasn't got to isn't quiet.
+        let runStart = -1;
+        for (let frame = 0; frame <= loudness.length; frame += 1) {
+            const value = frame < loudness.length ? loudness[frame] : NaN;
+            const quiet = value < quietBelow;
+            if (quiet && runStart < 0) runStart = frame;
+            if (quiet || runStart < 0) continue;
+            const from = (runStart + edge) / rate;
+            const to = (frame - edge) / rate;
+            if (to - from >= HUSH_MIN_SECONDS) hushes.push([from, to, frame < loudness.length && Number.isNaN(value)]);
+            runStart = -1;
+        }
+        analysis.hushes = hushes;
+    }
+
+    // In a hush at `time`: how long till the music's back (null where that's not measured yet). Just
+    // after one: how long since it came back.
+    function getSongHush(analysis, time) {
+        const hushes = analysis && analysis.hushes;
+        if (!hushes) return null;
+        for (let index = 0; index < hushes.length; index += 1) {
+            const [from, to, open] = hushes[index];
+            if (time < from) return null;
+            if (time < to) return { holding: true, left: open ? null : to - time, length: to - from };
+            if (!open && time - to < HUSH_LEAP_SECONDS) return { holding: false, since: time - to, length: to - from };
+        }
+        return null;
+    }
+
     // ───── The penguins' dance ─────
     // Locked to the beats: a hop each beat, landing on it with a squash and leaning one way then
     // the other; side steps in the third bar of every four, and a spinning jump to end the fourth.
     // Their heads bob on the beat too (the gif's two poses, a beat each), and they dance bigger
-    // when the music hits harder.
+    // when the music hits harder. In a hush they stop and wait for the music: crouched, lower and
+    // lower as it's due back, trembling just before, and they leap as it comes back (with a spin,
+    // after a long wait).
     const PENGUIN_GIF = "images/penguin.gif";
     const PENGUIN_POSES = ["images/penguin-pose-a.png", "images/penguin-pose-b.png"];
     const penguinIcons = titlePenguins.map((penguin) => penguin.querySelector(".penguin-icon")).filter(Boolean);
@@ -6101,6 +6300,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let danceEnergy = 0.5;
     let danceBeat = null; // the penguins' own count of beats danced (and how far into this one)
     let danceSongTime = null; // the song's time when it was last counted
+    let penguinHold = 0; // how far they've stopped for a hush (0 dancing, 1 still)
+    const HUSH_WIND_SECONDS = 0.7; // they crouch lower over this long before the music's back
 
     // The penguins keep their own count, going at the song's tempo and easing towards where its
     // beats are: when the beats are worked out again as more of the song is measured, the dance
@@ -6127,7 +6328,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return { index, phase: danceBeat - index, period: position.period, strength: position.strength };
     }
 
-    function dancePenguins(position, elapsed) {
+    function dancePenguins(position, elapsed, hush = null) {
         if (!position) {
             stopPenguinDance();
             return;
@@ -6135,6 +6336,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (penguinPose === null && jukeboxContainer) jukeboxContainer.classList.add("penguins-dancing");
         const beat = position.index;
         const phase = position.phase;
+        const holding = Boolean(hush && hush.holding);
+        penguinHold += ((holding ? 1 : 0) - penguinHold) * (1 - Math.exp(-elapsed / 0.06));
         danceEnergy += ((0.35 + (0.65 * position.strength)) - danceEnergy) * (1 - Math.exp(-elapsed / 0.8));
         const move = ((beat % 16) + 16) % 16;
         const hop = 4 * phase * (1 - phase); // up between beats, landing on each one
@@ -6154,15 +6357,37 @@ document.addEventListener("DOMContentLoaded", async () => {
             spin = 360 * easeInOutCubic(phase);
             lean = 0;
         }
-        const squash = 0.15 * landing * danceEnergy;
+        let squash = 0.15 * landing * danceEnergy;
+        let tremble = 0;
+        if (penguinHold > 0.001) {
+            // Waiting: still, and crouched, a little at first and right down as the music's due
+            const still = 1 - penguinHold;
+            lift *= still;
+            lean *= still;
+            step *= still;
+            spin *= still;
+            const windUp = holding && hush.left !== null ? Math.min(1, Math.max(0, 1 - (hush.left / HUSH_WIND_SECONDS))) : 0;
+            squash = (squash * still) + (0.2 * penguinHold * (0.35 + (0.65 * easeInOutCubic(windUp))));
+            tremble = 0.012 * windUp * penguinHold * Math.sin(performance.now() * 0.082);
+        }
+        if (hush && !hush.holding) {
+            // The music's back: up they go
+            const leap = Math.min(1, hush.since / HUSH_LEAP_SECONDS);
+            lift += Math.sin(Math.PI * leap) * (0.16 + (0.12 * danceEnergy));
+            if (hush.length >= 1.5) {
+                spin = 360 * easeInOutCubic(leap);
+                lean = 0;
+            }
+        }
         penguinIcons.forEach((icon, index) => {
             const side = index === 0 ? -1 : 1; // the left one leans and steps left, the right one right
-            icon.style.transform = `translate(${(side * step).toFixed(3)}em, ${(-lift).toFixed(3)}em) rotate(${(side * lean).toFixed(2)}deg) perspective(6em) rotateY(${(side * spin).toFixed(1)}deg) scale(${(1 + (squash * 0.8)).toFixed(3)}, ${(1 - squash).toFixed(3)})${index === 0 ? "" : " scaleX(-1)"}`;
+            icon.style.transform = `translate(${((side * step) + tremble).toFixed(3)}em, ${(-lift).toFixed(3)}em) rotate(${(side * lean).toFixed(2)}deg) perspective(6em) rotateY(${(side * spin).toFixed(1)}deg) scale(${(1 + (squash * 0.8)).toFixed(3)}, ${(1 - squash).toFixed(3)})${index === 0 ? "" : " scaleX(-1)"}`;
         });
         // Their shadows shrink as they jump
         titlePenguins.forEach((penguin) => penguin.style.setProperty("--hop", Math.min(1, lift / 0.36).toFixed(3)));
         const pose = ((beat % 2) + 2) % 2;
-        if (pose !== penguinPose) {
+        // (no head bobs while they wait)
+        if (pose !== penguinPose && (penguinPose === null || penguinHold < 0.5)) {
             penguinPose = pose;
             penguinIcons.forEach((icon) => {
                 icon.src = PENGUIN_POSES[pose];
@@ -6305,6 +6530,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         lastVisualTimestamp = timestamp;
         let beatIndex = null;
         let position = null;
+        let hush = null;
         let songTime = null;
         let bass = 0;
         let measured = false; // the song's sound or beats are known here
@@ -6321,14 +6547,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 measureSpectrumAhead(spectrum, time);
             }
             if (rhythmOn) {
-                position = getBeatPosition(beatAnalyses.get(getTrackAudio(currentTrackData)), time);
+                const analysis = beatAnalyses.get(getTrackAudio(currentTrackData));
+                position = getBeatPosition(analysis, time);
+                hush = position ? getSongHush(analysis, time) : null;
                 let level = 0;
                 if (position) {
                     beatIndex = position.index;
                     const accent = ((beatIndex % 4) + 4) % 4 === 0 ? 1 : 0.7;
                     // (the flash fades in real time: a slowed side's beats are longer in song time)
                     level = Math.exp(-(position.phase * position.period) / (0.12 * getTrackRate(currentTrackData))) * accent;
-                    if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1) {
+                    if (lastBeatIndex !== null && beatIndex === lastBeatIndex + 1 && !(hush && hush.holding)) {
                         onBeat(beatIndex);
                     }
                 }
@@ -6376,7 +6604,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const dance = followBeat(position, songTime, elapsed);
             if (!isFrontHidden() && !nowPlayingOpen) {
                 applyBeatLevel(shownLevels, Math.pow(beatLevel, 1.5));
-                dancePenguins(dance, elapsed);
+                dancePenguins(dance, elapsed, hush);
             }
         } else {
             applyCalmVisuals(playing);
@@ -6911,15 +7139,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // The queued song is still what should play next (the list or shuffle may have changed since)
+    // The queued song is still what should play next (the list, shuffle, or where Back has taken
+    // the jukebox may have changed since)
     function isUpNextStillValid(entry) {
         if (entry.shuffled !== shuffleEnabled) return false;
         const visibleTracks = getVisibleTracks();
         const queuedElement = visibleTracks.find((trackElement) => trackElement.dataset.file === entry.track.file);
         if (!queuedElement) return false;
 
+        const ahead = findPlayed(playedAt, 1);
+        if (ahead >= 0) return playedSongs[ahead] === getSongKey(entry.track);
+
         const currentElement = getCurrentTrackElement();
-        if (shuffleEnabled) return queuedElement !== currentElement || visibleTracks.length === 1;
+        if (shuffleEnabled) {
+            if (visibleTracks.length === 1) return true;
+            return queuedElement !== currentElement && !hasHeardThisRound(getSongKey(entry.track));
+        }
         const currentIndex = visibleTracks.indexOf(currentElement);
         return visibleTracks[(currentIndex + 1) % visibleTracks.length] === queuedElement;
     }
@@ -7153,6 +7388,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const previousElement = getCurrentTrackElement();
         player = entry.deck;
         currentTrackData = entry.track;
+        trackStartOffset = entry.startAt;
+        notePlayed(entry.track);
         syncDeckLooping();
         if (entry.crackle) openCrackle(entry.crackle);
 
