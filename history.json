@@ -45,30 +45,16 @@
   {
    "date": "2026-10-25",
    "title": "Jukebot moves in",
-   "text": "The jukebox turns round, and on its back lives Jukebot: a little robot with bugs in his wiring for you to fix.",
-   "picture": "history/2026-10-25-2.webp",
-   "small": "history/2026-10-25-2-small.webp"
-  },
-  {
-   "date": "2026-10-25",
-   "title": "Keep it playing",
-   "text": "Songs can play on one after another (shuffled, if you like), even with the screen off, and the record scratches like a DJ's.",
+   "text": "Songs play on one after another, even with the screen off, and the jukebox turns round to show Jukebot: a little robot with bugs in his wiring for you to fix.",
    "picture": "history/2026-10-25.webp",
    "small": "history/2026-10-25-small.webp"
   },
   {
    "date": "2026-08-10",
-   "title": "Marquees and Exhale",
-   "text": "Long tags scroll along like marquees, and Exhale joins.",
+   "title": "Countdown Island and Exhale",
+   "text": "Countdown Island arrives with its slowed-down twin, then Exhale, and long tags scroll along like marquees.",
    "picture": "history/2026-08-10.webp",
    "small": "history/2026-08-10-small.webp"
-  },
-  {
-   "date": "2026-07-31",
-   "title": "Countdown Island",
-   "text": "Countdown Island arrives, along with its slowed-down twin.",
-   "picture": "history/2026-07-31.webp",
-   "small": "history/2026-07-31-small.webp"
   },
   {
    "date": "2026-03-04",
@@ -100,17 +86,10 @@
   },
   {
    "date": "2025-01-14",
-   "title": "Drift drops in",
-   "text": "A new song to start 2025.",
+   "title": "Callout and Drift",
+   "text": "The first new songs since opening week: Callout, then Drift to start 2025.",
    "picture": "history/2025-01-14.webp",
    "small": "history/2025-01-14-small.webp"
-  },
-  {
-   "date": "2024-12-06",
-   "title": "Callout",
-   "text": "The first new song since opening week.",
-   "picture": "history/2024-12-06.webp",
-   "small": "history/2024-12-06-small.webp"
   },
   {
    "date": "2024-10-30",
