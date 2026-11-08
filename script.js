@@ -1642,8 +1642,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.querySelectorAll(".mode-button--shuffle, #np-shuffle").forEach((button) => {
             button.setAttribute("aria-pressed", String(shuffleEnabled));
         });
-        // (the speaker panel's is always there, so it shows whether songs are really being shuffled)
-        if (speakerShuffle) speakerShuffle.setAttribute("aria-pressed", String(shuffleEnabled && continuousPlayEnabled));
+        if (speakerShuffle) speakerShuffle.setAttribute("aria-pressed", String(shuffleEnabled));
     }
 
     // Only the current song shows the keep-playing / shuffle buttons
@@ -1886,10 +1885,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         updatePlaybackModeButtons();
     }
 
+    // Shuffle's button is always there, not just once keep-playing's on. Lit, a tap turns shuffle
+    // off; otherwise it turns it on, and keep-playing too if that's off, since shuffling means the
+    // songs carry on (in any order)
+    function pressShuffle() {
+        const turningOn = !shuffleEnabled;
+        toggleShuffle();
+        if (turningOn && !continuousPlayEnabled) setLoopMode(true, false);
+    }
+
     // Repeat and shuffle on the speaker panel (phones too short for the playing row to have them).
-    // Repeat goes round like the row's: keep playing, repeat this song, off. Shuffle means keep
-    // playing in any order, so switching it on switches that on too. Either way the equaliser spells
-    // out what's on for a moment.
+    // Repeat goes round like the row's: keep playing, repeat this song, off. Shuffle works like the
+    // other shuffle buttons (switched on, it switches keep-playing on too). Either way the
+    // equaliser spells out what's on for a moment.
     let speakerReadoutTimer = null;
 
     function showSpeakerReadout(text, tone) {
@@ -1910,12 +1918,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             else showSpeakerReadout("Repeat off", "off");
         });
         speakerShuffle.addEventListener("click", () => {
-            if (continuousPlayEnabled) {
-                toggleShuffle();
-            } else {
-                if (!shuffleEnabled) toggleShuffle();
-                setLoopMode(true, false);
-            }
+            pressShuffle();
             showSpeakerReadout(shuffleEnabled ? "Shuffle on" : "Shuffle off", shuffleEnabled ? "blue" : "off");
         });
     }
@@ -3621,7 +3624,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         npNext?.addEventListener("click", playNextTrack);
         npContinuous?.addEventListener("click", cycleLoopMode);
         npClear?.addEventListener("click", clearCurrentTrack);
-        npShuffle?.addEventListener("click", toggleShuffle);
+        npShuffle?.addEventListener("click", pressShuffle);
     }
 
     // ───── Now playing view (no room for the deck beside the jukebox) ─────
@@ -4632,7 +4635,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const playButton = trackElement.querySelector(".play-button");
             const coverImage = trackElement.querySelector("img");
             trackElement.querySelector(".mode-button--continuous").addEventListener("click", cycleLoopMode);
-            trackElement.querySelector(".mode-button--shuffle").addEventListener("click", toggleShuffle);
+            trackElement.querySelector(".mode-button--shuffle").addEventListener("click", pressShuffle);
             trackElement.querySelector(".skip-button--prev").addEventListener("click", playPreviousTrack);
             trackElement.querySelector(".skip-button--next").addEventListener("click", playNextTrack);
             trackElement.querySelector(".track-clear").addEventListener("click", clearCurrentTrack);

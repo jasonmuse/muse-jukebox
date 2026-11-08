@@ -1558,7 +1558,7 @@ audio {
 }
 
 .track-modes-visible .mode-button--continuous,
-#track-list.continuous-on .track-modes-visible .mode-button--shuffle {
+.track-modes-visible .mode-button--shuffle {
     width: var(--mode-size);
     margin-left: 8px;
     opacity: 1;
@@ -1862,7 +1862,7 @@ audio {
     }
 
     .track-modes-visible .mode-button--continuous,
-    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .mode-button--shuffle,
     .track-modes-visible .skip-button--next {
         margin-left: 5px;
     }
@@ -1887,7 +1887,7 @@ audio {
     }
 
     .track-modes-visible .mode-button--continuous,
-    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .mode-button--shuffle,
     .track-modes-visible .skip-button--next {
         margin-left: 4px;
     }
@@ -2835,24 +2835,13 @@ html {
     transform: scaleY(-1);
 }
 
-/* Shuffle only appears once keep-playing is on (its slot stays reserved) */
+/* Shuffle's always there, so it can be found without the loop button (tapped on, it switches
+   keep-playing on too: script.js) */
 .np-mode--shuffle {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: scale(0.6) translateX(-12px);
-    transition: transform 380ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 180ms ease-out, box-shadow 180ms ease-out, opacity 220ms ease-out, visibility 0s linear 380ms;
+    transition: transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 180ms ease-out, box-shadow 180ms ease-out;
 }
 
-.now-playing.continuous-on .np-mode--shuffle {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: none;
-    transition: transform 420ms cubic-bezier(0.34, 1.4, 0.64, 1), background-color 180ms ease-out, box-shadow 180ms ease-out, opacity 260ms ease-out 60ms, visibility 0s linear 0s;
-}
-
-.now-playing.continuous-on .np-mode--shuffle:active {
+.np-mode--shuffle:active {
     transform: scale(0.92);
 }
 
@@ -3313,7 +3302,7 @@ html {
 
     .track-modes-visible .skip-button,
     .track-modes-visible .mode-button--continuous,
-    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .mode-button--shuffle,
     .track-modes-visible .song-time-total {
         display: none;
     }
@@ -9388,7 +9377,7 @@ button.title-penguin:focus-visible {
     color: #ffb3e8;
 }
 
-.jukebox-speakers.continuous-on.shuffle-on .speaker-mode--shuffle {
+.jukebox-speakers.shuffle-on .speaker-mode--shuffle {
     border-color: rgba(127, 230, 255, 0.8);
     background: radial-gradient(circle at 50% 35%, #1f4252, #0f1a24 72%);
     box-shadow: inset 0 0 6px rgba(127, 230, 255, 0.35), 0 0 10px rgba(127, 230, 255, 0.55);
@@ -9405,7 +9394,7 @@ button.title-penguin:focus-visible {
     transform: rotate(360deg);
 }
 
-.jukebox-speakers.continuous-on.shuffle-on .speaker-mode--shuffle svg {
+.jukebox-speakers.shuffle-on .speaker-mode--shuffle svg {
     transform: scaleY(-1);
 }
 
@@ -9985,7 +9974,7 @@ html.viewport-shifted body {
        turntable view with everything else. */
     .track-modes-visible .skip-button,
     .track-modes-visible .mode-button--continuous,
-    #track-list.continuous-on .track-modes-visible .mode-button--shuffle,
+    .track-modes-visible .mode-button--shuffle,
     .track-modes-visible .song-time-total {
         display: none;
     }
