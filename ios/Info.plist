@@ -8,10 +8,6 @@
 	<array>
 		<string>audio</string>
 	</array>
-	<key>WKAppBoundDomains</key>
-	<array>
-		<string>muse-jukebox.pages.dev</string>
-	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
