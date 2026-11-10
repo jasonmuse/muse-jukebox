@@ -1,0 +1,772 @@
+{
+ "version": 1,
+ "songs": [
+  {
+   "id": "countdownisland",
+   "title": "Countdown Island",
+   "audio": "audio/countdownisland.mp3",
+   "rate": 1,
+   "cover": "images/countdownisland.png",
+   "tags": [
+    "Featured",
+    "Game OST"
+   ],
+   "year": "2026",
+   "featured": true,
+   "haptics": "haptics/countdownisland.json",
+   "thumbnail": "images/countdownisland-thumb.webp",
+   "duration": 171.47,
+   "shape": "2u1v1xv3887878797-8-6-899899798-7979-89898_6_7-8--8-9998--8-988-8-8-7-8-99--999-8-9998-8-8_7_8-6",
+   "side": "A",
+   "otherSide": "countdownisland_pitch_0.7",
+   "game": {
+    "name": "Countdown Island",
+    "url": "https://amused.itch.io/countdown-island"
+   }
+  },
+  {
+   "id": "countdownisland_pitch_0.7",
+   "title": "Countdown Paused",
+   "audio": "audio/countdownisland.mp3",
+   "rate": 0.7,
+   "cover": "images/countdownisland.png",
+   "tags": [
+    "Featured",
+    "Game OST",
+    "Slowed"
+   ],
+   "year": "2026",
+   "featured": true,
+   "haptics": "haptics/countdownisland.json",
+   "thumbnail": "images/countdownisland-thumb.webp",
+   "duration": 244.95,
+   "shape": "2u1v1xv3887878797-8-6-899899798-7979-89898_6_7-8--8-9998--8-988-8-8-7-8-99--999-8-9998-8-8_7_8-6",
+   "side": "B",
+   "otherSide": "countdownisland",
+   "grayscale": true,
+   "game": {
+    "name": "Countdown Island",
+    "url": "https://amused.itch.io/countdown-island"
+   }
+  },
+  {
+   "id": "exhale",
+   "title": "Exhale",
+   "audio": "audio/exhale.mp3",
+   "rate": 1,
+   "cover": "images/crows_nest.png",
+   "tags": [
+    "Chill",
+    "Atmospheric",
+    "Fast"
+   ],
+   "year": "2026",
+   "featured": false,
+   "haptics": "haptics/exhale.json",
+   "duration": 51.17,
+   "shape": "898998-87-8-9-989-8887_9--8989-8897_99_8889-8888--8_9789-89999_8_987-988999_7_9989-4VFAAAAAAAAAA"
+  },
+  {
+   "id": "runawaynovocals",
+   "title": "Runaway",
+   "audio": "audio/runawaynovocals.mp3",
+   "rate": 1,
+   "cover": "images/runaway.gif",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2026",
+   "featured": false,
+   "haptics": "haptics/runawaynovocals.json",
+   "duration": 112.04,
+   "shape": "00498776-76778687694977u7_198786-388886957-878767_768775-76779787rqqqooodBANHAy69488986867-80NAA"
+  },
+  {
+   "id": "leafed",
+   "title": "Leafed",
+   "audio": "audio/leafed.mp3",
+   "rate": 1,
+   "cover": "images/leafed.gif",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Mysterious"
+   ],
+   "year": "2026",
+   "featured": false,
+   "haptics": "haptics/leafed.json",
+   "duration": 48.04,
+   "shape": "768998741045122096400631-88-721z93220-95215729749-966632114841zz835227758586322z_8420863427_7852"
+  },
+  {
+   "id": "gallerymuseremix",
+   "title": "Gallery - Muse Remix",
+   "audio": "audio/gallerymuseremix.mp3",
+   "rate": 1,
+   "cover": "images/gallerymuseremix.png",
+   "tags": [
+    "Trap",
+    "Bass",
+    "Remix",
+    "Game OST"
+   ],
+   "year": "2025",
+   "featured": false,
+   "haptics": "haptics/gallerymuseremix.json",
+   "duration": 284.19,
+   "shape": "prnmxywy5767565556665555yronqwtqvx00w688-86778889-977786wuqqx3zwuz54z06999-897799989_9887-702yvv"
+  },
+  {
+   "id": "dropoff",
+   "title": "Dropoff",
+   "audio": "audio/dropoff.mp3",
+   "rate": 1,
+   "cover": "images/dropoff.png",
+   "tags": [
+    "Ambient",
+    "Bass",
+    "Chill"
+   ],
+   "year": "2025",
+   "featured": false,
+   "haptics": "haptics/dropoff.json",
+   "duration": 92.38,
+   "shape": "w3yz--_----0-_--s202q213hij29_--9_849_-80020z023yy269_--9-779__53zzy3z2tiho8----9-49---230zy303l"
+  },
+  {
+   "id": "drift",
+   "title": "Drift",
+   "audio": "audio/drift.mp3",
+   "rate": 1,
+   "cover": "images/drift.gif",
+   "tags": [
+    "Ambient",
+    "Bass",
+    "Chill"
+   ],
+   "year": "2025",
+   "featured": false,
+   "haptics": "haptics/drift.json",
+   "duration": 95.09,
+   "shape": "777776774w012x0137-9-99999898_799928695777767877789799_7989999-99996z2341230vtuuttttsussupRAAAAA"
+  },
+  {
+   "id": "callout",
+   "title": "Callout",
+   "audio": "audio/callout.mp3",
+   "rate": 1,
+   "cover": "images/penguin.png",
+   "tags": [
+    "Happy",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/callout.json",
+   "duration": 116.04,
+   "shape": "1vyzwyzxz1xxy86786977888787988898999897359777466-87973xz00wy401021--__---_-_----6977788596583CAA"
+  },
+  {
+   "id": "box11",
+   "title": "BOX 11",
+   "audio": "audio/box11.mp3",
+   "rate": 1,
+   "cover": "images/box11.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi",
+    "Mysterious"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/box11.json",
+   "duration": 93.02,
+   "shape": "-------_---_--98---_-__---_--_----_9-------9-----_--_----_----9----__-9-_----99--9--9999-885yfAA"
+  },
+  {
+   "id": "sundrown",
+   "title": "Sundrown",
+   "audio": "audio/sundrown.mp3",
+   "rate": 1,
+   "cover": "images/water.gif",
+   "tags": [
+    "Happy",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/sundrown.json",
+   "duration": 119.43,
+   "shape": "uoqrqrtqqtspx21020200yz0368777_48667978875857657867875857763666666745855867867757664865664752976"
+  },
+  {
+   "id": "mino",
+   "title": "Mino",
+   "audio": "audio/mino.mp3",
+   "rate": 1,
+   "cover": "images/bonedeer.png",
+   "tags": [
+    "Chill",
+    "Piano",
+    "Trap"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/mino.json",
+   "duration": 150.75,
+   "shape": "niommpmsp1-9-99---998997_-----99-----8999989998---99-_9-69---9_----899899993v793979--7onnjpklqhl"
+  },
+  {
+   "id": "portal",
+   "title": "Portal",
+   "audio": "audio/portal.mp3",
+   "rate": 1,
+   "cover": "images/howhollows-min.png",
+   "tags": [
+    "Chill",
+    "Lo-fi",
+    "Mysterious"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/portal.json",
+   "duration": 88.66,
+   "shape": "6547766355476656_599_6-7-599-6-96547_6_75547-6_9-599_6-7_599-6-95637_7-75537-6-9_699_6-8-59--699"
+  },
+  {
+   "id": "hollows",
+   "title": "Hollows",
+   "audio": "audio/hollows.mp3",
+   "rate": 1,
+   "cover": "images/hollows.jpg",
+   "tags": [
+    "Hype",
+    "Trap",
+    "Bass"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/hollows.json",
+   "duration": 164.3,
+   "shape": "wputsuuw3-9--_9-9--9---9--7-897-6--_9---9_9------88-_9_-_----7889788909294866-_9--_9--4vsusvsvtN"
+  },
+  {
+   "id": "rubberbandit",
+   "title": "Rubber Bandit",
+   "audio": "audio/rubberbandit.mp3",
+   "rate": 1,
+   "cover": "images/rubberbandit.png",
+   "tags": [
+    "Hype",
+    "Trap",
+    "Bass"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/rubberbandit.json",
+   "duration": 135.21,
+   "shape": "orquvtqruu089868988698888887998-yoorozzzyy89---9---9-898779996_-888887898_798779986_5uruvtqqtvtQ"
+  },
+  {
+   "id": "goodbyefroggy",
+   "title": "Farewell Froggy",
+   "audio": "audio/goodbyefroggy.mp3",
+   "rate": 1,
+   "cover": "images/goodbyefroggy.png",
+   "tags": [
+    "Emotional",
+    "Ambient",
+    "Melancholic",
+    "Game OST"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/goodbyefroggy.json",
+   "duration": 136.1,
+   "shape": "grqrusloqrsuuuxyvvxv0w04055261y_2x7425153y-60641744858_5521653844-92tuuwxuuuxwwmrqquqkopqrlIAAAA",
+   "game": {
+    "name": "Frog Quest",
+    "url": "https://amused.itch.io/frog-quest",
+    "appStore": "https://apps.apple.com/us/app/frog-quest/id6761079354"
+   }
+  },
+  {
+   "id": "FROGGOD",
+   "title": "Frog God",
+   "audio": "audio/FROGGOD.mp3",
+   "rate": 1,
+   "cover": "images/Baby_Bowser.png",
+   "tags": [
+    "Hype",
+    "Dark",
+    "Mysterious",
+    "Game OST"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/FROGGOD.json",
+   "duration": 243.91,
+   "shape": "rrnrroz0zz00120011----9-110120--_-_--9--9-999-9--------9-999----9-999999-9-9--999-9-88_78_799999",
+   "game": {
+    "name": "Frog Quest",
+    "url": "https://amused.itch.io/frog-quest",
+    "appStore": "https://apps.apple.com/us/app/frog-quest/id6761079354"
+   }
+  },
+  {
+   "id": "belldrop",
+   "title": "Bell Drop",
+   "audio": "audio/belldrop.mp3",
+   "rate": 1,
+   "cover": "images/belldrop.png",
+   "tags": [
+    "Chill",
+    "Hype",
+    "Lo-fi",
+    "Mysterious"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/belldrop.json",
+   "duration": 78.63,
+   "shape": "664357326465651575343yvpns39--98--9--_99-8-9--99----94vlTu389-999--9-_99-9-8-99989-98-99-9----98"
+  },
+  {
+   "id": "zoom",
+   "title": "Zoom",
+   "audio": "audio/zoom.mp3",
+   "rate": 1,
+   "cover": "images/zoom.png",
+   "tags": [
+    "Hype",
+    "Trap",
+    "Mysterious"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/zoom.json",
+   "duration": 153.65,
+   "shape": "prtssvvxwvxx-98_88-98_8z-98_88-98_89-98_88-98_88xxvuwtwyvvxx-98_79_99_7-_97_79_97_7-zxyvuxrnlfTF"
+  },
+  {
+   "id": "polarcoaster",
+   "title": "Polar Coaster",
+   "audio": "audio/polarcoaster.mp3",
+   "rate": 1,
+   "cover": "images/polarcoaster.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/polarcoaster.json",
+   "duration": 113.5,
+   "shape": "wypzuxr214221068-785658677497867453797-8858997969859-76878_557z2368797658_697878797887-98xwrpgaF"
+  },
+  {
+   "id": "ORBIT",
+   "title": "Orbit",
+   "audio": "audio/ORBIT.mp3",
+   "rate": 1,
+   "cover": "images/orbit.png",
+   "tags": [
+    "Chill",
+    "Lo-fi",
+    "Meow"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/ORBIT.json",
+   "duration": 122.28,
+   "shape": "qu0vqyrv0zvv1098-97_99-997997-998995_888831-7y896396z9899_-7--99-97988--98-8163z30rlrgaeXQMNCAAA"
+  },
+  {
+   "id": "clockedout",
+   "title": "Clocked Out",
+   "audio": "audio/clockedout.mp3",
+   "rate": 1,
+   "cover": "images/clockedout.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/clockedout.json",
+   "duration": 100.44,
+   "shape": "1z2zzz011y15-7885895855-73-61-737548219437324056168276040y975-42_75955955946-55550wywuvwwywvxpNA"
+  },
+  {
+   "id": "closedeyes",
+   "title": "Closed Eyes",
+   "audio": "audio/closedeyes.mp3",
+   "rate": 1,
+   "cover": "images/closedeyes.png",
+   "tags": [
+    "Chill",
+    "Lo-fi",
+    "Ambient"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/closedeyes.json",
+   "duration": 106.03,
+   "shape": "gdi75-896_6888859796-568984-597-85-896_6788859686-659885-598985-897_6788859686-659885-68890heLAA"
+  },
+  {
+   "id": "spitup",
+   "title": "Spit Up",
+   "audio": "audio/spitup.mp3",
+   "rate": 1,
+   "cover": "images/spitup.png",
+   "tags": [
+    "Chill",
+    "Dark",
+    "Trap"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/spitup.json",
+   "duration": 121.89,
+   "shape": "777688568536688789769798867878879993wxy37yw0w64vy0x54xu3yx89588--998--6786--89_7_6kTtrpvlXwxpRAA"
+  },
+  {
+   "id": "flyby",
+   "title": "Flyby",
+   "audio": "audio/flyby.mp3",
+   "rate": 1,
+   "cover": "images/flyby.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/flyby.json",
+   "duration": 110.86,
+   "shape": "-9-9-9_9-9-9-9_9-99999-9999999-98898989898989894-9-9_9_9-9-9-9_9-9-9-9-9-99999-99898989899989898"
+  },
+  {
+   "id": "kickedup",
+   "title": "Kicked Up",
+   "audio": "audio/kickedup.mp3",
+   "rate": 1,
+   "cover": "images/kickedup.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/kickedup.json",
+   "duration": 73.01,
+   "shape": "ooqmoorqrtpqrs29888-889-78-9899889_79-999-9906671776x89257x-988-989-87_-78y79218816670884nnpVFAA"
+  },
+  {
+   "id": "upstep",
+   "title": "Upstep",
+   "audio": "audio/upstep.mp3",
+   "rate": 1,
+   "cover": "images/upstep.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/upstep.json",
+   "duration": 67.25,
+   "shape": "888-899889700498-988998_99--88-888989-95v998_99-998-89_899988997-990498-899-89-89_-89_88-998-99_"
+  },
+  {
+   "id": "kickout",
+   "title": "Kickout",
+   "audio": "audio/kickout.mp3",
+   "rate": 1,
+   "cover": "images/kickout.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/kickout.json",
+   "duration": 92.35,
+   "shape": "ihkmgjlvy3x203s7797_7-7_697-876otmplnp102y42y0-397_879997-897_587_797_6-7_787x2y2z3y4z0suiolQAAA"
+  },
+  {
+   "id": "blackened",
+   "title": "Blackened",
+   "audio": "audio/blackened.mp3",
+   "rate": 1,
+   "cover": "images/blackened.png",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/blackened.json",
+   "duration": 134.45,
+   "shape": "982-69998895996-9979-998-905788485-6-_985978-889988-79-683-7897_-994686_9-5-8898-5795-598987_569"
+  },
+  {
+   "id": "beesting",
+   "title": "Beesting",
+   "audio": "audio/beesting.mp3",
+   "rate": 1,
+   "cover": "images/beesting.jpg",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/beesting.json",
+   "duration": 69.85,
+   "shape": "oqrsvvus9999-9-99-9---9-----------99-_------_--9_---_--_9---_-_---9----_----_--9--------99------"
+  },
+  {
+   "id": "oddball",
+   "title": "Oddball",
+   "audio": "audio/oddball.mp3",
+   "rate": 1,
+   "cover": "images/oddball.png",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/oddball.json",
+   "duration": 109.82,
+   "shape": "558899-86899-97764-989-5579447764654765888233-989-6789899-758-98894589_9-97-_8-98023-75899888bFA"
+  },
+  {
+   "id": "benched",
+   "title": "Benched",
+   "audio": "audio/benched.mp3",
+   "rate": 1,
+   "cover": "images/benched.png",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/benched.json",
+   "duration": 34.08,
+   "shape": "9_9728--889--8439--97-_-969_959---97793994-_951--97-9_9727---98--986-_949--995964-71ytmaCAAAAAAA"
+  },
+  {
+   "id": "elevate",
+   "title": "Elevate",
+   "audio": "audio/elevate.mp3",
+   "rate": 1,
+   "cover": "images/elevate.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/elevate.json",
+   "duration": 76.75,
+   "shape": "999-99999988888898-99999999998805888-999999999989888898-899989999898z6888-_nDAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+   "id": "floatoff",
+   "title": "Floatoff",
+   "audio": "audio/floatoff.mp3",
+   "rate": 1,
+   "cover": "images/floatoff.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/floatoff.json",
+   "duration": 76.85,
+   "shape": "-86578-86588-86688_87866-9868--98699_-779-_98789-98689-9769-_-779-_98889-86578-86588-96689-87654"
+  },
+  {
+   "id": "moonie",
+   "title": "Moonie",
+   "audio": "audio/moonie.mp3",
+   "rate": 1,
+   "cover": "images/good-night.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/moonie.json",
+   "duration": 134.45,
+   "shape": "suuutuvtsuqrr3-79-9--979-9-_-7-_--_97----_98--9_-98-----88-9--_89_9-_-7-_-__97-_-9887999--98----"
+  },
+  {
+   "id": "fliptrix",
+   "title": "Fliptrix",
+   "audio": "audio/fliptrix.mp3",
+   "rate": 1,
+   "cover": "images/fliptrix.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/fliptrix.json",
+   "duration": 152.11,
+   "shape": "suvuuttvxvvv59987978-59885834-45876-78-69968-87836756887986896966875986957999-67_79-uuwuuvohbRFA"
+  },
+  {
+   "id": "slaw",
+   "title": "Slaw",
+   "audio": "audio/slaw.mp3",
+   "rate": 1,
+   "cover": "images/slaw.gif",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2025",
+   "featured": false,
+   "haptics": "haptics/slaw.json",
+   "duration": 59.11,
+   "shape": "_77799856598-76699_766-9_77798846678-76598-76699-7769-956698-76689-7669-_66797856799_766-9-66699"
+  },
+  {
+   "id": "bones",
+   "title": "Bones",
+   "audio": "audio/bones.mp3",
+   "rate": 1,
+   "cover": "images/askbot.png",
+   "tags": [
+    "Old",
+    "Archive",
+    "Unsorted"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/bones.json",
+   "duration": 67.3,
+   "shape": "Znuv4-_-99--_--9---999----9----99-_--_-----9-99--9-----9-_---9---99-----9----9--_---9---99-999-9"
+  },
+  {
+   "id": "SKYWATCH",
+   "title": "Skywatch",
+   "audio": "audio/SKYWATCH.mp3",
+   "rate": 1,
+   "cover": "images/skywatch.png",
+   "tags": [
+    "Chill",
+    "Trap",
+    "Hype"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/SKYWATCH.json",
+   "duration": 96.68,
+   "shape": "ihijhgjkgiljk1678867_74-888965-668875_74u757-77_5779879445-78974_57w755_779765_879ifikgijigjjggX"
+  },
+  {
+   "id": "bottletop",
+   "title": "Boom Slide",
+   "audio": "audio/bottletop.mp3",
+   "rate": 1,
+   "cover": "images/boomslide.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Lo-fi",
+    "Game OST"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/bottletop.json",
+   "duration": 162.56,
+   "shape": "-9-8899737-_-___998_-8-9-887--9776899_997-48596499-357-69489-888785799479987779498887-8888984888",
+   "game": {
+    "name": "Boombox Swarm",
+    "url": "https://amused.itch.io/boombox-swarm"
+   }
+  },
+  {
+   "id": "braincheck",
+   "title": "Brain Check",
+   "audio": "audio/braincheck.mp3",
+   "rate": 1,
+   "cover": "images/pineapplecakelogo.png",
+   "tags": [
+    "Chill",
+    "Ambient",
+    "Game OST"
+   ],
+   "year": "2023",
+   "featured": false,
+   "haptics": "haptics/braincheck.json",
+   "duration": 112.09,
+   "shape": "6z240224277y58-99999_99-899-99-9-9_89-99--58_688969-58-879-48987-9579899989--9_999-5--77-96--688"
+  },
+  {
+   "id": "lootmode",
+   "title": "Loot Mode",
+   "audio": "audio/lootmode.mp3",
+   "rate": 1,
+   "cover": "images/itchyscratchy.gif",
+   "tags": [
+    "Hype",
+    "Dark",
+    "Mysterious",
+    "Trap"
+   ],
+   "year": "2024",
+   "featured": false,
+   "haptics": "haptics/lootmode.json",
+   "duration": 178.23,
+   "shape": "z50462629496-5-1-7669587_58696-67425560-4858869476885-587886-24354609274975-0916498573_3956-2-3-"
+  },
+  {
+   "id": "gotcha",
+   "title": "??????",
+   "audio": "audio/gotcha.mp3",
+   "rate": 1,
+   "cover": "images/question.jpg",
+   "tags": [
+    "?????",
+    "?????",
+    "?????",
+    "?????"
+   ],
+   "year": "?????",
+   "featured": false,
+   "haptics": "haptics/gotcha.json",
+   "duration": 1.99,
+   "shape": "AAAAAAAAAAAAAAAAAAAAAA3_-_-85ulAAAAAAAAAAAAs4qNz3br5mMp1bEXrYASqXBEsjJAXlUAHgYBABXIAACNAAAAAAAAA"
+  }
+ ]
+}
