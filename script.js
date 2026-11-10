@@ -5739,7 +5739,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const BEAT_TIGHTNESS = 600; // how firmly the beats keep to the tempo (any looser and they'd wander
     // onto a syncopated song's stronger off-beats, losing a beat every so often and falling behind)
     const BEAT_ONSET_LAG = 0.03; // seconds
-    const BEAT_BASS_BANDS = 12; // the bands under 160 Hz (a kick drum's), for how deep each hit is
     const BEAT_SLICE_MS = 5; // the longest the page works on it at a time
     const beatAnalyses = new Map();
     const beatBandBins = new Map(); // by sample rate
@@ -5787,7 +5786,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 sampleRate,
                 rate,
                 onsets: new Float32Array(frameCount),
-                bassShare: new Float32Array(frameCount), // how much of each onset is in the bass (0–1)
                 loudness: new Float32Array(frameCount).fill(NaN), // how loud each moment is (dB), once measured
                 hushes: [], // where it goes quiet: [from, to (seconds), whether that's only as far as measured]
                 chunkFrames,
@@ -5873,16 +5871,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             measureBeatBands(mono, (frame * BEAT_HOP) - offset, tables, bins, levels);
             if (frame >= first) {
                 let rise = 0;
-                let bassRise = 0;
                 if (previous) {
                     for (let band = 0; band < BEAT_BAND_COUNT; band += 1) {
-                        const up = Math.max(0, levels[band] - previous[band]);
-                        rise += up;
-                        if (band < BEAT_BASS_BANDS) bassRise += up;
+                        rise += Math.max(0, levels[band] - previous[band]);
                     }
                 }
                 analysis.onsets[frame] = rise / BEAT_BAND_COUNT;
-                analysis.bassShare[frame] = rise > 0 ? bassRise / rise : 0;
                 let power = 0;
                 for (let band = 0; band < BEAT_BAND_COUNT; band += 1) {
                     power += Math.pow(10, levels[band] / 10);
@@ -6302,37 +6296,31 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ───── Haptics: feel the music ─────
     // The phone taps along to the song, the way iOS's Music Haptics does for Apple Music: a tap on
-    // every beat (harder where the song's loud and the beat hits hard, a deep thud for a kick and a
-    // crisp tick for a snare or hi-hat), lighter taps for the strongest hits between the beats, and
-    // none where it goes quiet. The beats are the ones the penguins dance to (above), worked out
-    // with Rhythm on or off. In the Muse Jukebox app on an iPhone the app plays the taps (with Core
-    // Haptics: iOS lists the app under Music Haptics, and its haptics come on and go off with that
-    // setting); on an Android phone the page buzzes them itself. A page can't make an iPhone tap on
-    // its own (Safari only lets it as you touch the screen), so in Safari, and on computers, the
-    // setting isn't there.
+    // every beat (harder where the song's loud and the beat hits hard), lighter taps for the
+    // strongest hits between the beats, and none where it goes quiet. The beats are the ones the
+    // penguins dance to (above), worked out with Rhythm on or off. That's on an Android phone, which
+    // the page can buzz. A page can't make an iPhone tap on its own (Safari only lets it as you touch
+    // the screen), so in Safari, and on computers, the setting isn't there: on an iPhone it's the
+    // Muse Jukebox app (ios/) that taps along, from the same taps worked out ahead of time
+    // (tools/make-haptics.py).
     const HAPTICS_STORAGE_KEY = "museJukeboxHaptics";
     const HAPTICS_STRENGTH_STORAGE_KEY = "museJukeboxHapticsStrength";
-    const MUSIC_HAPTICS_SEEN_KEY = "museJukeboxMusicHapticsSeen";
     const HAPTIC_STRENGTHS = ["light", "medium", "strong"];
-    // How hard the hardest tap is at each strength (the app's taps go up to 1, and none's softer
-    // than the floor, the softest that's felt), and how long an Android phone buzzes for its
-    // softest and hardest (ms: its buzz can only be made longer, not harder)
-    const HAPTIC_TOPS = { light: 0.55, medium: 0.8, strong: 1 };
-    const HAPTIC_FLOOR = 0.12;
+    // How long the phone buzzes for its softest and hardest taps at each strength (ms: a phone's
+    // buzz can only be made longer, not harder)
     const HAPTIC_BUZZ_MS = { light: [6, 16], medium: [8, 26], strong: [10, 38] };
     const HAPTIC_RANGE_DB = 24; // from where the song's loud down to where its taps are softest
     const HAPTIC_GAP_SECONDS = 0.09; // taps any closer than this run together
     const HAPTICS_AHEAD_SECONDS = 0.3; // taps go out this far ahead, each timed to its moment
     const HAPTICS_STEP_MS = 100;
     // A taste of them as they're turned on or made harder or softer: boom, tick, boom-boom (when,
-    // how hard, how crisp)
-    const HAPTIC_SAMPLE = [[0, 1, 0.15], [0.24, 0.5, 0.8], [0.48, 0.85, 0.2], [0.6, 0.6, 0.25]];
+    // how hard)
+    const HAPTIC_SAMPLE = [[0, 1], [0.24, 0.5], [0.48, 0.85], [0.6, 0.6]];
     const hapticsRow = document.getElementById("setting-haptics-row");
     const hapticsSwitch = document.getElementById("setting-haptics");
     const hapticsStrengthButton = document.getElementById("setting-haptics-strength");
-    const appHaptics = getAppHaptics();
     // (a computer's browser has the call to buzz too, with nothing to buzz: it's phones and tablets)
-    const canBuzz = !window.museApp && typeof navigator.vibrate === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const canBuzz = typeof navigator.vibrate === "function" && window.matchMedia("(pointer: coarse)").matches;
     let hapticsOn = readHapticsSetting();
     let hapticsStrength = readHapticsStrength();
     let hapticTaps = null; // the playing song's taps
@@ -6343,23 +6331,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let hapticsOut = false; // whether any taps have gone out since they were last called back
     const buzzTimers = new Set();
 
-    // The app's haptics (the page inside the app hands it taps to play), or null on the website
-    function getAppHaptics() {
-        const app = window.museApp;
-        const handlers = window.webkit && window.webkit.messageHandlers;
-        const channel = handlers && handlers.museHaptics;
-        if (!app || !app.haptics || !channel) return null;
-        return (message) => {
-            try {
-                channel.postMessage(message);
-            } catch (error) {
-                // (the app isn't listening: nothing taps)
-            }
-        };
-    }
-
     function hapticsWanted() {
-        return hapticsOn && (Boolean(appHaptics) || canBuzz);
+        return hapticsOn && canBuzz;
     }
 
     function readHapticsSetting() {
@@ -6392,25 +6365,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         syncHaptics();
     }
 
-    // In the app they go with iOS's Music Haptics setting: on as it's turned on and off as it's
-    // turned off (even while the jukebox was shut), and the switch on the back changes them between
-    function followMusicHaptics(on) {
-        const value = on ? "on" : "off";
-        try {
-            if (localStorage.getItem(MUSIC_HAPTICS_SEEN_KEY) === value) return;
-            localStorage.setItem(MUSIC_HAPTICS_SEEN_KEY, value);
-        } catch (error) {
-            // (not remembered: it's followed afresh each time)
-        }
-        setHaptics(on);
-    }
-
     function showHapticsSetting() {
-        const available = Boolean(appHaptics) || canBuzz;
         if (hapticsRow) {
-            hapticsRow.hidden = !available;
+            hapticsRow.hidden = !canBuzz;
             const settings = hapticsRow.closest(".back-settings");
-            if (settings) settings.classList.toggle("has-haptics", available);
+            if (settings) settings.classList.toggle("has-haptics", canBuzz);
         }
         if (hapticsSwitch) hapticsSwitch.checked = hapticsOn;
         if (hapticsStrengthButton) {
@@ -6435,12 +6394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         tasteHaptics();
     }
 
-    // How hard a tap is in the app (0–1), and how long an Android phone buzzes for it, at the
-    // strength chosen, for `power` (0–1 of the song's hardest)
-    function getTapIntensity(power) {
-        return HAPTIC_FLOOR + ((HAPTIC_TOPS[hapticsStrength] - HAPTIC_FLOOR) * power);
-    }
-
+    // How long the phone buzzes for a tap at the strength chosen, for `power` (0–1 of the song's hardest)
     function getBuzzLength(power) {
         const [softest, hardest] = HAPTIC_BUZZ_MS[hapticsStrength];
         return Math.round(softest + ((hardest - softest) * power));
@@ -6449,12 +6403,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The sample. Not while a song plays: its own taps are the taste then.
     function tasteHaptics() {
         if (!hapticsWanted() || isPlayerActive()) return;
-        if (appHaptics) {
-            appHaptics({ type: "taps", taps: HAPTIC_SAMPLE.map(([at, power, crisp]) => [at, Number(getTapIntensity(power).toFixed(3)), crisp]) });
-            return;
-        }
-        // An Android phone buzzes it as one pattern, straight away (while the tap that asked for it
-        // still counts): buzz, pause, buzz...
+        // It's buzzed as one pattern, straight away (while the tap that asked for it still counts):
+        // buzz, pause, buzz...
         const pattern = [];
         let free = 0; // when the last buzz ends (ms)
         HAPTIC_SAMPLE.forEach(([at, power]) => {
@@ -6471,8 +6421,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // The playing song's taps: when each lands (song seconds), how hard (0–1 of its hardest hits)
-    // and how crisp (0 a deep thud, 1 a sharp tick). Made again whenever its beats or hushes are.
+    // The playing song's taps: when each lands (song seconds), and how hard (0–1 of its hardest
+    // hits). Made again whenever its beats or hushes are.
     function getHapticTaps() {
         const analysis = beatAnalyses.get(getTrackAudio(currentTrackData));
         if (!analysis || !analysis.beats) return null;
@@ -6483,7 +6433,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function makeHapticTaps(analysis) {
-        const { beats, strengths, onsets, bassShare, loudness, rate, hushes } = analysis;
+        const { beats, strengths, onsets, loudness, rate, hushes } = analysis;
         // (a beat's frame, from its time: placeSongBeats puts each beat this much after its frame)
         const centre = ((BEAT_FFT_SIZE / 2) / analysis.sampleRate) + BEAT_ONSET_LAG;
         const frameAt = (time) => Math.min(onsets.length - 1, Math.max(0, Math.round((time - centre) * rate)));
@@ -6498,25 +6448,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             return Math.min(1, Math.max(0, 1 - ((loud - level) / HAPTIC_RANGE_DB)));
         };
-        // How crisp a hit is, from how little of it's in the bass: a kick's mostly bass, a snare
-        // or a hi-hat hardly any
-        const crispAt = (frame) => {
-            let rise = 0;
-            let bass = 0;
-            for (let near = Math.max(0, frame - 1); near <= Math.min(onsets.length - 1, frame + 1); near += 1) {
-                rise += onsets[near];
-                bass += onsets[near] * bassShare[near];
-            }
-            const share = rise > 0 ? bass / rise : 0.3;
-            return Math.min(0.9, Math.max(0.1, 0.8 - share));
-        };
         const inHush = (time) => hushes.some(([from, to]) => time >= from && time < to);
 
         const taps = [];
         beats.forEach((time, index) => {
             if (inHush(time)) return;
             const frame = frameAt(time);
-            taps.push({ time, power: (0.45 + (0.55 * strengths[index])) * (0.3 + (0.7 * levelAt(frame))), crisp: crispAt(frame) });
+            taps.push({ time, power: (0.45 + (0.55 * strengths[index])) * (0.3 + (0.7 * levelAt(frame))) });
         });
 
         // The strongest hits between the beats (a snare off the beat, a syncopated kick): onset
@@ -6536,7 +6474,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const quarter = (beats[before + 1] - beats[before]) / 4;
             if (time - beats[before] < quarter || beats[before + 1] - time < quarter || inHush(time)) continue;
             const extra = Math.min(1, (onset - typicalHit) / typicalHit);
-            taps.push({ time, power: (0.35 + (0.25 * extra)) * (0.3 + (0.7 * levelAt(frame))), crisp: crispAt(frame) });
+            taps.push({ time, power: (0.35 + (0.25 * extra)) * (0.3 + (0.7 * levelAt(frame))) });
         }
 
         // In time order, and of two taps too close together, the harder
@@ -6554,8 +6492,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             beats,
             hushes,
             times: Float64Array.from(kept, (tap) => tap.time),
-            powers: Float32Array.from(kept, (tap) => Math.min(1, tap.power)),
-            crisps: Float32Array.from(kept, (tap) => tap.crisp)
+            powers: Float32Array.from(kept, (tap) => Math.min(1, tap.power))
         };
     }
 
@@ -6606,7 +6543,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             for (let index = findTapAfter(taps.times, hapticsSentTo); index < taps.times.length && taps.times[index] <= until; index += 1) {
                 // (one that's been missed is left out: a tap late is worse than none)
                 const delay = (taps.times[index] - time) / rate;
-                if (delay >= -0.02) due.push([Math.max(0, delay), taps.powers[index], taps.crisps[index]]);
+                if (delay >= -0.02) due.push([Math.max(0, delay), taps.powers[index]]);
             }
             if (due.length) playHapticTaps(due);
         }
@@ -6628,13 +6565,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         return low;
     }
 
-    // Taps to land so many seconds from now: [delay, power, crisp] each
+    // Taps to land so many seconds from now: [delay, power] each
     function playHapticTaps(taps) {
         hapticsOut = true;
-        if (appHaptics) {
-            appHaptics({ type: "taps", taps: taps.map(([delay, power, crisp]) => [Number(delay.toFixed(3)), Number(getTapIntensity(power).toFixed(3)), Number(crisp.toFixed(2))]) });
-            return;
-        }
         taps.forEach(([delay, power]) => {
             const timer = setTimeout(() => {
                 buzzTimers.delete(timer);
@@ -6648,27 +6581,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // The taps that are out but haven't landed are called back (the app's, and the buzzes waiting)
+    // The buzzes that are waiting to go are called back
     function cancelHapticTaps() {
         hapticsSentTo = null;
         hapticsDeck = null;
         if (!hapticsOut) return;
         hapticsOut = false;
-        if (appHaptics) appHaptics({ type: "stop" });
         buzzTimers.forEach((timer) => clearTimeout(timer));
         buzzTimers.clear();
     }
 
     function setUpHaptics() {
         showHapticsSetting();
-        if (!appHaptics && !canBuzz) return;
-        if (appHaptics) {
-            followMusicHaptics(Boolean(window.museApp.musicHaptics));
-            // (the app says when the setting's changed)
-            window.addEventListener("museappchange", (event) => {
-                if (event.detail && typeof event.detail.musicHaptics === "boolean") followMusicHaptics(event.detail.musicHaptics);
-            });
-        }
+        if (!canBuzz) return;
         if (hapticsSwitch) hapticsSwitch.addEventListener("change", () => setHaptics(hapticsSwitch.checked, true));
         if (hapticsStrengthButton) hapticsStrengthButton.addEventListener("click", changeHapticsStrength);
         // Whatever stops the playing song, moves it or changes its speed calls back the taps that are
