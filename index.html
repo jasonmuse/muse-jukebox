@@ -420,6 +420,13 @@
                                 <span class="back-setting-text"><strong>Rhythm</strong> <span>dance to the beat</span></span>
                                 <input id="setting-rhythm" class="back-switch" type="checkbox" role="switch" checked>
                             </label>
+                            <!-- Haptics: the phone taps along to the music. Only shown where it can (the Muse Jukebox
+                                 app on an iPhone, Android phones); the rings by its switch are how hard (tap to change) -->
+                            <div class="back-setting back-setting--haptics" id="setting-haptics-row" hidden>
+                                <label class="back-setting-text" for="setting-haptics"><strong>Haptics</strong> <span>feel the beat</span></label>
+                                <button class="back-strength" id="setting-haptics-strength" type="button" data-strength="medium" aria-label="Haptic strength: medium" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><circle cx="12" cy="12" r="6.3"/><circle cx="12" cy="12" r="10"/></svg></button>
+                                <input id="setting-haptics" class="back-switch" type="checkbox" role="switch">
+                            </div>
                         </section>
 
                         <!-- Tips: as many as there's room for (a page at a time when they don't all fit) -->
