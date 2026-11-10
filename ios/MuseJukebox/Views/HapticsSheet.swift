@@ -94,7 +94,10 @@ private struct IntensityTile: View {
                     .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(selected ? 0.12 : 0.06)))
+                    .background {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.white.opacity(selected ? 0.12 : 0.06))
+                    }
                 Text(strength.name)
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 12)

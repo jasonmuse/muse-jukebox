@@ -17,6 +17,8 @@ struct MuseJukeboxApp: App {
     init() {
         // The songs play like music: past the silent switch, and on with the screen locked
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        // Room to keep the covers and haptic tracks between visits (the site says when they've changed)
+        URLCache.shared = URLCache(memoryCapacity: 16 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         let player = Player()
         let settings = HapticsSettings()
         _library = State(initialValue: Library())

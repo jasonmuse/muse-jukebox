@@ -105,7 +105,7 @@ private struct FeaturedCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Artwork(song: song, cornerRadius: 26)
+            Artwork(song: song, size: .large, cornerRadius: 26)
             LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             HStack(alignment: .bottom) {
@@ -250,9 +250,11 @@ struct PlayingBars: View {
             let time = timeline.date.timeIntervalSinceReferenceDate
             HStack(alignment: .bottom, spacing: 2) {
                 ForEach(0..<3, id: \.self) { bar in
+                    let bounce: Double = abs(sin((time * 5) + (Double(bar) * 1.7)))
+                    let height: CGFloat = player.isPlaying ? 5 + (8 * bounce) : 5
                     Capsule()
                         .fill(Theme.rings[bar])
-                        .frame(width: 3, height: player.isPlaying ? 5 + (8 * abs(sin((time * 5) + (Double(bar) * 1.7)))) : 5)
+                        .frame(width: 3, height: height)
                 }
             }
             .frame(height: 13, alignment: .bottom)

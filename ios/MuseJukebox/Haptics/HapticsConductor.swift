@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// Plays the song's haptic track along with it: every tenth of a second, the taps due in the next
 /// 0.3 go to Core Haptics, each timed to land on its beat (sooner or later with the record's speed).
@@ -66,7 +67,9 @@ final class HapticsConductor {
     }
 
     private func step() {
-        guard settings.isActive, !isPlayingSample, let song = player.song, player.isPlaying else {
+        // (and none while the app's in the background: iOS doesn't play its haptics there)
+        guard settings.isActive, !isPlayingSample, let song = player.song, player.isPlaying,
+              UIApplication.shared.applicationState == .active else {
             callBack()
             return
         }
@@ -82,12 +85,15 @@ final class HapticsConductor {
             return
         }
         guard let track else { return }
-        let time = player.currentTime
+        // (the clock that runs on before the song's first sound reaches the speaker, so the first
+        // taps after a start or a seek aren't early)
+        let time = player.tapClock
         let rate = max(player.rate, 0.1)
         if let sent = sentTo, player.jumps != sentJumps || abs(rate - sentRate) > 0.001 || time < sent - (Self.ahead * rate) - 0.15 {
             callBack()
         }
-        let from = sentTo ?? time
+        // (nothing from before where it started: that's not going to be heard)
+        let from = max(sentTo ?? time, player.startTime - 0.001)
         if sentTo == nil {
             sentJumps = player.jumps
             sentRate = rate

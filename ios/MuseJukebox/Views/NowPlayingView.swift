@@ -28,7 +28,7 @@ struct NowPlayingView: View {
                     let layout = wide ? AnyLayout(HStackLayout(spacing: 28)) : AnyLayout(VStackLayout(spacing: 22))
                     layout {
                         RecordDeck(song: song)
-                            .frame(maxWidth: style == .stage ? .infinity : 420, maxHeight: style == .stage ? .infinity : 420)
+                            .frame(maxWidth: style == .stage ? .infinity : 470, maxHeight: style == .stage ? .infinity : 330)
                         if style != .stage {
                             VStack(spacing: 20) {
                                 SongHeading(song: song)
@@ -90,29 +90,30 @@ private struct RecordDeck: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let side = min(geometry.size.width / 1.3, geometry.size.height)
+            let side = min(geometry.size.width / 1.45, geometry.size.height)
             ZStack {
                 HapticPulse()
-                    .frame(width: side * 1.25, height: side * 1.25)
-                    .offset(x: side * 0.15)
+                    .frame(width: side * 1.1, height: side * 1.1)
+                    .offset(x: side * 0.085)
                 SpinningRecord(song: song)
                     .frame(width: side * 0.96, height: side * 0.96)
-                    .offset(x: player.isPlaying ? side * 0.3 : side * 0.06)
+                    .offset(x: player.isPlaying ? side * 0.235 : -side * 0.005)
                     .animation(.spring(response: 0.7, dampingFraction: 0.78), value: player.isPlaying)
-                Artwork(song: song, animated: true, cornerRadius: side * 0.06)
+                Artwork(song: song, size: .large, animated: true, cornerRadius: side * 0.06)
                     .frame(width: side, height: side)
                     .shadow(color: .black.opacity(0.5), radius: 24, x: 8, y: 14)
-                    .offset(x: -side * 0.15)
+                    .offset(x: -side * 0.215)
                     .scaleEffect(player.isPlaying ? 1 : 0.96)
                     .animation(.spring(response: 0.5, dampingFraction: 0.8), value: player.isPlaying)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .aspectRatio(1.3, contentMode: .fit)
+        .aspectRatio(1.45, contentMode: .fit)
     }
 }
 
-/// The record, turning at 33⅓ with the song (still when it's paused)
+/// The record, turning at 33⅓ with the song (slower for a slowed side, still when it's paused), with a
+/// sheen that stays where it is as the record turns under it
 private struct SpinningRecord: View {
     let song: Song
     @Environment(Player.self) private var player
@@ -120,12 +121,18 @@ private struct SpinningRecord: View {
     var body: some View {
         TimelineView(.animation(paused: !player.isPlaying)) { _ in
             VinylRecord(song: song)
-                .rotationEffect(.degrees((player.currentTime / player.rate) * 200))
+                .rotationEffect(.degrees(player.currentTime * 200))
+        }
+        .overlay {
+            AngularGradient(colors: [.clear, .white.opacity(0.13), .clear, .clear, .white.opacity(0.08), .clear, .clear], center: .center)
+                .clipShape(Circle())
+                .blendMode(.screen)
+                .allowsHitTesting(false)
         }
     }
 }
 
-/// A black record with fine grooves, a sheen that stays put as it turns, and the cover for a label
+/// A black record with fine grooves, and the cover for a label
 struct VinylRecord: View {
     let song: Song
 
@@ -150,12 +157,6 @@ struct VinylRecord: View {
                     .frame(width: size * 0.03, height: size * 0.03)
             }
             .frame(width: size, height: size)
-            .overlay {
-                AngularGradient(colors: [.clear, .white.opacity(0.13), .clear, .clear, .white.opacity(0.08), .clear, .clear], center: .center)
-                    .clipShape(Circle())
-                    .blendMode(.screen)
-                    .allowsHitTesting(false)
-            }
             .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -256,12 +257,13 @@ struct WaveformBars: View {
 
     var body: some View {
         Canvas { context, size in
-            let count = max(levels.count, 1)
+            let shown = levels.isEmpty ? Array(repeating: 0.3, count: 64) : levels
+            let count = shown.count
             let step = size.width / CGFloat(count)
             let barWidth = max(1.5, step * 0.62)
             var played = Path()
             var unplayed = Path()
-            for (index, level) in (levels.isEmpty ? Array(repeating: 0.3, count: 64) : levels).enumerated() {
+            for (index, level) in shown.enumerated() {
                 let height = max(3, size.height * (0.12 + (0.88 * level)))
                 let x = (CGFloat(index) * step) + ((step - barWidth) / 2)
                 let bar = Path(roundedRect: CGRect(x: x, y: (size.height - height) / 2, width: barWidth, height: height), cornerRadius: barWidth / 2)
@@ -353,7 +355,7 @@ private struct ExtraControls: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Flip to side \(song.side == "B" ? "A" : "B")")
             }
-            if duo.hasHinge {
+            if duo.isFoldable {
                 toggle("dial.medium.fill", label: "Fold FX", on: duo.foldFXOn) {
                     duo.foldFXOn.toggle()
                     player.setFilterOpenness(duo.foldFXOn ? duo.foldFXOpenness : 1)

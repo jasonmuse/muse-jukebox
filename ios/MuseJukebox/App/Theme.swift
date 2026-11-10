@@ -20,6 +20,8 @@ enum Theme {
 extension View {
     /// The night sky, edge to edge
     func nightBackdrop() -> some View {
-        background(Theme.backdrop.ignoresSafeArea())
+        background {
+            Theme.backdrop.ignoresSafeArea()
+        }
     }
 }

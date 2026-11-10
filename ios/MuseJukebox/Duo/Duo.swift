@@ -15,16 +15,18 @@ final class DuoState {
     var angle: Double = 180
     /// Where the fold is on screen, while it's folded
     var fold: CGRect?
+    /// Whether the screen has a fold at all, folded or not (known from the start, before the hinge moves)
+    var hasFold = false
     /// Fold FX: folding sweeps a filter over the music (and the haptics go softer and duller with it)
     var foldFXOn = false
 
-    var hasHinge: Bool {
-        hinge != .none
+    var isFoldable: Bool {
+        hasFold || hinge != .none
     }
 
     /// Propped up like a laptop: folded, with the fold running across the screen
     var isTabletop: Bool {
-        guard hinge == .partiallyOpen, let fold else { return false }
+        guard let fold else { return false }
         return fold.width > fold.height
     }
 
@@ -32,6 +34,12 @@ final class DuoState {
     var foldFXOpenness: Double {
         hinge == .partiallyOpen ? min(max((angle - 60) / 110, 0), 1) : 1
     }
+}
+
+/// Where the fold is (its region while it's folded), and whether there's one at all
+struct FoldReading: Equatable, Sendable {
+    var frame: CGRect?
+    var exists = false
 }
 
 /// Reads the hinge (its angle, as it moves) and where the fold is (iOS 27.1, on iPhone Duo), and
@@ -61,10 +69,14 @@ struct DuoReader: ViewModifier {
                         player.setFilterOpenness(duo.foldFXOpenness)
                     }
                 }
-                .onGeometryChange(for: CGRect?.self) { proxy in
-                    proxy.reservedRegions(kind: .division).first?.frame
-                } action: { fold in
-                    duo.fold = fold
+                .onGeometryChange(for: FoldReading.self) { proxy in
+                    FoldReading(
+                        frame: proxy.reservedRegions(kind: .division).first?.frame,
+                        exists: !proxy.reservedRegions(kind: .division, options: .includeInactive).isEmpty
+                    )
+                } action: { reading in
+                    duo.fold = reading.frame
+                    duo.hasFold = reading.exists
                 }
         } else {
             content
@@ -135,7 +147,7 @@ struct FoldFXButton: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Fold FX")
                         .font(.subheadline.weight(.bold))
-                    Text(duo.foldFXOn ? (duo.hinge == .partiallyOpen ? "\(Int((1 - player.filterOpenness) * 100))% filtered" : "Fold to filter") : "Off")
+                    Text(status)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .contentTransition(.numericText())
@@ -150,5 +162,12 @@ struct FoldFXButton: View {
         .sensoryFeedback(.selection, trigger: duo.foldFXOn)
         .accessibilityLabel("Fold FX")
         .accessibilityValue(duo.foldFXOn ? "On" : "Off")
+    }
+
+    private var status: String {
+        guard duo.foldFXOn else { return "Off" }
+        guard duo.hinge == .partiallyOpen else { return "Fold to filter" }
+        let filtered = Int(((1 - player.filterOpenness) * 100).rounded())
+        return "\(filtered)% filtered"
     }
 }

@@ -8,7 +8,7 @@ actor SongCache {
     private var fetching: [String: Task<URL, Error>] = [:]
 
     func file(for song: Song) async throws -> URL {
-        let kept = folder.appending(path: URL(fileURLWithPath: song.audio).lastPathComponent)
+        let kept = keptFile(for: song)
         if FileManager.default.fileExists(atPath: kept.path(percentEncoded: false)) {
             return kept
         }
@@ -20,7 +20,10 @@ actor SongCache {
         let task = Task { () throws -> URL in
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let (downloaded, response) = try await URLSession.shared.download(from: source)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            // (a song that isn't there comes back as the site's page, not an error: only sound is kept)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  http.mimeType?.hasPrefix("audio") == true else {
+                try? FileManager.default.removeItem(at: downloaded)
                 throw URLError(.badServerResponse)
             }
             try? FileManager.default.removeItem(at: kept)
@@ -30,5 +33,14 @@ actor SongCache {
         fetching[song.audio] = task
         defer { fetching[song.audio] = nil }
         return try await task.value
+    }
+
+    /// Whatever's kept for a song that wouldn't play goes, so it's fetched afresh next time
+    func forget(_ song: Song) {
+        try? FileManager.default.removeItem(at: keptFile(for: song))
+    }
+
+    private func keptFile(for song: Song) -> URL {
+        folder.appending(path: URL(fileURLWithPath: song.audio).lastPathComponent)
     }
 }

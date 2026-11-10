@@ -54,6 +54,10 @@ final class Player {
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private var glide: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    /// Where the player was last seen (host time, song time), for when the engine's stopped under it
+    @ObservationIgnored private var lastSeen: (at: TimeInterval, time: TimeInterval) = (0, 0)
+    /// How long sound takes to come out (measured as it starts, and when the output changes)
+    @ObservationIgnored private var latency: TimeInterval = 0
     private let cache = SongCache()
 
     init() {
@@ -75,13 +79,22 @@ final class Player {
         Double(varispeed.rate)
     }
 
-    /// Where the song is, in seconds of its file, as it's heard: what's been played, less what's still
-    /// on its way out (a few hundredths of a second from the speaker, a fifth through AirPods)
+    /// Where the song is, in seconds of its file, as it's heard (to show): what's been played, less what's
+    /// still on its way out (a few hundredths of a second from the speaker, a fifth through AirPods)
     var currentTime: TimeInterval {
-        guard isPlaying else { return pausedTime }
-        let session = AVAudioSession.sharedInstance()
-        let onItsWay = (session.outputLatency + session.ioBufferDuration) * rate
-        return min(duration, max(startTime, playedTime - onItsWay))
+        isPlaying ? min(duration, max(startTime, heardTime)) : pausedTime
+    }
+
+    /// The same, for timing taps to: just after the song's started or moved it can be before where it
+    /// started from, while its first sound is still on its way out
+    var tapClock: TimeInterval {
+        isPlaying ? heardTime : pausedTime
+    }
+
+    /// Where the song was started or moved to (nothing before it is heard)
+    var startTime: TimeInterval {
+        guard let file else { return pausedTime }
+        return Double(segmentStart) / file.processingFormat.sampleRate
     }
 
     /// 0 to 1 along the song
@@ -89,15 +102,22 @@ final class Player {
         duration > 0 ? currentTime / duration : 0
     }
 
-    private var startTime: TimeInterval {
-        guard let file else { return pausedTime }
-        return Double(segmentStart) / file.processingFormat.sampleRate
+    private var heardTime: TimeInterval {
+        playedTime - (latency * rate)
     }
 
+    /// What's been played: the player's own count while the engine's running, and otherwise (iOS has
+    /// just stopped it for a call, say, or new headphones) worked out from where it last was
     private var playedTime: TimeInterval {
-        guard file != nil, let renderTime = node.lastRenderTime, renderTime.isSampleTimeValid,
-              let playerTime = node.playerTime(forNodeTime: renderTime) else { return pausedTime }
-        return startTime + (Double(max(0, playerTime.sampleTime)) / playerTime.sampleRate)
+        let now = CACurrentMediaTime()
+        if file != nil, let renderTime = node.lastRenderTime, renderTime.isSampleTimeValid,
+           let playerTime = node.playerTime(forNodeTime: renderTime) {
+            let played = startTime + (Double(max(0, playerTime.sampleTime)) / playerTime.sampleRate)
+            lastSeen = (now, played)
+            return played
+        }
+        guard isPlaying else { return pausedTime }
+        return min(duration, lastSeen.time + ((now - lastSeen.at) * rate))
     }
 
     // MARK: - Playing
@@ -123,12 +143,13 @@ final class Player {
 
     /// Puts a song straight after the one that's playing
     func playNext(_ song: Song) {
-        guard self.song != nil else {
+        guard let current = self.song else {
             play(song, in: [song])
             return
         }
+        guard song != current else { return }
         queue.removeAll { $0 == song }
-        queueIndex = queue.firstIndex(where: { $0 == self.song }) ?? 0
+        queueIndex = queue.firstIndex(of: current) ?? 0
         queue.insert(song, at: min(queue.count, queueIndex + 1))
     }
 
@@ -148,10 +169,17 @@ final class Player {
     func pause() {
         playWhenLoaded = false
         guard isPlaying else { return }
-        pausedTime = playedTime
-        node.pause()
-        engine.pause()
+        let rendering = engine.isRunning
+        pausedTime = min(duration, playedTime)
         isPlaying = false
+        if rendering {
+            node.pause()
+            engine.pause()
+        } else {
+            // (iOS has stopped the engine under it: the song's queued again from where it got to)
+            stopNode()
+            schedule(from: pausedTime)
+        }
         jumps += 1
         updateNowPlaying()
     }
@@ -179,7 +207,12 @@ final class Player {
         stopNode()
         schedule(from: time)
         if wasPlaying {
-            node.play()
+            if engine.isRunning {
+                node.play()
+                lastSeen = (CACurrentMediaTime(), time)
+            } else {
+                start()
+            }
         }
         jumps += 1
         updateNowPlaying()
@@ -205,7 +238,7 @@ final class Player {
     /// where it is (both sides play the same recording)
     func flip(to other: Song) {
         guard let song, other.audio == song.audio, file != nil else {
-            load(other, playing: isPlaying)
+            load(other, playing: isPlaying || playWhenLoaded)
             return
         }
         self.song = other
@@ -213,7 +246,9 @@ final class Player {
             queue[queueIndex] = other
         }
         glideRate(to: other.rate)
-        loadArtwork(for: other)
+        if other.cover != song.cover {
+            loadArtwork(for: other)
+        }
         updateNowPlaying()
     }
 
@@ -273,6 +308,8 @@ final class Player {
             } catch is CancellationError {
                 // (another song's been chosen)
             } catch {
+                // (whatever was kept for it won't play, so it's fetched afresh next time)
+                await cache.forget(song)
                 guard self.song == song else { return }
                 isLoading = false
                 couldNotLoad = true
@@ -301,12 +338,19 @@ final class Player {
                 try engine.start()
             }
             node.play()
+            measureLatency()
+            lastSeen = (CACurrentMediaTime(), pausedTime)
             isPlaying = true
             jumps += 1
         } catch {
             isPlaying = false
         }
         updateNowPlaying()
+    }
+
+    private func measureLatency() {
+        let session = AVAudioSession.sharedInstance()
+        latency = session.outputLatency + session.ioBufferDuration
     }
 
     /// The rest of the song, from `time`, queued on the player
@@ -381,7 +425,7 @@ final class Player {
     private func loadArtwork(for song: Song) {
         artwork = nil
         Task { [weak self] in
-            let image = await ArtworkStore.shared.image(for: song.cover)
+            let image = await ArtworkStore.shared.image(for: song.cover, maxPixels: 800)
             guard let self, self.song?.cover == song.cover else { return }
             self.artwork = image
             self.updateNowPlaying()
@@ -450,10 +494,17 @@ final class Player {
             Task { @MainActor in self.interrupted(type, shouldResume: shouldResume) }
         })
         // Headphones unplugged: paused, so it doesn't carry on out loud
+        // (and whatever the new output is, how long its sound takes to come out)
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
             let rawReason = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
-            guard let self, AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable else { return }
-            Task { @MainActor in self.pause() }
+            let unplugged = AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable
+            guard let self else { return }
+            Task { @MainActor in
+                self.measureLatency()
+                if unplugged {
+                    self.pause()
+                }
+            }
         })
         // The output changed under the engine (it stops): carry on from where it was
         observers.append(center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
@@ -482,7 +533,8 @@ final class Player {
     private func engineChanged() {
         guard file != nil else { return }
         let wasPlaying = isPlaying
-        let time = currentTime
+        // (the engine's stopped, so this is worked out from where the player was last seen)
+        let time = isPlaying ? min(duration, playedTime) : pausedTime
         stopNode()
         isPlaying = false
         schedule(from: time)
