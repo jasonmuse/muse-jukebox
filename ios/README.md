@@ -61,8 +61,8 @@ an update. The copies built into the app are for when it first opens without sig
 
 ## Good to know
 
-- The taps play while the app's open. With the screen locked the music plays on, and iOS decides
-  whether an app's haptics carry on with it.
+- The taps play while the app's open. With the screen locked the music plays on and the taps rest
+  until you're back (iOS doesn't play an app's haptics in the background).
 - Most iPads have no Taptic Engine, so they play the music without the haptics settings.
 - Apple's own haptic tracks (the ones Apple Music plays) only exist for songs in Apple's catalog,
   found by their ISRC. These songs have their own, made from their beats. If the songs ever go out on
