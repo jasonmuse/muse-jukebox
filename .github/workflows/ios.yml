@@ -52,6 +52,57 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee build.log
 
+      # On the newest iPhone the Simulator has (and iPhone Duo, if it has one): the songs, then Now
+      # Playing (-showNowPlaying), pictured after 15 seconds each, and still running by then
+      - name: Run it in the Simulator, and take pictures
+        run: |
+          app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/Build/Products/Debug-iphonesimulator/MuseJukebox.app" | head -1)
+          runtime=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys; ios = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]; print(ios[-1]["identifier"])')
+          echo "App: $app"
+          echo "Runtime: $runtime"
+          xcrun simctl list devicetypes --json | python3 -c '
+          import json, re, sys
+          names = [kind["name"] for kind in json.load(sys.stdin)["devicetypes"]]
+          phones = sorted((name for name in names if re.fullmatch(r"iPhone \d+ Pro", name)), key=lambda name: int(name.split()[1]))
+          duos = [name for name in names if "Duo" in name]
+          print("\n".join(phones[-1:] + duos[:1]))
+          ' > devices.txt
+          cat devices.txt
+          mkdir -p screenshots
+          status=0
+          while IFS= read -r device; do
+            udid=$(xcrun simctl create "Jukebox" "$device" "$runtime")
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+            xcrun simctl install "$udid" "$app"
+            for view in songs now-playing; do
+              args=""
+              if [ "$view" = now-playing ]; then args="-showNowPlaying"; fi
+              if ! xcrun simctl launch --terminate-running-process "$udid" app.muselabs.jukebox $args; then
+                echo "::error::Muse Jukebox wouldn't open on $device"
+                status=1
+                continue
+              fi
+              sleep 15
+              xcrun simctl io "$udid" screenshot "screenshots/$device - $view.png"
+              if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
+                echo "::error::Muse Jukebox stopped on $device ($view) within 15 seconds of opening"
+                status=1
+              fi
+            done
+            xcrun simctl shutdown "$udid"
+          done < devices.txt
+          exit $status
+
+      - name: Keep the pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
       - name: What went wrong
         if: failure()
         run: |
