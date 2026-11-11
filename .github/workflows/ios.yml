@@ -1,7 +1,8 @@
 # The Muse Jukebox iPhone app (ios/), built on GitHub's Macs with Xcode 27.1 (the iPhone Duo SDK).
-# Every push that touches it is built for the Simulator (no signing needed), so a change that breaks
-# the build shows up here. Run it by hand (Actions › iPhone app › Run workflow) to send a build to
-# TestFlight too, once the App Store Connect secrets are set (ios/README.md says how).
+# Every push that touches it is built for the Simulator (no signing needed) and pictured running, so
+# a change that breaks it shows up here, and sent to TestFlight once the App Store Connect secrets
+# are set (ios/README.md says how). It can be run by hand too (Actions › iPhone app › Run workflow,
+# once it's on the default branch).
 name: iPhone app
 
 on:
@@ -174,10 +175,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Every push that touches the app, once the four App Store Connect secrets are set (ios/README.md,
+  # "Trying it without a Mac"), and by hand: archived, signed and sent to TestFlight. Without the
+  # secrets a push just notes they're missing; run by hand, that's an error.
   testflight:
     name: Send to TestFlight
-    needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+    if: github.event_name == 'push' || inputs.testflight
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -185,41 +188,63 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY: ${{ secrets.ASC_KEY }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # (higher every run, and every re-run of one)
+      BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
     steps:
       - name: Check the App Store Connect secrets are set
+        id: secrets
         run: |
+          missing=""
           for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY APPLE_TEAM_ID; do
-            if [ -z "${!name}" ]; then
-              echo "::error::The $name secret isn't set (ios/README.md, \"Trying it without a Mac\")"
-              exit 1
-            fi
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
+          if [ -z "$missing" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "::error::These secrets aren't set yet:$missing (ios/README.md, \"Trying it without a Mac\")"
+            exit 1
+          else
+            echo "::notice::Not sent to TestFlight: these secrets aren't set yet:$missing (ios/README.md, \"Trying it without a Mac\")"
+          fi
 
       - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
         with:
           sparse-checkout: |
             ios
             haptics
 
       - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
         run: |
           set -o pipefail
           printf '%s\n' "$ASC_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          xcodebuild archive \
-            -project ios/MuseJukebox.xcodeproj \
-            -scheme MuseJukebox \
-            -destination "generic/platform=iOS" \
-            -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            2>&1 | tee archive.log
+          archive() {
+            rm -rf "$RUNNER_TEMP/MuseJukebox.xcarchive"
+            xcodebuild archive \
+              -project ios/MuseJukebox.xcodeproj \
+              -scheme MuseJukebox \
+              -destination "generic/platform=iOS" \
+              -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+              -authenticationKeyID "$ASC_KEY_ID" \
+              -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              CODE_SIGN_STYLE=Automatic \
+              CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+              "$@" 2>&1 | tee -a archive.log
+          }
+          # Signed for development first, as Xcode does. That needs an iPhone registered to the team;
+          # with none, it's archived unsigned instead, and the upload signs it for the App Store
+          # either way.
+          if ! archive; then
+            echo "::warning::Couldn't sign the archive for development (a team with no iPhone registered can't), so it's archived unsigned, for the upload to sign"
+            archive CODE_SIGNING_ALLOWED=NO
+          fi
 
       - name: Upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -249,6 +274,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee export.log
+          echo "::notice::Build $BUILD_NUMBER is on its way to TestFlight: App Store Connect takes about 15 minutes to process it"
 
       - name: What went wrong
         if: failure()
