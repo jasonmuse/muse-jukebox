@@ -89,7 +89,19 @@ jobs:
             xcrun simctl boot "$udid"
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-            xcrun simctl io "$udid" enumerate || true
+            # (the device's own screens: one on an iPhone, two on iPhone Duo, outside and in)
+            screens=$(xcrun simctl io "$udid" enumerate 2>/dev/null | python3 -c '
+          import re, sys
+          screens, screen = [], None
+          for line in sys.stdin:
+              found = re.match(r"\s+Screen ID: (\d+)", line)
+              if found:
+                  screen = found.group(1)
+              if "Screen Type: Integrated" in line and screen:
+                  screens.append(screen)
+          print(" ".join(screens or ["1"]))
+          ')
+            echo "$device screens: $screens"
             xcrun simctl install "$udid" "$app"
             for view in songs now-playing; do
               args=""
@@ -100,15 +112,22 @@ jobs:
                 continue
               fi
               sleep 15
-              picture="screenshots/$device - $view.png"
-              xcrun simctl io "$udid" screenshot "$picture"
-              if sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
-                echo "::group::$device - $view (small copy)"
-                echo "SHOT-BEGIN $device - $view"
-                base64 -i small.jpg | fold -w 800
-                echo "SHOT-END"
-                echo "::endgroup::"
-              fi
+              for screen in $screens; do
+                name="$device - $view"
+                if [ "$screens" != "$screen" ]; then name="$name - screen $screen"; fi
+                picture="screenshots/$name.png"
+                if ! xcrun simctl io "$udid" screenshot --display="$screen" "$picture"; then
+                  echo "::warning::Couldn't take a picture of $name"
+                  continue
+                fi
+                if sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
+                  echo "::group::$name (small copy)"
+                  echo "SHOT-BEGIN $name"
+                  base64 -i small.jpg | fold -w 800
+                  echo "SHOT-END"
+                  echo "::endgroup::"
+                fi
+              done
               if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
                 echo "::error::Muse Jukebox stopped on $device ($view) within 15 seconds of opening"
                 status=1

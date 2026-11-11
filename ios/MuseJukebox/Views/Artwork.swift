@@ -114,36 +114,38 @@ struct Artwork: View {
     }
 
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(LinearGradient(colors: [Theme.night, Theme.lilac.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            if let image {
-                if image.images != nil {
-                    AnimatedImage(image: image)
+        // (the frame's the rectangle's, whatever size it's given: the cover fills it, cropped to it,
+        // rather than pushing it wider)
+        Rectangle()
+            .fill(LinearGradient(colors: [Theme.night, Theme.lilac.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                if let image {
+                    if image.images != nil {
+                        AnimatedImage(image: image)
+                    } else {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
                 } else {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                    Image(systemName: "music.note")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
                 }
-            } else {
-                Image(systemName: "music.note")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.35))
             }
-        }
-        .grayscale(song?.grayscale == true ? 1 : 0)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .task(id: sourceKey) {
-            guard let source else {
-                image = nil
-                return
+            .grayscale(song?.grayscale == true ? 1 : 0)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .task(id: sourceKey) {
+                guard let source else {
+                    image = nil
+                    return
+                }
+                let store = ArtworkStore.shared
+                image = store.cached(source.path, maxPixels: source.maxPixels, animated: source.animated)
+                if image == nil {
+                    image = await store.image(for: source.path, maxPixels: source.maxPixels, animated: source.animated)
+                }
             }
-            let store = ArtworkStore.shared
-            image = store.cached(source.path, maxPixels: source.maxPixels, animated: source.animated)
-            if image == nil {
-                image = await store.image(for: source.path, maxPixels: source.maxPixels, animated: source.animated)
-            }
-        }
     }
 }
 

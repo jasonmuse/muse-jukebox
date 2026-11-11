@@ -20,8 +20,7 @@ struct NowPlayingView: View {
     @State private var showingQueue = false
 
     var body: some View {
-        ZStack {
-            Backdrop(image: player.artwork)
+        Group {
             if let song = player.song {
                 GeometryReader { geometry in
                     let wide = geometry.size.width > geometry.size.height * 1.1
@@ -47,7 +46,12 @@ struct NowPlayingView: View {
                 }
             } else {
                 ContentUnavailableView("Nothing's playing", systemImage: "opticaldisc", description: Text("Pick a song and it'll spin here."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        // (behind, not beside: a blurred cover filling the screen mustn't make the screen any wider)
+        .background {
+            Backdrop(image: player.artwork)
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingHaptics) {
@@ -64,21 +68,24 @@ private struct Backdrop: View {
     let image: UIImage?
 
     var body: some View {
-        ZStack {
-            Theme.backdrop
-            if let image {
-                Image(uiImage: image.images?.first ?? image)
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: 70)
-                    .saturation(1.5)
-                    .opacity(0.55)
-                    .transition(.opacity)
+        Theme.backdrop
+            .overlay {
+                if let image {
+                    Image(uiImage: image.images?.first ?? image)
+                        .resizable()
+                        .scaledToFill()
+                        .blur(radius: 70)
+                        .saturation(1.5)
+                        .opacity(0.55)
+                        .transition(.opacity)
+                }
             }
-            LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
-        }
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.6), value: image)
+            .overlay {
+                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+            }
+            .clipped()
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.6), value: image)
     }
 }
 
