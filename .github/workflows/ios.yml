@@ -53,13 +53,16 @@ jobs:
             2>&1 | tee build.log
 
       # On the newest iPhone the Simulator has (and iPhone Duo, if it has one): the songs, then Now
-      # Playing (-showNowPlaying), pictured after 15 seconds each, and still running by then
+      # Playing (-showNowPlaying), pictured after 15 seconds each, and still running by then. Each
+      # picture's kept, and a small copy's written into the log too (between SHOT-BEGIN and SHOT-END,
+      # in base64) for whoever can read the log but not download what's kept.
       - name: Run it in the Simulator, and take pictures
         run: |
           app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/Build/Products/Debug-iphonesimulator/MuseJukebox.app" | head -1)
-          runtime=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys; ios = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]; print(ios[-1]["identifier"])')
+          # (newest first: iPhone Duo may only run on some of them)
+          runtimes=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys; ios = [r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]; print("\n".join(reversed(ios)))')
           echo "App: $app"
-          echo "Runtime: $runtime"
+          echo "Runtimes:" $runtimes
           xcrun simctl list devicetypes --json | python3 -c '
           import json, re, sys
           names = [kind["name"] for kind in json.load(sys.stdin)["devicetypes"]]
@@ -71,10 +74,22 @@ jobs:
           mkdir -p screenshots
           status=0
           while IFS= read -r device; do
-            udid=$(xcrun simctl create "Jukebox" "$device" "$runtime")
+            udid=""
+            for runtime in $runtimes; do
+              if udid=$(xcrun simctl create "Jukebox" "$device" "$runtime" 2>/dev/null); then
+                echo "$device on $runtime"
+                break
+              fi
+              udid=""
+            done
+            if [ -z "$udid" ]; then
+              echo "::notice::None of this Mac's Simulator runtimes runs $device"
+              continue
+            fi
             xcrun simctl boot "$udid"
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+            xcrun simctl io "$udid" enumerate || true
             xcrun simctl install "$udid" "$app"
             for view in songs now-playing; do
               args=""
@@ -85,7 +100,15 @@ jobs:
                 continue
               fi
               sleep 15
-              xcrun simctl io "$udid" screenshot "screenshots/$device - $view.png"
+              picture="screenshots/$device - $view.png"
+              xcrun simctl io "$udid" screenshot "$picture"
+              if sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
+                echo "::group::$device - $view (small copy)"
+                echo "SHOT-BEGIN $device - $view"
+                base64 -i small.jpg | fold -w 800
+                echo "SHOT-END"
+                echo "::endgroup::"
+              fi
               if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
                 echo "::error::Muse Jukebox stopped on $device ($view) within 15 seconds of opening"
                 status=1
