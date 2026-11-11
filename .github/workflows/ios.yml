@@ -1,0 +1,153 @@
+# The Muse Jukebox iPhone app (ios/), built on GitHub's Macs with Xcode 27.1 (the iPhone Duo SDK).
+# Every push that touches it is built for the Simulator (no signing needed), so a change that breaks
+# the build shows up here. Run it by hand (Actions › iPhone app › Run workflow) to send a build to
+# TestFlight too, once the App Store Connect secrets are set (ios/README.md says how).
+name: iPhone app
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "songs.json"
+      - "haptics/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: "Send the build to TestFlight"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build for the Simulator
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # (the app needs ios/, haptics/ and songs.json, not the site's songs and pictures)
+          sparse-checkout: |
+            ios
+            haptics
+
+      - name: Xcode
+        run: xcodebuild -version
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ios/MuseJukebox.xcodeproj \
+            -scheme MuseJukebox \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+
+      - name: What went wrong
+        if: failure()
+        run: |
+          {
+            echo "### Build errors"
+            echo '```'
+            grep -E "error:" build.log | sort -u | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  testflight:
+    name: Send to TestFlight
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY: ${{ secrets.ASC_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Check the App Store Connect secrets are set
+        run: |
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The $name secret isn't set (ios/README.md, \"Trying it without a Mac\")"
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ios
+            haptics
+
+      - name: Archive
+        run: |
+          set -o pipefail
+          printf '%s\n' "$ASC_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          xcodebuild archive \
+            -project ios/MuseJukebox.xcodeproj \
+            -scheme MuseJukebox \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            2>&1 | tee archive.log
+
+      - name: Upload to TestFlight
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>destination</key>
+              <string>upload</string>
+              <key>teamID</key>
+              <string>$APPLE_TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee export.log
+
+      - name: What went wrong
+        if: failure()
+        run: |
+          {
+            echo "### Errors"
+            echo '```'
+            cat archive.log export.log 2>/dev/null | grep -E "error:|Error Domain|failed" | sort -u | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tidy up the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

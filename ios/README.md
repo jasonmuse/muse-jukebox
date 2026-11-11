@@ -47,6 +47,31 @@ does for Apple Music. Made for iPhone Duo.
 
 The app was written without Xcode to hand, so the first build may need a small fix or two.
 
+## Trying it without a Mac
+
+GitHub builds the app on its own Macs (Xcode 27.1) whenever `ios/` changes: Actions › iPhone app.
+To get it onto your phone from there, through TestFlight, do this once (all of it works in a
+browser on your phone):
+
+1. **The app in App Store Connect.** appstoreconnect.apple.com › Apps › + › New App: iOS, name
+   Muse Jukebox, bundle ID `app.muselabs.jukebox` (if it isn't offered, add it as an identifier at
+   developer.apple.com first, or tell Claude yours and it'll change the project), any SKU.
+2. **A key for GitHub.** App Store Connect › Users and Access › Integrations › App Store Connect API
+   › Team Keys › +, with Admin access (it lets GitHub's Mac make the signing certificate). Note its
+   Key ID and the Issuer ID above the list, and download the key (a `.p8` file: it can only be
+   downloaded once).
+3. **The secrets.** github.com/jasonmuse/muse-jukebox › Settings › Secrets and variables › Actions ›
+   New repository secret, four times:
+   - `ASC_KEY_ID`: the Key ID
+   - `ASC_ISSUER_ID`: the Issuer ID
+   - `ASC_KEY`: everything in the `.p8` file, the BEGIN and END lines too
+   - `APPLE_TEAM_ID`: your Team ID (developer.apple.com › Account › Membership details)
+4. **A build.** Actions › iPhone app › Run workflow (on the branch with the app), TestFlight ticked.
+5. **Your phone.** Once App Store Connect has processed the build (about 15 minutes), TestFlight ›
+   Internal Testing: add yourself. Then install it from the TestFlight app.
+
+Builds after that are just step 4.
+
 ## Adding songs
 
 After adding a song to `script.js` (and running `tools/make-waves.py`, as before):
