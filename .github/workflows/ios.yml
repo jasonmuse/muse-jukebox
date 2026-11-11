@@ -29,7 +29,7 @@ jobs:
   build:
     name: Build for the Simulator
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,10 +52,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee build.log
 
-      # On the newest iPhone the Simulator has (and iPhone Duo, if it has one): the songs, then Now
-      # Playing (-showNowPlaying), pictured after 15 seconds each, and still running by then. Each
-      # picture's kept, and a small copy's written into the log too (between SHOT-BEGIN and SHOT-END,
-      # in base64) for whoever can read the log but not download what's kept.
+      # On the newest iPhone the Simulator has, and on iPhone Duo closed, open, and propped up like a
+      # laptop (folded by ios/Simulator/fold.m, as simctl can't): the songs, then Now Playing
+      # (-showNowPlaying), pictured after 15 seconds each, and still running by then. Each picture's
+      # kept, and a small copy's written into the log too (between SHOT-BEGIN and SHOT-END, in base64)
+      # for whoever can read the log but not download what's kept.
       - name: Run it in the Simulator, and take pictures
         run: |
           app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/Build/Products/Debug-iphonesimulator/MuseJukebox.app" | head -1)
@@ -63,6 +64,14 @@ jobs:
           runtimes=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys; ios = [r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]; print("\n".join(reversed(ios)))')
           echo "App: $app"
           echo "Runtimes:" $runtimes
+          fold_tool=""
+          if xcrun -sdk iphonesimulator clang -arch "$(uname -m)" -mios-simulator-version-min=26.0 -fobjc-arc \
+              -framework Foundation -framework IOKit -framework CoreMotion ios/Simulator/fold.m -o "$RUNNER_TEMP/fold" \
+              && codesign -f -s - "$RUNNER_TEMP/fold"; then
+            fold_tool="$RUNNER_TEMP/fold"
+          else
+            echo "::warning::ios/Simulator/fold.m wouldn't build, so iPhone Duo's only pictured closed"
+          fi
           xcrun simctl list devicetypes --json | python3 -c '
           import json, re, sys
           names = [kind["name"] for kind in json.load(sys.stdin)["devicetypes"]]
@@ -89,49 +98,59 @@ jobs:
             xcrun simctl boot "$udid"
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-            # (the device's own screens: one on an iPhone, two on iPhone Duo, outside and in)
-            screens=$(xcrun simctl io "$udid" enumerate 2>/dev/null | python3 -c '
-          import re, sys
-          screens, screen = [], None
-          for line in sys.stdin:
-              found = re.match(r"\s+Screen ID: (\d+)", line)
-              if found:
-                  screen = found.group(1)
-              if "Screen Type: Integrated" in line and screen:
-                  screens.append(screen)
-          print(" ".join(screens or ["1"]))
-          ')
-            echo "$device screens: $screens"
             xcrun simctl install "$udid" "$app"
-            for view in songs now-playing; do
-              args=""
-              if [ "$view" = now-playing ]; then args="-showNowPlaying"; fi
-              if ! xcrun simctl launch --terminate-running-process "$udid" app.muselabs.jukebox $args; then
-                echo "::error::Muse Jukebox wouldn't open on $device"
-                status=1
-                continue
-              fi
-              sleep 15
-              for screen in $screens; do
-                name="$device - $view"
-                if [ "$screens" != "$screen" ]; then name="$name - screen $screen"; fi
-                picture="screenshots/$name.png"
-                if ! xcrun simctl io "$udid" screenshot --display="$screen" "$picture"; then
-                  echo "::warning::Couldn't take a picture of $name"
+            # (iPhone Duo starts closed. Then it's opened out flat, and then turned on its side and
+            # half closed, like a laptop. Each pose is pictured on the screen it shows on: the cover
+            # screen, LCD, or the inner one, LCD-1.)
+            poses="phone"
+            if [[ "$device" == *Duo* ]]; then
+              poses="closed"
+              if [ -n "$fold_tool" ]; then poses="closed open propped"; fi
+            fi
+            for pose in $poses; do
+              display=""
+              case "$pose" in
+                closed)
+                  display=LCD
+                  ;;
+                open)
+                  display=LCD-1
+                  xcrun simctl spawn "$udid" "$fold_tool" 180 || echo "::warning::iPhone Duo didn't open"
+                  ;;
+                propped)
+                  display=LCD-1
+                  xcrun simctl spawn "$udid" "$fold_tool" turn landscape-left || echo "::warning::iPhone Duo didn't turn"
+                  xcrun simctl spawn "$udid" "$fold_tool" 110 || echo "::warning::iPhone Duo didn't fold to 110°"
+                  ;;
+              esac
+              # (the app moves to the other screen a second or two after the hinge does)
+              sleep 3
+              for view in songs now-playing; do
+                args=""
+                if [ "$view" = now-playing ]; then args="-showNowPlaying"; fi
+                if ! xcrun simctl launch --terminate-running-process "$udid" app.muselabs.jukebox $args; then
+                  echo "::error::Muse Jukebox wouldn't open on $device ($pose)"
+                  status=1
                   continue
                 fi
-                if sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
+                sleep 15
+                name="$device - $view"
+                if [ "$pose" != phone ]; then name="$device - $pose - $view"; fi
+                picture="screenshots/$name.png"
+                if ! xcrun simctl io "$udid" screenshot ${display:+--display=$display} "$picture"; then
+                  echo "::warning::Couldn't take a picture of $name"
+                elif sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
                   echo "::group::$name (small copy)"
                   echo "SHOT-BEGIN $name"
                   base64 -i small.jpg | fold -w 800
                   echo "SHOT-END"
                   echo "::endgroup::"
                 fi
+                if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
+                  echo "::error::Muse Jukebox stopped on $device ($pose, $view) within 15 seconds of opening"
+                  status=1
+                fi
               done
-              if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
-                echo "::error::Muse Jukebox stopped on $device ($view) within 15 seconds of opening"
-                status=1
-              fi
             done
             xcrun simctl shutdown "$udid"
           done < devices.txt

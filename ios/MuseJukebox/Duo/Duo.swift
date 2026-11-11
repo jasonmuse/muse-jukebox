@@ -93,20 +93,24 @@ struct Gatefold: View {
     @Environment(DuoState.self) private var duo
 
     var body: some View {
-        NavigationStack {
-            if #available(iOS 27.1, *) {
-                ArrangementView {
-                    NowPlayingView(style: duo.isTabletop ? .stage : .page)
-                } secondary: {
+        // (each page its own: the songs' title and buttons stay over the songs, and Now Playing has
+        // its page to itself)
+        if #available(iOS 27.1, *) {
+            ArrangementView {
+                NowPlayingView(style: duo.isTabletop ? .stage : .page)
+            } secondary: {
+                NavigationStack {
                     LibraryView(showsDeck: duo.isTabletop)
                 }
-                .arrangementViewStyle(.split)
-            } else {
-                HStack(spacing: 0) {
-                    NowPlayingView(style: .page)
+            }
+            .arrangementViewStyle(.split)
+        } else {
+            HStack(spacing: 0) {
+                NowPlayingView(style: .page)
+                NavigationStack {
                     LibraryView()
-                        .frame(maxWidth: 520)
                 }
+                .frame(maxWidth: 520)
             }
         }
     }

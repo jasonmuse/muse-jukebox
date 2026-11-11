@@ -257,21 +257,22 @@ struct Scrubber: View {
     }
 }
 
-/// The wave's bars: a mirror of how loud the song is along the way
+/// The wave's bars: a mirror of how loud the song is along the way, drawn as the site draws it
 struct WaveformBars: View {
     let levels: [Double]
     let progress: Double
 
     var body: some View {
         Canvas { context, size in
-            let shown = levels.isEmpty ? Array(repeating: 0.3, count: 64) : levels
+            let shown = levels.isEmpty ? Array(repeating: 0.62, count: 64) : levels
             let count = shown.count
             let step = size.width / CGFloat(count)
             let barWidth = max(1.5, step * 0.62)
             var played = Path()
             var unplayed = Path()
             for (index, level) in shown.enumerated() {
-                let height = max(3, size.height * (0.12 + (0.88 * level)))
+                // (most of a song sits near the top of its range, so the top's spread out)
+                let height = max(barWidth, size.height * CGFloat(pow(level, 2.4)))
                 let x = (CGFloat(index) * step) + ((step - barWidth) / 2)
                 let bar = Path(roundedRect: CGRect(x: x, y: (size.height - height) / 2, width: barWidth, height: height), cornerRadius: barWidth / 2)
                 if (Double(index) + 0.5) / Double(count) <= progress {
