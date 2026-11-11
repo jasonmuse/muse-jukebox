@@ -9,35 +9,45 @@ struct LibraryView: View {
     /// Set to show the transport controls above the songs (iPhone Duo propped up like a laptop: the
     /// controls go on the half that's lying flat)
     var showsDeck = false
+    /// Set to search the songs right here, from the navigation bar (the gatefold has no Search tab)
+    var searchable = false
 
     @State private var tag: String?
     @State private var sort: Library.Sort = .newest
+    @State private var query = ""
     @State private var showingHaptics = false
 
     private var songs: [Song] {
-        library.songs(tag: tag, sortedBy: sort)
+        library.songs(tag: tag, matching: query, sortedBy: sort)
     }
 
     var body: some View {
+        let songs = self.songs
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 if showsDeck {
                     DeckControls()
                         .padding(.horizontal)
                 }
-                if tag == nil && !library.featured.isEmpty && !showsDeck {
+                if tag == nil && query.isEmpty && !library.featured.isEmpty && !showsDeck {
                     FeaturedCarousel(songs: library.featured) { song in
                         player.play(song, in: library.featured + songs.filter { !$0.featured })
                     }
                 }
                 MoodChips(tags: library.tags, selection: $tag)
-                SongGrid(songs: songs)
-                    .padding(.horizontal)
+                if songs.isEmpty && !query.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                        .padding(.top, 40)
+                } else {
+                    SongGrid(songs: songs)
+                        .padding(.horizontal)
+                }
             }
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
         .nightBackdrop()
+        .modifier(SongSearch(isOn: searchable, query: $query))
         .navigationTitle("Jukebox")
         .toolbar {
             ToolbarItem {
@@ -70,6 +80,21 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showingHaptics) {
             HapticsSheet()
+        }
+    }
+}
+
+/// Searching the songs from the navigation bar, where it's wanted
+private struct SongSearch: ViewModifier {
+    let isOn: Bool
+    @Binding var query: String
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content
+                .searchable(text: $query, prompt: "Songs, moods, years, games")
+        } else {
+            content
         }
     }
 }

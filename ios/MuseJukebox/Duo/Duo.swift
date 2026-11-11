@@ -100,7 +100,7 @@ struct Gatefold: View {
                 NowPlayingView(style: duo.isTabletop ? .stage : .page)
             } secondary: {
                 NavigationStack {
-                    LibraryView(showsDeck: duo.isTabletop)
+                    LibraryView(showsDeck: duo.isTabletop, searchable: true)
                 }
             }
             .arrangementViewStyle(.split)
@@ -108,7 +108,7 @@ struct Gatefold: View {
             HStack(spacing: 0) {
                 NowPlayingView(style: .page)
                 NavigationStack {
-                    LibraryView()
+                    LibraryView(searchable: true)
                 }
                 .frame(maxWidth: 520)
             }

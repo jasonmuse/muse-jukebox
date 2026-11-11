@@ -19,9 +19,15 @@ struct NowPlayingView: View {
     @State private var showingHaptics = false
     @State private var showingQueue = false
 
+    /// While nothing's on, a page of its own (the gatefold) shows the first featured song, ready to play
+    private var waiting: Song? {
+        style == .sheet ? nil : (library.featured.first ?? library.songs.first)
+    }
+
     var body: some View {
         Group {
-            if let song = player.song {
+            if let song = player.song ?? waiting {
+                let isOn = player.song != nil
                 GeometryReader { geometry in
                     let wide = geometry.size.width > geometry.size.height * 1.1
                     let layout = wide ? AnyLayout(HStackLayout(spacing: 28)) : AnyLayout(VStackLayout(spacing: 22))
@@ -31,13 +37,22 @@ struct NowPlayingView: View {
                         if style != .stage {
                             VStack(spacing: 20) {
                                 SongHeading(song: song)
-                                Scrubber()
-                                Transport()
-                                ExtraControls(showingHaptics: $showingHaptics, showingQueue: $showingQueue)
+                                if isOn {
+                                    Scrubber()
+                                    Transport()
+                                    ExtraControls(showingHaptics: $showingHaptics, showingQueue: $showingQueue)
+                                } else {
+                                    PlayButton(song: song)
+                                }
                             }
                             .frame(maxWidth: 460)
                         } else {
-                            SongHeading(song: song, large: true)
+                            VStack(spacing: 22) {
+                                SongHeading(song: song, large: true)
+                                if !isOn {
+                                    PlayButton(song: song)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -205,6 +220,29 @@ private struct SongHeading: View {
                     .foregroundStyle(Theme.pink)
             }
         }
+    }
+}
+
+/// Play, for the song that's waiting while nothing's on: it, then the rest of the featured songs, then
+/// the others
+private struct PlayButton: View {
+    let song: Song
+    @Environment(Player.self) private var player
+    @Environment(Library.self) private var library
+
+    var body: some View {
+        Button {
+            player.play(song, in: library.featured + library.songs.filter { !$0.featured })
+        } label: {
+            Label("Play", systemImage: "play.fill")
+                .font(.title3.weight(.bold))
+                .fontDesign(.rounded)
+                .padding(.horizontal, 30)
+                .padding(.vertical, 16)
+                .foregroundStyle(.white)
+                .glassEffect(.regular.tint(Theme.pink.opacity(0.45)).interactive(), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -27,7 +27,8 @@ does for Apple Music. Made for iPhone Duo.
 - **iPhone Duo** (iOS 27.1):
   - **Closed:** the tab bar and toolbar move into the side strip, like the system apps.
   - **Open:** the gatefold. Now Playing and the jukebox sit side by side like a record sleeve opened
-    out (`ArrangementView`). Folded like a book, each one gets a page either side of the fold.
+    out (`ArrangementView`), a page each either side of the fold, with search right on the songs'
+    page. Before anything's on, the featured song waits on the left page with a Play button.
   - **Propped up like a laptop:** Now Playing becomes the stage. The record and the song's name
     fill the half that's standing up, big enough to see from across the room, while the controls and
     the songs go on the half lying flat, within reach. This follows Apple's tabletop guidance for
@@ -45,7 +46,10 @@ does for Apple Music. Made for iPhone Duo.
    can open, close, fold and rotate to show the Duo layouts.
 4. Settings › Accessibility › Music Haptics: turn it on, and Muse Jukebox is listed. Play a song.
 
-The app was written without Xcode to hand, so the first build may need a small fix or two.
+GitHub's Macs build it with Xcode 27.1 on every push (no warnings), then run it in the Simulator on
+the newest iPhone and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture
+of each (Actions › iPhone app › the run › screenshots). `ios/Simulator/fold.m` does the folding,
+which the Simulator's command line can't.
 
 ## Trying it without a Mac
 
