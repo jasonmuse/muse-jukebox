@@ -37,14 +37,51 @@ does for Apple Music. Made for iPhone Duo.
     filter knob. The taps go softer and duller along with it. It reads the hinge angle live with
     `onHingeChange`.
 
-## Building it
+## Putting it on your iPhone from your Mac
 
-1. Open `MuseJukebox.xcodeproj` in Xcode 27.1 or later. The Duo APIs need the iOS 27.1 SDK.
-2. MuseJukebox target › Signing & Capabilities: choose your team. Change the bundle identifier
-   (`app.muselabs.jukebox`) if you like.
-3. Run it on an iPhone with iOS 26 or later. The Simulator has no haptics, but Device Hub's iPhone Duo
-   can open, close, fold and rotate to show the Duo layouts.
-4. Settings › Accessibility › Music Haptics: turn it on, and Muse Jukebox is listed. Play a song.
+No App Store Connect key or TestFlight needed: Xcode installs it straight onto the phone. Claude
+running on the Mac can do every step but the ones marked *you*.
+
+1. **Xcode 27.1 or later** (the Duo APIs need the iOS 27.1 SDK): `xcodebuild -version`. If it's
+   older or missing, install Xcode from the Mac App Store (it's big) and open it once so it can
+   install its components.
+2. **The code:** `git clone https://github.com/jasonmuse/muse-jukebox.git`, then
+   `git checkout claude/zen-turing-9xzqin` until the pull request is merged.
+3. **Your Apple ID in Xcode** (*you*): Xcode › Settings › Accounts › + › Apple ID. A free Apple ID
+   works: the app then lasts 7 days on the phone before it needs installing again. A paid
+   developer account makes that a year, and is what TestFlight needs.
+4. **The phone** (*you*): plug it into the Mac, unlock it and tap Trust. Then Settings › Privacy &
+   Security › Developer Mode: on. It restarts, and asks you to confirm.
+5. **Install it:** open `ios/MuseJukebox.xcodeproj`, MuseJukebox target › Signing & Capabilities ›
+   Team: yours (if Xcode says the bundle ID's taken, change `app.muselabs.jukebox` to one of your
+   own). Choose the iPhone in the toolbar and press Run. From Terminal, once the team's chosen:
+
+   ```
+   xcodebuild -project ios/MuseJukebox.xcodeproj -scheme MuseJukebox \
+     -destination "platform=iOS,name=<the iPhone's name>" \
+     -allowProvisioningUpdates -allowProvisioningDeviceRegistration -derivedDataPath build build
+   xcrun devicectl list devices
+   xcrun devicectl device install app --device <its identifier> build/Build/Products/Debug-iphoneos/MuseJukebox.app
+   ```
+6. **The first time** (*you*, with a free Apple ID): the phone won't open it until you trust it:
+   Settings › General › VPN & Device Management › your Apple ID › Trust.
+7. **Music Haptics** (*you*): Settings › Accessibility › Music Haptics: on, and Muse Jukebox is
+   listed there. Play a song and feel it.
+
+The Simulator has no haptics, but Xcode's Device Hub can open, close, fold and rotate an iPhone Duo
+to show its layouts.
+
+**Then TestFlight from the cloud, if you have the paid account:** make the app and the key
+("Trying it without a Mac", steps 1 to 3), and put the secrets in from Terminal, so the key never
+goes through a chat. `gh secret set` asks for each value without showing it:
+
+```
+gh auth login
+gh secret set ASC_KEY_ID -R jasonmuse/muse-jukebox
+gh secret set ASC_ISSUER_ID -R jasonmuse/muse-jukebox
+gh secret set APPLE_TEAM_ID -R jasonmuse/muse-jukebox
+gh secret set ASC_KEY -R jasonmuse/muse-jukebox < ~/Downloads/AuthKey_<the Key ID>.p8
+```
 
 GitHub's Macs build it with Xcode 27.1 on every push (no warnings), then run it in the Simulator on
 the newest iPhone and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture
