@@ -1,0 +1,291 @@
+# The Muse Jukebox iPhone app (ios/), built on GitHub's Macs with Xcode 27.1 (the iPhone Duo SDK).
+# Every push that touches it is built for the Simulator (no signing needed) and pictured running, so
+# a change that breaks it shows up here, and sent to TestFlight once the App Store Connect secrets
+# are set (ios/README.md says how). It can be run by hand too (Actions › iPhone app › Run workflow,
+# once it's on the default branch).
+name: iPhone app
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "songs.json"
+      - "haptics/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: "Send the build to TestFlight"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build for the Simulator
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # (the app needs ios/, haptics/ and songs.json, not the site's songs and pictures)
+          sparse-checkout: |
+            ios
+            haptics
+
+      - name: Xcode
+        run: xcodebuild -version
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ios/MuseJukebox.xcodeproj \
+            -scheme MuseJukebox \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+
+      # On the newest iPhone the Simulator has, and on iPhone Duo closed, open, and propped up like a
+      # laptop (folded by ios/Simulator/fold.m, as simctl can't): the songs, then Now Playing
+      # (-showNowPlaying), pictured after 15 seconds each, and still running by then. Each picture's
+      # kept, and a small copy's written into the log too (between SHOT-BEGIN and SHOT-END, in base64)
+      # for whoever can read the log but not download what's kept.
+      - name: Run it in the Simulator, and take pictures
+        run: |
+          app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/Build/Products/Debug-iphonesimulator/MuseJukebox.app" | head -1)
+          # (newest first: iPhone Duo may only run on some of them)
+          runtimes=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys; ios = [r["identifier"] for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]; print("\n".join(reversed(ios)))')
+          echo "App: $app"
+          echo "Runtimes:" $runtimes
+          fold_tool=""
+          if xcrun -sdk iphonesimulator clang -arch "$(uname -m)" -mios-simulator-version-min=26.0 -fobjc-arc \
+              -framework Foundation -framework IOKit -framework CoreMotion ios/Simulator/fold.m -o "$RUNNER_TEMP/fold" \
+              && codesign -f -s - "$RUNNER_TEMP/fold"; then
+            fold_tool="$RUNNER_TEMP/fold"
+          else
+            echo "::warning::ios/Simulator/fold.m wouldn't build, so iPhone Duo's only pictured closed"
+          fi
+          xcrun simctl list devicetypes --json | python3 -c '
+          import json, re, sys
+          names = [kind["name"] for kind in json.load(sys.stdin)["devicetypes"]]
+          phones = sorted((name for name in names if re.fullmatch(r"iPhone \d+ Pro", name)), key=lambda name: int(name.split()[1]))
+          duos = [name for name in names if "Duo" in name]
+          print("\n".join(phones[-1:] + duos[:1]))
+          ' > devices.txt
+          cat devices.txt
+          mkdir -p screenshots
+          status=0
+          while IFS= read -r device; do
+            udid=""
+            for runtime in $runtimes; do
+              if udid=$(xcrun simctl create "Jukebox" "$device" "$runtime" 2>/dev/null); then
+                echo "$device on $runtime"
+                break
+              fi
+              udid=""
+            done
+            if [ -z "$udid" ]; then
+              echo "::notice::None of this Mac's Simulator runtimes runs $device"
+              continue
+            fi
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+            xcrun simctl install "$udid" "$app"
+            # (iPhone Duo starts closed. Then it's opened out flat, and then turned on its side and
+            # half closed, like a laptop. Each pose is pictured on the screen it shows on: the cover
+            # screen, LCD, or the inner one, LCD-1.)
+            poses="phone"
+            if [[ "$device" == *Duo* ]]; then
+              poses="closed"
+              if [ -n "$fold_tool" ]; then poses="closed open propped"; fi
+            fi
+            for pose in $poses; do
+              display=""
+              case "$pose" in
+                closed)
+                  display=LCD
+                  ;;
+                open)
+                  display=LCD-1
+                  xcrun simctl spawn "$udid" "$fold_tool" 180 || echo "::warning::iPhone Duo didn't open"
+                  ;;
+                propped)
+                  display=LCD-1
+                  xcrun simctl spawn "$udid" "$fold_tool" turn landscape-left || echo "::warning::iPhone Duo didn't turn"
+                  xcrun simctl spawn "$udid" "$fold_tool" 110 || echo "::warning::iPhone Duo didn't fold to 110°"
+                  ;;
+              esac
+              # (the app moves to the other screen a second or two after the hinge does)
+              sleep 3
+              for view in songs now-playing; do
+                args=""
+                if [ "$view" = now-playing ]; then args="-showNowPlaying"; fi
+                if ! xcrun simctl launch --terminate-running-process "$udid" app.muselabs.jukebox $args; then
+                  echo "::error::Muse Jukebox wouldn't open on $device ($pose)"
+                  status=1
+                  continue
+                fi
+                sleep 15
+                name="$device - $view"
+                if [ "$pose" != phone ]; then name="$device - $pose - $view"; fi
+                picture="screenshots/$name.png"
+                if ! xcrun simctl io "$udid" screenshot ${display:+--display=$display} "$picture"; then
+                  echo "::warning::Couldn't take a picture of $name"
+                elif sips -Z 560 -s format jpeg -s formatOptions 55 "$picture" --out small.jpg > /dev/null; then
+                  echo "::group::$name (small copy)"
+                  echo "SHOT-BEGIN $name"
+                  base64 -i small.jpg | fold -w 800
+                  echo "SHOT-END"
+                  echo "::endgroup::"
+                fi
+                if ! xcrun simctl spawn "$udid" launchctl list | grep -q "app.muselabs.jukebox"; then
+                  echo "::error::Muse Jukebox stopped on $device ($pose, $view) within 15 seconds of opening"
+                  status=1
+                fi
+              done
+            done
+            xcrun simctl shutdown "$udid"
+          done < devices.txt
+          exit $status
+
+      - name: Keep the pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
+      - name: What went wrong
+        if: failure()
+        run: |
+          {
+            echo "### Build errors"
+            echo '```'
+            grep -E "error:" build.log | sort -u | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Every push that touches the app, once the four App Store Connect secrets are set (ios/README.md,
+  # "Trying it without a Mac"), and by hand: archived, signed and sent to TestFlight. Without the
+  # secrets a push just notes they're missing; run by hand, that's an error.
+  testflight:
+    name: Send to TestFlight
+    if: github.event_name == 'push' || inputs.testflight
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY: ${{ secrets.ASC_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # (higher every run, and every re-run of one)
+      BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+    steps:
+      - name: Check the App Store Connect secrets are set
+        id: secrets
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -z "$missing" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "::error::These secrets aren't set yet:$missing (ios/README.md, \"Trying it without a Mac\")"
+            exit 1
+          else
+            echo "::notice::Not sent to TestFlight: these secrets aren't set yet:$missing (ios/README.md, \"Trying it without a Mac\")"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          sparse-checkout: |
+            ios
+            haptics
+
+      - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          printf '%s\n' "$ASC_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          archive() {
+            rm -rf "$RUNNER_TEMP/MuseJukebox.xcarchive"
+            xcodebuild archive \
+              -project ios/MuseJukebox.xcodeproj \
+              -scheme MuseJukebox \
+              -destination "generic/platform=iOS" \
+              -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+              -authenticationKeyID "$ASC_KEY_ID" \
+              -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              CODE_SIGN_STYLE=Automatic \
+              CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+              "$@" 2>&1 | tee -a archive.log
+          }
+          # Signed for development first, as Xcode does. That needs an iPhone registered to the team;
+          # with none, it's archived unsigned instead, and the upload signs it for the App Store
+          # either way.
+          if ! archive; then
+            echo "::warning::Couldn't sign the archive for development (a team with no iPhone registered can't), so it's archived unsigned, for the upload to sign"
+            archive CODE_SIGNING_ALLOWED=NO
+          fi
+
+      - name: Upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>destination</key>
+              <string>upload</string>
+              <key>teamID</key>
+              <string>$APPLE_TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee export.log
+          echo "::notice::Build $BUILD_NUMBER is on its way to TestFlight: App Store Connect takes about 15 minutes to process it"
+
+      - name: What went wrong
+        if: failure()
+        run: |
+          {
+            echo "### Errors"
+            echo '```'
+            cat archive.log export.log 2>/dev/null | grep -E "error:|Error Domain|failed" | sort -u | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tidy up the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
