@@ -175,9 +175,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Every push that touches the app, once the four App Store Connect secrets are set (ios/README.md,
-  # "Trying it without a Mac"), and by hand: archived, signed and sent to TestFlight. Without the
-  # secrets a push just notes they're missing; run by hand, that's an error.
+  # Every push that touches the app, once the App Store Connect secrets are set (ios/README.md,
+  # "Trying it without a Mac"), and by hand: the app's ID registered and the app found in App Store
+  # Connect (ios/TestFlight/appstoreconnect.py), then archived, signed, sent to TestFlight, and a
+  # TestFlight group with everyone on the team in it given every build, so it shows up on their phones
+  # by itself. Without the secrets a push just notes they're missing; run by hand, that's an error.
   testflight:
     name: Send to TestFlight
     if: github.event_name == 'push' || inputs.testflight
@@ -187,6 +189,8 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY: ${{ secrets.ASC_KEY }}
+      ASC_KEY_PATH: ${{ github.workspace }}/../AuthKey.p8
+      # (optional: worked out from the app's ID when it isn't set)
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       # (higher every run, and every re-run of one)
       BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
@@ -195,7 +199,7 @@ jobs:
         id: secrets
         run: |
           missing=""
-          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY APPLE_TEAM_ID; do
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -z "$missing" ]; then
@@ -214,11 +218,19 @@ jobs:
             ios
             haptics
 
-      - name: Archive
+      - name: Get App Store Connect ready
+        id: asc
         if: steps.secrets.outputs.ready == 'true'
         run: |
+          printf '%s\n' "$ASC_KEY" > "$ASC_KEY_PATH"
+          python3 ios/TestFlight/appstoreconnect.py prepare
+
+      - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID || steps.asc.outputs.team }}
+        run: |
           set -o pipefail
-          printf '%s\n' "$ASC_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           archive() {
             rm -rf "$RUNNER_TEMP/MuseJukebox.xcarchive"
             xcodebuild archive \
@@ -227,10 +239,10 @@ jobs:
               -destination "generic/platform=iOS" \
               -archivePath "$RUNNER_TEMP/MuseJukebox.xcarchive" \
               -allowProvisioningUpdates \
-              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+              -authenticationKeyPath "$ASC_KEY_PATH" \
               -authenticationKeyID "$ASC_KEY_ID" \
               -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              DEVELOPMENT_TEAM="$TEAM" \
               CODE_SIGN_STYLE=Automatic \
               CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
               "$@" 2>&1 | tee -a archive.log
@@ -245,6 +257,8 @@ jobs:
 
       - name: Upload to TestFlight
         if: steps.secrets.outputs.ready == 'true'
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID || steps.asc.outputs.team }}
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -257,7 +271,7 @@ jobs:
               <key>destination</key>
               <string>upload</string>
               <key>teamID</key>
-              <string>$APPLE_TEAM_ID</string>
+              <string>$TEAM</string>
               <key>signingStyle</key>
               <string>automatic</string>
               <key>manageAppVersionAndBuildNumber</key>
@@ -270,11 +284,18 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee export.log
           echo "::notice::Build $BUILD_NUMBER is on its way to TestFlight: App Store Connect takes about 15 minutes to process it"
+
+      # (if this can't, the build's still uploaded: add yourself in App Store Connect › the app ›
+      # TestFlight › Internal Testing)
+      - name: Put everyone on the team in TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        continue-on-error: true
+        run: python3 ios/TestFlight/appstoreconnect.py testers "${{ steps.asc.outputs.app }}"
 
       - name: What went wrong
         if: failure()
@@ -288,4 +309,4 @@ jobs:
 
       - name: Tidy up the key
         if: always()
-        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+        run: rm -f "$ASC_KEY_PATH"

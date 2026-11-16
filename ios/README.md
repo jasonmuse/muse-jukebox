@@ -71,15 +71,14 @@ running on the Mac can do every step but the ones marked *you*.
 The Simulator has no haptics, but Xcode's Device Hub can open, close, fold and rotate an iPhone Duo
 to show its layouts.
 
-**Then TestFlight from the cloud, if you have the paid account:** make the app and the key
-("Trying it without a Mac", steps 1 to 3), and put the secrets in from Terminal, so the key never
-goes through a chat. `gh secret set` asks for each value without showing it:
+**Then TestFlight from the cloud, if you have the paid account:** make the key ("Trying it
+without a Mac", step 2), and put the secrets in from Terminal, so the key never goes through a chat.
+`gh secret set` asks for each value without showing it:
 
 ```
 gh auth login
 gh secret set ASC_KEY_ID -R jasonmuse/muse-jukebox
 gh secret set ASC_ISSUER_ID -R jasonmuse/muse-jukebox
-gh secret set APPLE_TEAM_ID -R jasonmuse/muse-jukebox
 gh secret set ASC_KEY -R jasonmuse/muse-jukebox < ~/Downloads/AuthKey_<the Key ID>.p8
 ```
 
@@ -91,45 +90,49 @@ which the Simulator's command line can't.
 ## Trying it without a Mac
 
 GitHub builds the app on its own Macs (Xcode 27.1) whenever `ios/` changes (Actions › iPhone app),
-and sends each build to TestFlight once it has your App Store Connect key. Setting that up is a
-one-time job, and all of it works in Safari on your phone:
+and once it has your App Store Connect key, it does the rest: registers the app's ID, sends each
+build to TestFlight, and puts you in a TestFlight group that gets every build, so new versions show
+up in the TestFlight app on your phone by themselves. Setting that up is a one-time job, and all of
+it works in Safari on your phone:
 
-0. **An Apple Developer account** (the paid one, $99 a year): TestFlight needs it. Enroll in the
+1. **An Apple Developer account** (the paid one, $99 a year): TestFlight needs it. Enroll in the
    Apple Developer app, or at developer.apple.com/programs.
-1. **The app's ID.** developer.apple.com › Account › Identifiers › + › App IDs › App: description
-   Muse Jukebox, Explicit bundle ID `app.muselabs.jukebox` (taken? tell Claude another and it'll
-   change the project). No capabilities needed.
-2. **The app in App Store Connect.** appstoreconnect.apple.com › Apps › + › New App: iOS, name Muse
-   Jukebox, that bundle ID, any SKU (`musejukebox` will do).
-3. **A key for GitHub.** App Store Connect › Users and Access › Integrations › App Store Connect API
-   › Team Keys › +, with Admin access (so GitHub's Mac can make the signing certificate). Note its
-   Key ID and the Issuer ID above the list, then download the key, a `.p8` file (it can only be
-   downloaded once). On a phone it lands in Files › Downloads: rename it to end in `.txt` to open
-   it, and copy everything in it.
-4. **The secrets.** github.com/jasonmuse/muse-jukebox › Settings › Secrets and variables › Actions ›
-   New repository secret, four times:
+2. **A key for GitHub.** appstoreconnect.apple.com › Users and Access › Integrations › App Store
+   Connect API › Team Keys › +, with Admin access. Note its Key ID and the Issuer ID above the list,
+   then download the key, a `.p8` file (it can only be downloaded once). On a phone it lands in Files
+   › Downloads: rename it to end in `.txt` to open it, and copy everything in it.
+3. **Three secrets.** github.com/jasonmuse/muse-jukebox › Settings › Secrets and variables ›
+   Actions › New repository secret:
    - `ASC_KEY_ID`: the Key ID
    - `ASC_ISSUER_ID`: the Issuer ID
    - `ASC_KEY`: everything in the `.p8` file, the BEGIN and END lines too
-   - `APPLE_TEAM_ID`: your Team ID (developer.apple.com › Account › Membership details)
-5. **A build.** The next change to the app goes to TestFlight by itself, or ask Claude to send one.
-6. **Your phone.** Once App Store Connect has processed the build (about 15 minutes): the app ›
-   TestFlight › Internal Testing › + to make a group, and add yourself. Install the TestFlight app,
-   and Muse Jukebox is in it.
+
+   (`APPLE_TEAM_ID` too, only if the build says it signed with the wrong team: it's worked out
+   from the app's ID otherwise.)
+4. **A first build:** ask Claude to send one, or push a change to the app. It registers the app's
+   ID, `app.muselabs.jukebox`, and stops there if the app isn't in App Store Connect yet.
+5. **The app in App Store Connect.** appstoreconnect.apple.com › Apps › + › New App: iOS, name Muse
+   Jukebox, bundle ID `app.muselabs.jukebox` (in the list now), SKU `musejukebox`. Then ask Claude to
+   send the build again.
+6. **Your phone.** Install the TestFlight app and accept the invitation that comes by email. Muse
+   Jukebox is in it about 15 minutes after the build (App Store Connect processes it first).
 
 After that, every change to the app shows up in TestFlight by itself.
 
 ## Adding songs
 
-After adding a song to `script.js` (and running `tools/make-waves.py`, as before):
+Add the song to `script.js` and its audio to `audio/`, as before, and push to `main`. The Song
+files workflow (`.github/workflows/songs.yml`) makes its wave, its haptic track and the app's
+`songs.json`, and commits them. Once the site's deployed, the app has the new song, with no update.
+The copies built into the app are for when it first opens without signal.
+
+By hand, from the repo root (needs ffmpeg and numpy):
 
 ```
+python3 tools/make-waves.py
 python3 tools/make-haptics.py
 python3 tools/make-songs.py
 ```
-
-Commit `haptics/` and `songs.json`. Once the site's deployed, the app picks the new songs up without
-an update. The copies built into the app are for when it first opens without signal.
 
 ## Good to know
 

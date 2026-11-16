@@ -1,0 +1,67 @@
+# When the songs change on main (script.js's list of them, or the audio), the files made from them
+# are made again and committed: waves.json (the songs' waves, on the site), haptics/ (each song's
+# haptic track, for the app) and songs.json (the songs as the app reads them). It's the tools in
+# tools/ doing what "Adding songs" in ios/README.md says to do by hand, so a new song is in the app
+# as soon as the site's deployed, with no app update. They give the same files every time, so a
+# change to script.js that isn't about the songs commits nothing.
+name: Song files
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "script.js"
+      - "audio/**"
+      - "tools/make-waves.py"
+      - "tools/make-haptics.py"
+      - "tools/make-songs.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: song-files
+  cancel-in-progress: false
+
+jobs:
+  make:
+    name: Make the song files
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: ffmpeg and numpy
+        run: |
+          command -v ffmpeg || { sudo apt-get update -q && sudo apt-get install -y -q ffmpeg; }
+          python -m pip install --quiet numpy
+
+      - name: Make them
+        run: |
+          python tools/make-waves.py
+          python tools/make-haptics.py
+          python tools/make-songs.py
+
+      - name: Commit what changed
+        run: |
+          git add waves.json haptics songs.json
+          if git diff --cached --quiet; then
+            echo "The song files were up to date"
+            exit 0
+          fi
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "The song files, made again for the songs as they are now" \
+            -m "Made by the Song files workflow (.github/workflows/songs.yml) from script.js and audio/."
+          # (someone else may have pushed in the meantime)
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase -q
+          done
+          exit 1
