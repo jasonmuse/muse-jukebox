@@ -6,12 +6,16 @@ getting a build onto your phone that would otherwise be done by hand in a browse
                                       App Store Connect: writes the team and the app to GITHUB_OUTPUT
     appstoreconnect.py testers APP    a TestFlight group that gets every build, with everyone on the
                                       team in it, so each build shows up in their TestFlight app
+    appstoreconnect.py fresh APP DAYS whether TestFlight's latest build is newer than DAYS (writes
+                                      fresh=true to GITHUB_OUTPUT if so: TestFlight builds stop
+                                      opening after 90 days)
 
 It signs in with the App Store Connect API key (ASC_KEY_ID, ASC_ISSUER_ID, and the .p8 file at
 ASC_KEY_PATH) using a token signed by openssl, so it needs nothing but Python 3 and openssl. It never
 prints anyone's email address: the build logs may be public.
 """
 import base64
+import datetime
 import json
 import os
 import re
@@ -185,6 +189,28 @@ def testers(app):
     print(f"{team} on the team, {added} added to the group just now: each build shows up in their TestFlight app")
 
 
+def uploaded_at(text):
+    """An App Store Connect date (2026-11-16T08:15:02-08:00, sometimes with fractions of a second or a Z)"""
+    text = re.sub(r"\.\d+", "", text.strip()).replace("Z", "+00:00")
+    return datetime.datetime.fromisoformat(text)
+
+
+def fresh(app, days):
+    builds = call("GET", "builds", query={"filter[app]": app, "sort": "-uploadedDate", "limit": 1})["data"]
+    if not builds:
+        print("TestFlight has no build of it yet")
+        return
+    build = builds[0]["attributes"]
+    age = (datetime.datetime.now(datetime.timezone.utc) - uploaded_at(build["uploadedDate"])).days
+    if build.get("expired"):
+        print(f"TestFlight's latest build ({build.get('version')}) has expired")
+    elif age < days:
+        print(f"TestFlight's latest build ({build.get('version')}) is {age} days old: it'll do")
+        output("fresh", "true")
+    else:
+        print(f"TestFlight's latest build ({build.get('version')}) is {age} days old: time for a new one")
+
+
 def main():
     for name in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH"):
         if not os.environ.get(name):
@@ -195,8 +221,10 @@ def main():
             prepare()
         elif command == ["testers"] and len(sys.argv) == 3:
             testers(sys.argv[2])
+        elif command == ["fresh"] and len(sys.argv) == 4:
+            fresh(sys.argv[2], int(sys.argv[3]))
         else:
-            fail("usage: appstoreconnect.py prepare | testers APP")
+            fail("usage: appstoreconnect.py prepare | testers APP | fresh APP DAYS")
     except Refused as refused:
         hint = {
             401: " Check ASC_KEY_ID and ASC_ISSUER_ID, and that ASC_KEY is the whole .p8 file.",

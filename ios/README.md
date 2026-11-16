@@ -82,10 +82,12 @@ gh secret set ASC_ISSUER_ID -R jasonmuse/muse-jukebox
 gh secret set ASC_KEY -R jasonmuse/muse-jukebox < ~/Downloads/AuthKey_<the Key ID>.p8
 ```
 
-GitHub's Macs build it with Xcode 27.1 on every push (no warnings), then run it in the Simulator on
-the newest iPhone and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture
-of each (Actions › iPhone app › the run › screenshots). `ios/Simulator/fold.m` does the folding,
-which the Simulator's command line can't.
+GitHub's Macs build it with Xcode 27.1 on every push (no warnings). Run by hand (Actions › iPhone app
+› Run workflow) with the pictures box ticked, they also run it in the Simulator on the newest iPhone
+and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture of each (the run ›
+screenshots). That takes the Mac about 20 minutes, and a Mac's minutes count ten times over in a
+private repo's Actions allowance, so it's only done when asked. `ios/Simulator/fold.m` does the
+folding, which the Simulator's command line can't.
 
 ## Trying it without a Mac
 
@@ -117,7 +119,9 @@ it works in Safari on your phone:
 6. **Your phone.** Install the TestFlight app and accept the invitation that comes by email. Muse
    Jukebox is in it about 15 minutes after the build (App Store Connect processes it first).
 
-After that, every change to the app shows up in TestFlight by itself.
+After that, every change to the app shows up in TestFlight by itself. And on the 1st of each month,
+if TestFlight's latest build is over 45 days old, a new one is sent, so the app on your phone never
+reaches the 90 days after which TestFlight builds stop opening.
 
 ## Adding songs
 

@@ -1,8 +1,11 @@
 # The Muse Jukebox iPhone app (ios/), built on GitHub's Macs with Xcode 27.1 (the iPhone Duo SDK).
-# Every push that touches it is built for the Simulator (no signing needed) and pictured running, so
-# a change that breaks it shows up here, and sent to TestFlight once the App Store Connect secrets
-# are set (ios/README.md says how). It can be run by hand too (Actions › iPhone app › Run workflow,
-# once it's on the default branch).
+# Every push that touches it is built for the Simulator (no signing needed), so a change that breaks
+# it shows up here, and sent to TestFlight once the App Store Connect secrets are set (ios/README.md
+# says how). Run by hand (Actions › iPhone app › Run workflow), it can also run the app in the
+# Simulator and picture it, on iPhone and on iPhone Duo in each of its poses: that takes the Mac
+# about 20 minutes, and a Mac's minutes count ten times over in a private repo's allowance, so it's
+# only done when asked. On the 1st of each month, TestFlight's build is renewed if it's getting old
+# (TestFlight builds stop opening after 90 days).
 name: iPhone app
 
 on:
@@ -18,6 +21,12 @@ on:
         description: "Send the build to TestFlight"
         type: boolean
         default: true
+      pictures:
+        description: "Run it in the Simulator and picture it (about 20 minutes of the Mac)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "37 15 1 * *"
 
 permissions:
   contents: read
@@ -29,6 +38,7 @@ concurrency:
 jobs:
   build:
     name: Build for the Simulator
+    if: github.event_name != 'schedule'
     runs-on: xcode-27
     timeout-minutes: 40
     steps:
@@ -59,6 +69,7 @@ jobs:
       # kept, and a small copy's written into the log too (between SHOT-BEGIN and SHOT-END, in base64)
       # for whoever can read the log but not download what's kept.
       - name: Run it in the Simulator, and take pictures
+        if: github.event_name == 'workflow_dispatch' && inputs.pictures
         run: |
           app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/Build/Products/Debug-iphonesimulator/MuseJukebox.app" | head -1)
           # (newest first: iPhone Duo may only run on some of them)
@@ -158,7 +169,7 @@ jobs:
           exit $status
 
       - name: Keep the pictures
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.pictures
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
@@ -179,10 +190,11 @@ jobs:
   # "Trying it without a Mac"), and by hand: the app's ID registered and the app found in App Store
   # Connect (ios/TestFlight/appstoreconnect.py), then archived, signed, sent to TestFlight, and a
   # TestFlight group with everyone on the team in it given every build, so it shows up on their phones
-  # by itself. Without the secrets a push just notes they're missing; run by hand, that's an error.
+  # by itself. Monthly, only if TestFlight's latest build is over 45 days old. Without the secrets a
+  # push just notes they're missing; run by hand, that's an error.
   testflight:
     name: Send to TestFlight
-    if: github.event_name == 'push' || inputs.testflight
+    if: github.event_name == 'push' || github.event_name == 'schedule' || inputs.testflight
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -225,8 +237,13 @@ jobs:
           printf '%s\n' "$ASC_KEY" > "$ASC_KEY_PATH"
           python3 ios/TestFlight/appstoreconnect.py prepare
 
+      - name: Is TestFlight's build getting old?
+        id: fresh
+        if: steps.secrets.outputs.ready == 'true' && github.event_name == 'schedule'
+        run: python3 ios/TestFlight/appstoreconnect.py fresh "${{ steps.asc.outputs.app }}" 45
+
       - name: Archive
-        if: steps.secrets.outputs.ready == 'true'
+        if: steps.secrets.outputs.ready == 'true' && steps.fresh.outputs.fresh != 'true'
         env:
           TEAM: ${{ secrets.APPLE_TEAM_ID || steps.asc.outputs.team }}
         run: |
@@ -256,7 +273,7 @@ jobs:
           fi
 
       - name: Upload to TestFlight
-        if: steps.secrets.outputs.ready == 'true'
+        if: steps.secrets.outputs.ready == 'true' && steps.fresh.outputs.fresh != 'true'
         env:
           TEAM: ${{ secrets.APPLE_TEAM_ID || steps.asc.outputs.team }}
         run: |
@@ -293,7 +310,7 @@ jobs:
       # (if this can't, the build's still uploaded: add yourself in App Store Connect › the app ›
       # TestFlight › Internal Testing)
       - name: Put everyone on the team in TestFlight
-        if: steps.secrets.outputs.ready == 'true'
+        if: steps.secrets.outputs.ready == 'true' && steps.fresh.outputs.fresh != 'true'
         continue-on-error: true
         run: python3 ios/TestFlight/appstoreconnect.py testers "${{ steps.asc.outputs.app }}"
 
