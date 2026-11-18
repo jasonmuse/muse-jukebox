@@ -87,7 +87,11 @@ gh secret set ASC_ISSUER_ID -R jasonmuse/muse-jukebox
 gh secret set ASC_KEY -R jasonmuse/muse-jukebox < ~/Downloads/AuthKey_<the Key ID>.p8
 ```
 
-GitHub's Macs build it with Xcode 27.1 on every push (no warnings). Run by hand (Actions › iPhone app
+GitHub's Macs build it with Xcode 27.1 on every push (no warnings), for the Simulator: about a minute
+of the Mac. Sending it to TestFlight takes about five, so that's done once a batch of changes is
+ready (a push whose last commit message says `[testflight]`), or by hand (Actions › iPhone app ›
+Run workflow, with "Send the build to TestFlight" ticked), not for every push, and merging a pull
+request doesn't send the same app again. Run by hand (Actions › iPhone app
 › Run workflow) with the pictures box ticked, they also run it in the Simulator on the newest iPhone
 and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture of each (the run ›
 screenshots). That takes the Mac about 20 minutes, and a Mac's minutes count ten times over in a
@@ -97,9 +101,9 @@ folding, which the Simulator's command line can't.
 ## Trying it without a Mac
 
 GitHub builds the app on its own Macs (Xcode 27.1) whenever `ios/` changes (Actions › iPhone app),
-and once it has your App Store Connect key, it does the rest: registers the app's ID, sends each
-build to TestFlight, and puts you in a TestFlight group that gets every build, so new versions show
-up in the TestFlight app on your phone by themselves. Setting that up is a one-time job, and all of
+and once it has your App Store Connect key, it does the rest: registers the app's ID, sends builds
+to TestFlight (once a batch of changes is ready), and puts you in a TestFlight group that gets every
+build, so new versions show up in the TestFlight app on your phone by themselves. Setting that up is a one-time job, and all of
 it works in Safari on your phone:
 
 1. **An Apple Developer account** (the paid one, $99 a year): TestFlight needs it. Enroll in the
@@ -124,7 +128,7 @@ it works in Safari on your phone:
 6. **Your phone.** Install the TestFlight app and accept the invitation that comes by email. Muse
    Jukebox is in it about 15 minutes after the build (App Store Connect processes it first).
 
-After that, every change to the app shows up in TestFlight by itself. And on the 1st of each month,
+After that, each batch of changes shows up in TestFlight by itself. And on the 1st of each month,
 if TestFlight's latest build is over 45 days old, a new one is sent, so the app on your phone never
 reaches the 90 days after which TestFlight builds stop opening.
 
