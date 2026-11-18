@@ -4,12 +4,31 @@ import Observation
 import UIKit
 
 /// Plays the songs. Each song's file is fetched once and kept, then played through AVAudioEngine:
-/// the player, a varispeed (a slowed side plays slower and lower, like a record) and a low-pass filter
-/// (Fold FX, on iPhone Duo). Knows to the sample where the song is, which the haptics are timed by.
+/// the player, a varispeed (a slowed side plays slower and lower, like a record), then Fold FX's
+/// effects (on iPhone Duo: a filter, a crusher, an echo and a reverb, each doing nothing until
+/// folding brings it in). Knows to the sample where the song is, which the haptics are timed by.
 /// Keeps the lock screen, Control Center and headphone buttons in step.
 @MainActor
 @Observable
 final class Player {
+    /// Fold FX's sounds: folding the phone brings one of these in over the music
+    enum FoldEffect: String, CaseIterable, Identifiable, Sendable {
+        /// A low-pass filter closing down, like a DJ's filter knob
+        case filter
+        /// Echoes, in time with the song when its beat's known
+        case echo
+        /// A cathedral's reverb
+        case space
+        /// The record slowing down, to half speed
+        case slowmo
+        /// Crunched up like an old games console
+        case crunch
+        /// Squashed into a little radio (the lows and the highs filtered away)
+        case radio
+
+        var id: String { rawValue }
+    }
+
     enum Repeat: String, CaseIterable {
         case off, all, one
 
@@ -33,7 +52,10 @@ final class Player {
     /// Goes up whenever where the song is jumps (another song, a seek, a pause, a new speed), so what
     /// follows it along (the haptics) starts again from where it is
     private(set) var jumps = 0
-    /// Fold FX: how far open the filter is (1 lets everything through)
+    /// Fold FX's sound, and how far in it is (0, not at all, to 1, all the way)
+    private(set) var foldEffect: FoldEffect = .filter
+    private(set) var foldAmount: Double = 0
+    /// How far open Fold FX's filter is (1 lets everything through): the taps go duller with it
     private(set) var filterOpenness: Double = 1
     /// The song's cover, once it's loaded (for the lock screen, and the backdrop)
     private(set) var artwork: UIImage?
@@ -43,7 +65,20 @@ final class Player {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
     private let varispeed = AVAudioUnitVarispeed()
-    private let filter = AVAudioUnitEQ(numberOfBands: 1)
+    /// Fold FX's filters: a low-pass, and a high-pass (the radio)
+    private let filter = AVAudioUnitEQ(numberOfBands: 2)
+    /// (everything from here on in stereo, which the effects after it are happiest with)
+    private let effectsMixer = AVAudioMixerNode()
+    private let crusher = AVAudioUnitDistortion()
+    private let echo = AVAudioUnitDelay()
+    private let reverb = AVAudioUnitReverb()
+    /// The side's own speed (1, or a slowed side's), and Fold FX's slow-mo on top (1, none)
+    @ObservationIgnored private var sideRate: Double = 1
+    @ObservationIgnored private var foldRate: Double = 1
+    /// The song's beat, in seconds of its file, once its haptic track says (Fold FX's echo keeps time with it)
+    @ObservationIgnored private var beat: TimeInterval?
+    /// The speed the lock screen was last told about
+    @ObservationIgnored private var toldRate: Double = 1
     @ObservationIgnored private var connectedFormat: AVAudioFormat?
     @ObservationIgnored private var file: AVAudioFile?
     @ObservationIgnored private var segmentStart: AVAudioFramePosition = 0
@@ -64,10 +99,18 @@ final class Player {
         engine.attach(node)
         engine.attach(varispeed)
         engine.attach(filter)
-        let band = filter.bands[0]
-        band.filterType = .lowPass
-        band.frequency = 20_000
-        band.bypass = true
+        engine.attach(effectsMixer)
+        engine.attach(crusher)
+        engine.attach(echo)
+        engine.attach(reverb)
+        filter.bands[0].filterType = .lowPass
+        filter.bands[1].filterType = .highPass
+        crusher.loadFactoryPreset(.multiDecimated2)
+        echo.lowPassCutoff = 5_000
+        reverb.loadFactoryPreset(.cathedral)
+        for effect in FoldEffect.allCases {
+            setNeutral(effect)
+        }
         observeSession()
         setUpRemoteCommands()
     }
@@ -252,18 +295,92 @@ final class Player {
         updateNowPlaying()
     }
 
-    /// Fold FX: the filter closing down to 220 Hz (0) or open (1)
-    func setFilterOpenness(_ openness: Double) {
-        let openness = min(max(openness, 0), 1)
-        guard abs(openness - filterOpenness) > 0.002 else { return }
-        filterOpenness = openness
-        let band = filter.bands[0]
-        if openness > 0.985 {
-            band.bypass = true
-        } else {
-            band.frequency = Float(220 * pow(20_000 / 220, openness))
-            band.bypass = false
+    /// Fold FX: `effect`, `amount` of the way in (0, not at all, to 1, all the way). Changing the
+    /// effect puts the one before back to doing nothing.
+    func setFoldFX(_ effect: FoldEffect, amount: Double) {
+        let amount = min(max(amount, 0), 1)
+        guard effect != foldEffect || abs(amount - foldAmount) > 0.002 else { return }
+        if effect != foldEffect {
+            setNeutral(foldEffect)
+            foldEffect = effect
         }
+        foldAmount = amount
+        let on = amount > 0.015
+        switch effect {
+        case .filter:
+            // (closing down to 220 Hz)
+            filter.bands[0].frequency = Float(220 * pow(20_000 / 220, 1 - amount))
+            filter.bands[0].bypass = !on
+        case .radio:
+            // (the highs down to 3 kHz and the lows up to 900 Hz: a little speaker's band)
+            filter.bands[0].frequency = Float(20_000 * pow(3_000.0 / 20_000, amount))
+            filter.bands[1].frequency = Float(20 * pow(900.0 / 20, amount))
+            filter.bands[0].bypass = !on
+            filter.bands[1].bypass = !on
+        case .crunch:
+            crusher.wetDryMix = Float(100 * amount)
+            crusher.bypass = !on
+        case .echo:
+            echo.delayTime = echoTime
+            echo.wetDryMix = Float(55 * amount)
+            echo.feedback = Float(15 + (55 * amount))
+            echo.bypass = !on
+        case .space:
+            reverb.wetDryMix = Float(75 * amount)
+            reverb.bypass = !on
+        case .slowmo:
+            foldRate = 1 - (0.5 * amount)
+            applyRate()
+            if abs(rate - toldRate) > 0.05 {
+                updateNowPlaying()
+            }
+        }
+        filterOpenness = effect == .filter ? 1 - amount : 1
+    }
+
+    /// The song's beat, from its haptic track (for Fold FX's echo)
+    func setBeat(_ beat: TimeInterval?, for song: Song) {
+        guard self.song?.audio == song.audio else { return }
+        self.beat = beat
+        if foldEffect == .echo {
+            echo.delayTime = echoTime
+        }
+    }
+
+    /// The echo's time: three quarters of a beat as it's heard (at the record's speed), or a third
+    /// of a second when the beat's not known
+    private var echoTime: TimeInterval {
+        guard let beat, beat > 0 else { return 0.33 }
+        return min(max(0.75 * beat / max(rate, 0.1), 0.12), 1.2)
+    }
+
+    /// An effect back to doing nothing
+    private func setNeutral(_ effect: FoldEffect) {
+        switch effect {
+        case .filter, .radio:
+            filter.bands[0].frequency = 20_000
+            filter.bands[1].frequency = 20
+            filter.bands[0].bypass = true
+            filter.bands[1].bypass = true
+        case .crunch:
+            crusher.wetDryMix = 0
+            crusher.bypass = true
+        case .echo:
+            echo.wetDryMix = 0
+            echo.feedback = 0
+            echo.bypass = true
+        case .space:
+            reverb.wetDryMix = 0
+            reverb.bypass = true
+        case .slowmo:
+            foldRate = 1
+            applyRate()
+        }
+    }
+
+    /// The varispeed at the side's speed, slowed by Fold FX's slow-mo
+    private func applyRate() {
+        varispeed.rate = Float(sideRate * foldRate)
     }
 
     // MARK: - Loading and the engine
@@ -277,6 +394,7 @@ final class Player {
         }
         self.song = song
         file = nil
+        beat = nil
         isPlaying = false
         isLoading = true
         couldNotLoad = false
@@ -296,7 +414,8 @@ final class Player {
                 self.file = file
                 duration = Double(file.length) / file.processingFormat.sampleRate
                 connect(file.processingFormat)
-                varispeed.rate = Float(song.rate)
+                sideRate = song.rate
+                applyRate()
                 schedule(from: time)
                 isLoading = false
                 if playWhenLoaded {
@@ -318,16 +437,22 @@ final class Player {
         }
     }
 
-    /// The player, varispeed and filter wired up for the song's file (only when its format's new)
+    /// The player, varispeed and Fold FX's effects wired up for the song's file (only when its
+    /// format's new). From the effects mixer on it's in stereo, whatever the file is.
     private func connect(_ format: AVAudioFormat) {
         if let connectedFormat, connectedFormat == format { return }
         engine.stop()
-        engine.disconnectNodeOutput(node)
-        engine.disconnectNodeOutput(varispeed)
-        engine.disconnectNodeOutput(filter)
+        for unit in [node, varispeed, filter, effectsMixer, crusher, echo, reverb] as [AVAudioNode] {
+            engine.disconnectNodeOutput(unit)
+        }
+        let stereo = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 2) ?? format
         engine.connect(node, to: varispeed, format: format)
         engine.connect(varispeed, to: filter, format: format)
-        engine.connect(filter, to: engine.mainMixerNode, format: format)
+        engine.connect(filter, to: effectsMixer, format: format)
+        engine.connect(effectsMixer, to: crusher, format: stereo)
+        engine.connect(crusher, to: echo, format: stereo)
+        engine.connect(echo, to: reverb, format: stereo)
+        engine.connect(reverb, to: engine.mainMixerNode, format: stereo)
         connectedFormat = format
     }
 
@@ -407,7 +532,7 @@ final class Player {
 
     private func glideRate(to target: Double) {
         glide?.cancel()
-        let from = Double(varispeed.rate)
+        let from = sideRate
         glide = Task { [weak self] in
             let steps = 24
             for step in 1...steps {
@@ -415,7 +540,8 @@ final class Player {
                 guard let self, !Task.isCancelled else { return }
                 let along = Double(step) / Double(steps)
                 let eased = along * along * (3 - (2 * along))
-                self.varispeed.rate = Float(from + ((target - from) * eased))
+                self.sideRate = from + ((target - from) * eased)
+                self.applyRate()
             }
             self?.jumps += 1
             self?.updateNowPlaying()
@@ -441,6 +567,7 @@ final class Player {
             return
         }
         let speed = max(rate, 0.1)
+        toldRate = rate
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.title,
             MPMediaItemPropertyArtist: "Jason Muse",

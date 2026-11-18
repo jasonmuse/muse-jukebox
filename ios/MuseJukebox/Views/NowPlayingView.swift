@@ -402,20 +402,12 @@ private struct ExtraControls: View {
                 .accessibilityLabel("Flip to side \(song.side == "B" ? "A" : "B")")
             }
             if duo.isFoldable {
-                Button {
-                    duo.stepFoldFX()
-                    player.setFilterOpenness(duo.foldFXOpenness)
-                } label: {
+                FoldFXMenu {
                     FoldFXDial(size: 17)
                         .foregroundStyle(duo.foldFXTint)
                         .frame(width: 44, height: 44)
                         .glassEffect(.regular.interactive(), in: Circle())
                 }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: duo.foldFX)
-                .accessibilityLabel("Fold FX")
-                .accessibilityValue(duo.foldFXSpoken)
-                .accessibilityHint("Steps through off, live and locked")
             }
             if settings.isSupported {
                 Button {

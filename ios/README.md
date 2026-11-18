@@ -33,8 +33,11 @@ does for Apple Music. Made for iPhone Duo.
     fill the half that's standing up, big enough to see from across the room, while the controls and
     the songs go on the half lying flat, within reach. This follows Apple's tabletop guidance for
     media controls.
-  - **Fold FX:** folding the Duo sweeps a low-pass filter over the music, like a DJ's filter knob,
-    and the taps go softer and duller along with it. Its button steps through **Off**, **Live**
+  - **Fold FX:** folding the Duo brings an effect in over the music, further the more it's folded.
+    Hold its button to pick the sound: **Filter** (a DJ's low-pass sweep; the taps go softer and
+    duller with it), **Echo** (in time with the song's beat), **Space** (a cathedral's reverb),
+    **Slow-mo** (the record slowing down to half speed), **8-bit** (crunched like an old console)
+    or **Radio** (squashed into a little speaker). A tap steps it through **Off**, **Live**
     (follows the hinge, read live with `onHingeChange`) and **Locked** (stays where it is, even
     with the phone closed on the outside screen). In Live, closing the phone holds the sound where
     it was rather than cutting back to normal, and the button stays on the outside screen too.
