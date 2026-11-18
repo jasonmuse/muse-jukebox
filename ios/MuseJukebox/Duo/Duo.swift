@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import SwiftUI
 
@@ -38,10 +39,20 @@ final class DuoState {
     private(set) var heldOpenness: Double = 1
 
     /// Whether this phone folds, once it's been seen to: so Fold FX's button stays on the outside
-    /// screen too (which has no fold or hinge of its own), and Fold FX can be turned off there
-    private(set) var folds = UserDefaults.standard.bool(forKey: DuoState.foldsKey)
+    /// screen too (which has no fold or hinge of its own), and Fold FX can be turned off there. Kept
+    /// with the model of phone it was seen on, so a backup restored onto a phone that doesn't fold
+    /// doesn't bring Fold FX with it: it's only ever on iPhone Duo.
+    private(set) var folds = UserDefaults.standard.string(forKey: DuoState.foldsKey) == DuoState.model
 
-    private static let foldsKey = "duo.folds"
+    private static let foldsKey = "duo.foldsOnModel"
+    /// This phone's model ("iPhone19,4")
+    private static let model: String = {
+        var system = utsname()
+        uname(&system)
+        return withUnsafeBytes(of: &system.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
+    }()
     private static let effectKey = "duo.foldEffect"
 
     var isFoldable: Bool {
@@ -163,7 +174,7 @@ final class DuoState {
     private func rememberFolding() {
         guard !folds else { return }
         folds = true
-        UserDefaults.standard.set(true, forKey: Self.foldsKey)
+        UserDefaults.standard.set(Self.model, forKey: Self.foldsKey)
     }
 }
 
