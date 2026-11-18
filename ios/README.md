@@ -33,8 +33,11 @@ does for Apple Music. Made for iPhone Duo.
     fill the half that's standing up, big enough to see from across the room, while the controls and
     the songs go on the half lying flat, within reach. This follows Apple's tabletop guidance for
     media controls.
-  - **Fold FX:** folding the Duo sweeps a low-pass filter over the music, like a DJ's filter knob,
-    and the taps go softer and duller along with it. Its button steps through **Off**, **Live**
+  - **Fold FX:** folding the Duo brings an effect in over the music, further the more it's folded.
+    Hold its button to pick the sound: **Filter** (a DJ's low-pass sweep; the taps go softer and
+    duller with it), **Echo** (in time with the song's beat), **Space** (a cathedral's reverb),
+    **Slow-mo** (the record slowing down to half speed), **8-bit** (crunched like an old console)
+    or **Radio** (squashed into a little speaker). A tap steps it through **Off**, **Live**
     (follows the hinge, read live with `onHingeChange`) and **Locked** (stays where it is, even
     with the phone closed on the outside screen). In Live, closing the phone holds the sound where
     it was rather than cutting back to normal, and the button stays on the outside screen too.
@@ -84,7 +87,11 @@ gh secret set ASC_ISSUER_ID -R jasonmuse/muse-jukebox
 gh secret set ASC_KEY -R jasonmuse/muse-jukebox < ~/Downloads/AuthKey_<the Key ID>.p8
 ```
 
-GitHub's Macs build it with Xcode 27.1 on every push (no warnings). Run by hand (Actions › iPhone app
+GitHub's Macs build it with Xcode 27.1 on every push (no warnings), for the Simulator: about a minute
+of the Mac. Sending it to TestFlight takes about five, so that's done once a batch of changes is
+ready (a push whose last commit message says `[testflight]`), or by hand (Actions › iPhone app ›
+Run workflow, with "Send the build to TestFlight" ticked), not for every push, and merging a pull
+request doesn't send the same app again. Run by hand (Actions › iPhone app
 › Run workflow) with the pictures box ticked, they also run it in the Simulator on the newest iPhone
 and on iPhone Duo closed, open, and propped up like a laptop, and keep a picture of each (the run ›
 screenshots). That takes the Mac about 20 minutes, and a Mac's minutes count ten times over in a
@@ -94,9 +101,9 @@ folding, which the Simulator's command line can't.
 ## Trying it without a Mac
 
 GitHub builds the app on its own Macs (Xcode 27.1) whenever `ios/` changes (Actions › iPhone app),
-and once it has your App Store Connect key, it does the rest: registers the app's ID, sends each
-build to TestFlight, and puts you in a TestFlight group that gets every build, so new versions show
-up in the TestFlight app on your phone by themselves. Setting that up is a one-time job, and all of
+and once it has your App Store Connect key, it does the rest: registers the app's ID, sends builds
+to TestFlight (once a batch of changes is ready), and puts you in a TestFlight group that gets every
+build, so new versions show up in the TestFlight app on your phone by themselves. Setting that up is a one-time job, and all of
 it works in Safari on your phone:
 
 1. **An Apple Developer account** (the paid one, $99 a year): TestFlight needs it. Enroll in the
@@ -121,7 +128,7 @@ it works in Safari on your phone:
 6. **Your phone.** Install the TestFlight app and accept the invitation that comes by email. Muse
    Jukebox is in it about 15 minutes after the build (App Store Connect processes it first).
 
-After that, every change to the app shows up in TestFlight by itself. And on the 1st of each month,
+After that, each batch of changes shows up in TestFlight by itself. And on the 1st of each month,
 if TestFlight's latest build is over 45 days old, a new one is sent, so the app on your phone never
 reaches the 90 days after which TestFlight builds stop opening.
 

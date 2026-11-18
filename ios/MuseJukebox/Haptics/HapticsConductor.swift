@@ -81,6 +81,8 @@ final class HapticsConductor {
                 let loaded = await store.track(for: song)
                 guard let self, self.trackPath == song.haptics else { return }
                 self.track = loaded
+                // (Fold FX's echo keeps time with the song's beat)
+                self.player.setBeat(loaded?.bpm.map { 60 / $0 }, for: song)
             }
             return
         }

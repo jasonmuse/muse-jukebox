@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import SwiftUI
 
@@ -10,7 +11,7 @@ final class DuoState {
         case none, closed, partiallyOpen, fullyOpen
     }
 
-    /// Fold FX: folding sweeps a filter over the music (and the haptics go softer and duller with it).
+    /// Fold FX: folding brings its sound in over the music, the filter or another (`foldEffect`).
     /// Its button steps through these.
     enum FoldFX: Equatable {
         case off
@@ -29,6 +30,8 @@ final class DuoState {
     /// Whether the screen has a fold at all, folded or not (known from the start, before the hinge moves)
     var hasFold = false
     var foldFX: FoldFX = .off
+    /// Fold FX's sound (picked by holding its button; kept for next time)
+    private(set) var foldEffect: Player.FoldEffect = Player.FoldEffect(rawValue: UserDefaults.standard.string(forKey: DuoState.effectKey) ?? "") ?? .filter
 
     /// Fold FX's filter for the hinge, as of the last time the hinge said where it was. Closing it,
     /// or the app moving to the outside screen, leaves this be: the sound holds, rather than cutting
@@ -36,10 +39,21 @@ final class DuoState {
     private(set) var heldOpenness: Double = 1
 
     /// Whether this phone folds, once it's been seen to: so Fold FX's button stays on the outside
-    /// screen too (which has no fold or hinge of its own), and Fold FX can be turned off there
-    private(set) var folds = UserDefaults.standard.bool(forKey: DuoState.foldsKey)
+    /// screen too (which has no fold or hinge of its own), and Fold FX can be turned off there. Kept
+    /// with the model of phone it was seen on, so a backup restored onto a phone that doesn't fold
+    /// doesn't bring Fold FX with it: it's only ever on iPhone Duo.
+    private(set) var folds = UserDefaults.standard.string(forKey: DuoState.foldsKey) == DuoState.model
 
-    private static let foldsKey = "duo.folds"
+    private static let foldsKey = "duo.foldsOnModel"
+    /// This phone's model ("iPhone19,4")
+    private static let model: String = {
+        var system = utsname()
+        uname(&system)
+        return withUnsafeBytes(of: &system.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
+    }()
+    private static let effectKey = "duo.foldEffect"
 
     var isFoldable: Bool {
         hasFold || hinge != .none || folds
@@ -91,6 +105,17 @@ final class DuoState {
         }
     }
 
+    /// Fold FX's sound, from now on
+    func choose(_ effect: Player.FoldEffect) {
+        foldEffect = effect
+        UserDefaults.standard.set(effect.rawValue, forKey: Self.effectKey)
+    }
+
+    /// How far in Fold FX wants its sound now (0 while it's off)
+    var foldFXAmount: Double {
+        1 - foldFXOpenness
+    }
+
     /// The filter Fold FX wants now (1, wide open, while it's off)
     var foldFXOpenness: Double {
         switch foldFX {
@@ -100,24 +125,25 @@ final class DuoState {
         }
     }
 
-    /// Fold FX in a few words, for under its name: "Off", "Live · 42% muffled", "Locked · wide open"
+    /// Fold FX in a few words, for under its name: "Echo · Off", "Echo · Live 42%", "Echo · Locked 42%"
     var foldFXStatus: String {
+        let name = foldEffect.name
         switch foldFX {
         case .off:
-            return "Off"
+            return "\(name) · Off"
         case .live:
-            return muffled == 0 && hinge != .partiallyOpen ? "Live · fold to muffle" : "Live · \(muffledText)"
+            return percent == 0 && hinge != .partiallyOpen ? "\(name) · fold it" : "\(name) · Live \(percent)%"
         case .locked:
-            return "Locked · \(muffledText)"
+            return "\(name) · Locked \(percent)%"
         }
     }
 
     /// Fold FX, said in full (VoiceOver)
     var foldFXSpoken: String {
         switch foldFX {
-        case .off: "Off"
-        case .live: "Live, following the fold: \(muffledText)"
-        case .locked: "Locked: \(muffledText), open or closed"
+        case .off: "\(foldEffect.name), off"
+        case .live: "\(foldEffect.name), live, following the fold: \(percent)%"
+        case .locked: "\(foldEffect.name), locked at \(percent)%, open or closed"
         }
     }
 
@@ -135,13 +161,9 @@ final class DuoState {
         return false
     }
 
-    /// How muffled the music is, in percent
-    private var muffled: Int {
-        Int(((1 - foldFXOpenness) * 100).rounded())
-    }
-
-    private var muffledText: String {
-        muffled == 0 ? "wide open" : "\(muffled)% muffled"
+    /// How far in Fold FX's sound is, in percent
+    private var percent: Int {
+        Int((foldFXAmount * 100).rounded())
     }
 
     /// Fold FX's filter for a hinge angle: wide open at 170° and over, closed right down by 60°
@@ -152,7 +174,7 @@ final class DuoState {
     private func rememberFolding() {
         guard !folds else { return }
         folds = true
-        UserDefaults.standard.set(true, forKey: Self.foldsKey)
+        UserDefaults.standard.set(Self.model, forKey: Self.foldsKey)
     }
 }
 
@@ -183,7 +205,7 @@ struct DuoReader: ViewModifier {
                     } else {
                         duo.update(hinge: .none, angle: nil)
                     }
-                    player.setFilterOpenness(duo.foldFXOpenness)
+                    player.follow(duo)
                 }
                 .onGeometryChange(for: FoldReading.self) { proxy in
                     FoldReading(
@@ -250,16 +272,13 @@ struct DeckControls: View {
     }
 }
 
-/// Fold FX, with what it's doing: tap through off, live (following the hinge) and locked
+/// Fold FX, with what it's doing: tap through off, live (following the hinge) and locked, and hold
+/// to pick its sound
 struct FoldFXButton: View {
     @Environment(DuoState.self) private var duo
-    @Environment(Player.self) private var player
 
     var body: some View {
-        Button {
-            duo.stepFoldFX()
-            player.setFilterOpenness(duo.foldFXOpenness)
-        } label: {
+        FoldFXMenu {
             HStack(spacing: 8) {
                 FoldFXDial(size: 17)
                 VStack(alignment: .leading, spacing: 0) {
@@ -276,23 +295,56 @@ struct FoldFXButton: View {
             .foregroundStyle(duo.foldFXTint)
             .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: duo.foldFX)
-        .accessibilityLabel("Fold FX")
-        .accessibilityValue(duo.foldFXSpoken)
-        .accessibilityHint("Steps through off, live and locked")
     }
 }
 
-/// Fold FX's dial: turned as far as the filter's closed, with a lock on it while it's locked
+/// Fold FX's button, whatever it looks like: a tap steps it through off, live and locked, and holding
+/// it picks the sound
+struct FoldFXMenu<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    @Environment(DuoState.self) private var duo
+    @Environment(Player.self) private var player
+
+    var body: some View {
+        Menu {
+            Picker("Fold FX", selection: Binding(get: { duo.foldEffect }, set: { effect in
+                duo.choose(effect)
+                player.follow(duo)
+            })) {
+                ForEach(Player.FoldEffect.allCases) { effect in
+                    Label(effect.name, systemImage: effect.symbol)
+                        .tag(effect)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            content()
+        } primaryAction: {
+            duo.stepFoldFX()
+            player.follow(duo)
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: duo.foldFX)
+        .sensoryFeedback(.selection, trigger: duo.foldEffect)
+        .accessibilityLabel("Fold FX")
+        .accessibilityValue(duo.foldFXSpoken)
+        .accessibilityHint("Steps through off, live and locked. Touch and hold to pick the sound.")
+    }
+}
+
+/// Fold FX's sound's symbol (the filter's a dial, turned as far as it's closed), with a lock on it
+/// while it's locked
 struct FoldFXDial: View {
     var size: CGFloat
     @Environment(DuoState.self) private var duo
 
     var body: some View {
-        Image(systemName: "dial.medium.fill")
+        Image(systemName: duo.foldEffect.symbol)
             .font(.system(size: size, weight: .semibold))
-            .rotationEffect(.degrees((duo.foldFXOpenness - 1) * 140))
+            .rotationEffect(.degrees(duo.foldEffect == .filter ? -duo.foldFXAmount * 140 : 0))
+            .scaleEffect(duo.foldEffect == .filter ? 1 : 1 + (0.15 * duo.foldFXAmount))
+            .contentTransition(.symbolEffect(.replace))
             .overlay(alignment: .topTrailing) {
                 if duo.foldFXIsLocked {
                     Image(systemName: "lock.fill")
@@ -305,5 +357,36 @@ struct FoldFXDial: View {
                 }
             }
             .animation(.snappy, value: duo.foldFXIsLocked)
+    }
+}
+
+extension Player.FoldEffect {
+    var name: String {
+        switch self {
+        case .filter: "Filter"
+        case .echo: "Echo"
+        case .space: "Space"
+        case .slowmo: "Slow-mo"
+        case .crunch: "8-bit"
+        case .radio: "Radio"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .filter: "dial.medium.fill"
+        case .echo: "wave.3.right"
+        case .space: "sparkles"
+        case .slowmo: "tortoise.fill"
+        case .crunch: "gamecontroller.fill"
+        case .radio: "antenna.radiowaves.left.and.right"
+        }
+    }
+}
+
+extension Player {
+    /// Fold FX as the hinge and its button have it now
+    func follow(_ duo: DuoState) {
+        setFoldFX(duo.foldEffect, amount: duo.foldFXAmount)
     }
 }

@@ -60,8 +60,24 @@ struct NowPlayingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                ContentUnavailableView("Nothing's playing", systemImage: "opticaldisc", description: Text("Pick a song and it'll spin here."))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView {
+                    Label("Nothing's playing", systemImage: "opticaldisc")
+                } description: {
+                    Text("Pick a song and it'll spin here.")
+                } actions: {
+                    // (a random song, then the rest shuffled: the jukebox's dice)
+                    Button {
+                        player.shuffleAll(library.songs)
+                    } label: {
+                        Label("Play something random", systemImage: "die.face.5")
+                            .font(.headline)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .disabled(library.songs.isEmpty)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         // (behind, not beside: a blurred cover filling the screen mustn't make the screen any wider)
@@ -402,20 +418,12 @@ private struct ExtraControls: View {
                 .accessibilityLabel("Flip to side \(song.side == "B" ? "A" : "B")")
             }
             if duo.isFoldable {
-                Button {
-                    duo.stepFoldFX()
-                    player.setFilterOpenness(duo.foldFXOpenness)
-                } label: {
+                FoldFXMenu {
                     FoldFXDial(size: 17)
                         .foregroundStyle(duo.foldFXTint)
                         .frame(width: 44, height: 44)
                         .glassEffect(.regular.interactive(), in: Circle())
                 }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: duo.foldFX)
-                .accessibilityLabel("Fold FX")
-                .accessibilityValue(duo.foldFXSpoken)
-                .accessibilityHint("Steps through off, live and locked")
             }
             if settings.isSupported {
                 Button {
