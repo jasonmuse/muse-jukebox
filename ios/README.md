@@ -5,13 +5,27 @@ does for Apple Music. Made for iPhone Duo.
 
 ## What's in it
 
-- **The jukebox.** Every song as a cover in a grid, the featured ones big at the top, moods to filter
-  by, search, sort and shuffle. Songs stream from muse-jukebox.pages.dev and are kept once they've
-  played, so they play again without signal.
-- **Now Playing.** The sleeve with the record sliding out of it and spinning at 33⅓, the song's wave
-  to scrub along, Liquid Glass controls, shuffle and repeat, Up Next and AirPlay, with the cover
-  glowing behind it all. Countdown Island flips to its slowed side B, and the record glides down to
-  the new speed. The lock screen, Control Center and headphone buttons all work.
+- **The jukebox.** Its records stand in a row to flip through (in 3D, like a jukebox's rack): the one
+  in front faces you, ready to play, with its flip side if it has one. Underneath are the title
+  strips, a row for each mood with a code for each record, as on a real jukebox: A is the newest,
+  then the biggest moods (B: Chill, so B3 is its third record), then the rest. Songs stream from
+  muse-jukebox.pages.dev and are kept once they've played, so they play again without signal.
+- **The selector.** Punch in a record's code like the real thing: a letter for the row, a number for
+  the record, its name lights up on an amber LED display, then play it or line it up next. Every
+  key clicks under your finger, and 🎲 picks one.
+- **Search.** Every song in one list, with mood chips, a sort, and each song's wave and length.
+- **Now Playing.** The record on the turntable's platter, spinning at 33⅓ with the tonearm swung
+  down onto it (and lifted off when it's paused), the record's code on an LED display, neon tubes up
+  the sides that flare with each haptic tap, the song's wave to scrub along and Liquid Glass
+  controls. Countdown Island has Side A and Side B (slowed): flip, and the record glides to the new
+  speed. Underneath are three labeled tools: Fold FX (iPhone Duo only), Haptics and Coming up (with
+  shuffle and repeat). AirPlay sits at the top. The lock screen, Control Center and headphone buttons
+  all work.
+- **Jukebot.** The robot in the back of the jukebox, with the app's settings (Music Haptics, and
+  Fold FX's sound on iPhone Duo) and links to the website, Frog Quest and Ko-fi. His repair game
+  comes next.
+- **The look.** "Muse" in the site's neon script (Pacifico, under the SIL Open Font License, in
+  `MuseJukebox/App/Fonts/`), LED lettering, and a night sky of stars behind it all.
 - **Music Haptics.** Every song comes with a haptic track (`haptics/<song>.json`, made by
   `tools/make-haptics.py` with the same beat tracker as the website's penguins):
   - a tap on every beat, harder where the song's loud and the beat hits hard;

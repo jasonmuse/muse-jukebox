@@ -237,7 +237,7 @@ struct Gatefold: View {
                 NowPlayingView(style: duo.isTabletop ? .stage : .page)
             } secondary: {
                 NavigationStack {
-                    LibraryView(showsDeck: duo.isTabletop, searchable: true)
+                    JukeboxHome(showsDeck: duo.isTabletop, searchable: true)
                 }
             }
             .arrangementViewStyle(.split)
@@ -245,7 +245,7 @@ struct Gatefold: View {
             HStack(spacing: 0) {
                 NowPlayingView(style: .page)
                 NavigationStack {
-                    LibraryView(searchable: true)
+                    JukeboxHome(searchable: true)
                 }
                 .frame(maxWidth: 520)
             }
@@ -380,6 +380,30 @@ extension Player.FoldEffect {
         case .slowmo: "tortoise.fill"
         case .crunch: "gamecontroller.fill"
         case .radio: "antenna.radiowaves.left.and.right"
+        }
+    }
+
+    /// What folding does, in a line
+    var blurb: String {
+        switch self {
+        case .filter: "Muffles it, like a DJ's filter knob"
+        case .echo: "Echoes, in time with the beat"
+        case .space: "A cathedral's worth of reverb"
+        case .slowmo: "The record winds down to half speed"
+        case .crunch: "Crunched like an old games console"
+        case .radio: "Squashed into a little speaker"
+        }
+    }
+
+    /// Its color in the rack
+    var tint: Color {
+        switch self {
+        case .filter: Theme.pink
+        case .echo: Theme.sky
+        case .space: Theme.lilac
+        case .slowmo: Theme.mint
+        case .crunch: Theme.cream
+        case .radio: Theme.orange
         }
     }
 }

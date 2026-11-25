@@ -70,7 +70,7 @@ struct SearchView: View {
                 .padding(.vertical, 8)
             }
             .scrollIndicators(.hidden)
-            .nightBackdrop()
+            .nightSky()
             .navigationTitle("Search")
             .searchable(text: $query, prompt: "Songs, moods, years, games")
             .toolbar {
@@ -88,7 +88,7 @@ struct SearchView: View {
 }
 
 /// What a long press on a song offers: play it, play it next, or play its game
-private struct SongActions: View {
+struct SongActions: View {
     let song: Song
     let songs: [Song]
     @Environment(Player.self) private var player
