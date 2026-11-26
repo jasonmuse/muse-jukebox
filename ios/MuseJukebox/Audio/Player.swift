@@ -81,6 +81,8 @@ final class Player {
     @ObservationIgnored private var toldRate: Double = 1
     @ObservationIgnored private var connectedFormat: AVAudioFormat?
     @ObservationIgnored private var file: AVAudioFile?
+    /// The file's length in frames, worked out as it was opened
+    @ObservationIgnored private var fileLength: AVAudioFramePosition = 0
     @ObservationIgnored private var segmentStart: AVAudioFramePosition = 0
     @ObservationIgnored private var pausedTime: TimeInterval = 0
     @ObservationIgnored private var segment = 0
@@ -211,7 +213,11 @@ final class Player {
 
     func pause() {
         playWhenLoaded = false
-        guard isPlaying else { return }
+        guard isPlaying else {
+            // (paused while the song's still on its way: the engine needn't run on for it)
+            idleEngine()
+            return
+        }
         let rendering = engine.isRunning
         pausedTime = min(duration, playedTime)
         isPlaying = false
@@ -389,11 +395,14 @@ final class Player {
         loading?.cancel()
         glide?.cancel()
         stopNode()
-        if engine.isRunning {
+        // (going straight on to another song the engine's left running, so the song starts the
+        // moment it's ready: stopping and starting the engine for every song held up the screen)
+        if engine.isRunning && !playing {
             engine.pause()
         }
         self.song = song
         file = nil
+        fileLength = 0
         beat = nil
         isPlaying = false
         isLoading = true
@@ -404,16 +413,25 @@ final class Player {
         jumps += 1
         loadArtwork(for: song)
         updateNowPlaying()
+        if playing {
+            wakeSession()
+        }
         loading = Task { [weak self] in
             guard let self else { return }
             do {
                 let url = try await cache.file(for: song)
                 try Task.checkCancellation()
-                let file = try AVAudioFile(forReading: url)
+                // (opened away from the main thread: working out an mp3's length can mean reading
+                // through the whole file, which held up the screen as the song started)
+                let opened = try await Task.detached(priority: .userInitiated) {
+                    try OpenedFile(url)
+                }.value
+                try Task.checkCancellation()
                 guard self.song == song else { return }
-                self.file = file
-                duration = Double(file.length) / file.processingFormat.sampleRate
-                connect(file.processingFormat)
+                file = opened.file
+                fileLength = opened.length
+                duration = Double(opened.length) / opened.file.processingFormat.sampleRate
+                connect(opened.file.processingFormat)
                 sideRate = song.rate
                 applyRate()
                 schedule(from: time)
@@ -421,6 +439,7 @@ final class Player {
                 if playWhenLoaded {
                     start()
                 } else {
+                    idleEngine()
                     updateNowPlaying()
                 }
                 fetchNext()
@@ -432,8 +451,25 @@ final class Player {
                 guard self.song == song else { return }
                 isLoading = false
                 couldNotLoad = true
+                idleEngine()
                 updateNowPlaying()
             }
+        }
+    }
+
+    /// The audio session woken in the background while the song's fetched and opened, so it's awake
+    /// by the time the song starts (waking it holds up whichever thread asks, the first time for a
+    /// good moment)
+    private func wakeSession() {
+        Task.detached(priority: .userInitiated) {
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
+    }
+
+    /// The engine paused while there's nothing for it to play, rather than left running silent
+    private func idleEngine() {
+        if engine.isRunning && !isPlaying {
+            engine.pause()
         }
     }
 
@@ -482,12 +518,12 @@ final class Player {
     private func schedule(from time: TimeInterval) {
         guard let file else { return }
         let sampleRate = file.processingFormat.sampleRate
-        let first = min(max(0, AVAudioFramePosition(time * sampleRate)), file.length)
+        let first = min(max(0, AVAudioFramePosition(time * sampleRate)), fileLength)
         segment += 1
         let current = segment
         segmentStart = first
         pausedTime = Double(first) / sampleRate
-        let frames = file.length - first
+        let frames = fileLength - first
         guard frames > 0 else { return }
         node.scheduleSegment(file, startingFrame: first, frameCount: AVAudioFrameCount(frames), at: nil,
                              completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
@@ -668,5 +704,17 @@ final class Player {
         if wasPlaying {
             start()
         }
+    }
+}
+
+/// A song's file, opened, and its length in frames (for an mp3, working that out can mean reading
+/// through the whole file, so it's done away from the main thread)
+private struct OpenedFile: @unchecked Sendable {
+    let file: AVAudioFile
+    let length: AVAudioFramePosition
+
+    init(_ url: URL) throws {
+        file = try AVAudioFile(forReading: url)
+        length = file.length
     }
 }

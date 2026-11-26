@@ -1,4 +1,5 @@
 import AVKit
+import CoreImage
 import SwiftUI
 
 /// The song that's on, now spinning: its record on the turntable's platter with the tonearm down on
@@ -165,19 +166,20 @@ private struct TopBar: View {
     }
 }
 
-/// The cover, big and blurred, glowing behind everything
+/// The cover, big and blurred, glowing behind everything. It's blurred once, small and away from the
+/// main thread, then stretched to fill the screen: blurring it live at that size cost every frame.
 private struct Backdrop: View {
     let image: UIImage?
+    @State private var blurred: UIImage?
 
     var body: some View {
         Theme.backdrop
             .overlay {
-                if let image {
-                    Image(uiImage: image.images?.first ?? image)
+                if let blurred {
+                    Image(uiImage: blurred)
                         .resizable()
+                        .interpolation(.high)
                         .scaledToFill()
-                        .blur(radius: 70)
-                        .saturation(1.5)
                         .opacity(0.55)
                         .transition(.opacity)
                 }
@@ -187,7 +189,39 @@ private struct Backdrop: View {
             }
             .clipped()
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: image)
+            .animation(.easeInOut(duration: 0.6), value: blurred)
+            .task(id: image.map { ObjectIdentifier($0) }) {
+                guard let image else {
+                    blurred = nil
+                    return
+                }
+                blurred = await BlurredCover.make(from: image.images?.first ?? image)
+            }
+    }
+}
+
+/// A cover blurred for the backdrop: small (stretched across the screen and blurred this much,
+/// nothing's lost), with its colors turned up by half
+private enum BlurredCover {
+    private static let context = CIContext(options: [.cacheIntermediates: false])
+    /// How many pixels across it's made
+    private static let side: CGFloat = 128
+
+    static func make(from image: UIImage) async -> UIImage? {
+        guard let source = image.cgImage else { return nil }
+        return await Task.detached(priority: .utility) { () -> UIImage? in
+            let cover = CIImage(cgImage: source)
+            let scale = BlurredCover.side / max(cover.extent.width, cover.extent.height, 1)
+            let small = cover.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            let frame = small.extent.integral
+            // (as blurred as a 70-point blur on the cover stretched to fill the screen)
+            let blurred = small.clampedToExtent()
+                .applyingGaussianBlur(sigma: 7)
+                .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1.5])
+                .cropped(to: frame)
+            guard let made = BlurredCover.context.createCGImage(blurred, from: frame) else { return nil }
+            return UIImage(cgImage: made)
+        }.value
     }
 }
 
@@ -261,22 +295,29 @@ private struct Tonearm: View {
 }
 
 /// The record, turning at 33⅓ with the song (slower for a slowed side, still when it's paused), with a
-/// sheen that stays where it is as the record turns under it
+/// sheen and its shadow that stay where they are as it turns under them
 struct SpinningRecord: View {
     let song: Song
     var shadowed = true
     @Environment(Player.self) private var player
 
     var body: some View {
+        // (only the record turns: a shadow turning with it would wheel round and round it)
         TimelineView(.animation(paused: !player.isPlaying)) { _ in
-            VinylRecord(song: song, shadowed: shadowed)
+            VinylRecord(song: song, shadowed: false)
                 .rotationEffect(.degrees(player.currentTime * 200))
         }
         .overlay {
+            // (white laid over the record lightens it just as a screen blend does, without the
+            // blend's extra pass every frame)
             AngularGradient(colors: [.clear, .white.opacity(0.13), .clear, .clear, .white.opacity(0.08), .clear, .clear], center: .center)
                 .clipShape(Circle())
-                .blendMode(.screen)
                 .allowsHitTesting(false)
+        }
+        .background {
+            if shadowed {
+                RecordShadow()
+            }
         }
     }
 }
@@ -307,9 +348,42 @@ struct VinylRecord: View {
                     .frame(width: size * 0.03, height: size * 0.03)
             }
             .frame(width: size, height: size)
-            .shadow(color: .black.opacity(shadowed ? 0.55 : 0), radius: shadowed ? 18 : 0, y: shadowed ? 10 : 0)
+            .background {
+                if shadowed {
+                    RecordShadow()
+                }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// A record's shadow on whatever's under it: soft, and a little below. It's drawn as a gradient
+/// rather than blurred, so it costs next to nothing, even under records flying past in the wall.
+struct RecordShadow: View {
+    /// How far it shades off, either side of the record's edge
+    private let softness: CGFloat = 10
+
+    var body: some View {
+        GeometryReader { geometry in
+            let radius = min(geometry.size.width, geometry.size.height) / 2
+            let reach = radius + (softness * 3)
+            Circle()
+                .fill(RadialGradient(stops: stops(radius: radius, reach: reach), center: .center, startRadius: 0, endRadius: reach))
+                .frame(width: reach * 2, height: reach * 2)
+                .position(x: geometry.size.width / 2, y: (geometry.size.height / 2) + 10)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// A blurred disc's edge: dark inside it, shading off over a few points either side of the edge
+    private func stops(radius: CGFloat, reach: CGFloat) -> [Gradient.Stop] {
+        let edge: [(past: CGFloat, left: Double)] = [(-2, 0.98), (-1, 0.84), (0, 0.5), (1, 0.16), (2, 0.02), (3, 0)]
+        let shading = edge.map { point in
+            Gradient.Stop(color: .black.opacity(0.55 * point.left), location: max(0, (radius + (point.past * softness)) / reach))
+        }
+        return [Gradient.Stop(color: .black.opacity(0.55), location: 0)] + shading
     }
 }
 
@@ -380,10 +454,13 @@ struct Scrubber: View {
     @State private var dragging: Double?
 
     var body: some View {
+        let levels = player.song?.waveform ?? []
         VStack(spacing: 6) {
             GeometryReader { geometry in
-                TimelineView(.animation(paused: !player.isPlaying || dragging != nil)) { _ in
-                    WaveformBars(levels: player.song?.waveform ?? [], progress: dragging ?? player.progress)
+                // (another bar lights up every second or two: so it's checked four times a second, and
+                // the bars are only drawn again when one does, rather than every frame)
+                TimelineView(.animation(minimumInterval: 0.25, paused: !player.isPlaying || dragging != nil)) { _ in
+                    WaveformBars(levels: levels, lit: WaveformBars.litCount(at: dragging ?? player.progress, of: levels))
                 }
                 .contentShape(Rectangle())
                 .gesture(
@@ -423,14 +500,27 @@ struct Scrubber: View {
     }
 }
 
-/// The wave's bars: a mirror of how loud the song is along the way, drawn as the site draws it
+/// The wave's bars: a mirror of how loud the song is along the way, drawn as the site draws it, lit
+/// as far as the song's got
 struct WaveformBars: View {
     let levels: [Double]
-    let progress: Double
+    /// How many of the bars are lit, from the left
+    let lit: Int
+
+    /// Bars all the same height, while the song's wave isn't known
+    private static let placeholder = Array(repeating: 0.62, count: 64)
+
+    /// How many of a wave's bars are lit `progress` (0 to 1) of the way along it: each one once the
+    /// song's halfway along it
+    static func litCount(at progress: Double, of levels: [Double]) -> Int {
+        let count = levels.isEmpty ? placeholder.count : levels.count
+        guard progress.isFinite else { return 0 }
+        return Int((min(max(progress, 0), 1) * Double(count)).rounded())
+    }
 
     var body: some View {
         Canvas { context, size in
-            let shown = levels.isEmpty ? Array(repeating: 0.62, count: 64) : levels
+            let shown = levels.isEmpty ? Self.placeholder : levels
             let count = shown.count
             let step = size.width / CGFloat(count)
             let barWidth = max(1.5, step * 0.62)
@@ -441,7 +531,7 @@ struct WaveformBars: View {
                 let height = max(barWidth, size.height * CGFloat(pow(level, 2.4)))
                 let x = (CGFloat(index) * step) + ((step - barWidth) / 2)
                 let bar = Path(roundedRect: CGRect(x: x, y: (size.height - height) / 2, width: barWidth, height: height), cornerRadius: barWidth / 2)
-                if (Double(index) + 0.5) / Double(count) <= progress {
+                if index < lit {
                     played.addPath(bar)
                 } else {
                     unplayed.addPath(bar)
@@ -457,6 +547,7 @@ struct WaveformBars: View {
 struct Transport: View {
     var compact = false
     @Environment(Player.self) private var player
+    @State private var presses = 0
 
     var body: some View {
         GlassEffectContainer(spacing: 18) {
@@ -464,6 +555,7 @@ struct Transport: View {
                 button("backward.fill", label: "Previous", size: compact ? 44 : 58) { player.previous() }
                 Button {
                     player.togglePlayPause()
+                    presses += 1
                 } label: {
                     ZStack {
                         if player.isLoading {
@@ -481,7 +573,9 @@ struct Transport: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-                .sensoryFeedback(.impact(weight: .medium), trigger: player.isPlaying)
+                // (a thump for the press, not whenever the song stops or starts: the next song
+                // coming on, say, or the lock screen's button)
+                .sensoryFeedback(.impact(weight: .medium), trigger: presses)
                 button("forward.fill", label: "Next", size: compact ? 44 : 58) { player.next() }
             }
         }
@@ -601,6 +695,9 @@ private struct NeonTubes: View {
     @Environment(HapticsSettings.self) private var settings
     @Environment(HapticsConductor.self) private var conductor
 
+    /// Room either side of a tube for its glow
+    private static let room: CGFloat = 18
+
     var body: some View {
         TimelineView(.animation(paused: !player.isPlaying)) { context in
             let time = player.currentTime
@@ -614,6 +711,8 @@ private struct NeonTubes: View {
                 Spacer()
                 tube(flare: flare, clock: clock, playing: playing, seed: 1.7)
             }
+            // (the tubes where they'd be without the room for their glow)
+            .padding(.horizontal, -Self.room)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -621,23 +720,59 @@ private struct NeonTubes: View {
 
     private func tube(flare: Double, clock: Double, playing: Bool, seed: Double) -> some View {
         Canvas { context, size in
-            let shape = Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: size.width / 2)
-            context.fill(shape, with: .linearGradient(Gradient(colors: Theme.rings), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+            let room = Self.room
+            let tube = CGRect(x: room, y: room, width: max(1, size.width - (room * 2)), height: max(1, size.height - (room * 2)))
+            let shine = 0.5 + (0.5 * flare)
+            Self.glow(round: tube, reach: 6 + (10 * flare), color: Theme.lilac.opacity((0.35 + (0.5 * flare)) * shine), in: context)
+            context.opacity = shine
+            let shape = Path(roundedRect: tube, cornerRadius: tube.width / 2)
+            context.fill(shape, with: .linearGradient(Gradient(colors: Theme.rings), startPoint: CGPoint(x: 0, y: tube.minY), endPoint: CGPoint(x: 0, y: tube.maxY)))
             guard playing else { return }
+            var inside = context
+            inside.clip(to: shape)
             for bubble in 0..<6 {
                 let speed = 38 + (Double(bubble) * 7)
-                let travel = Double(size.height) + 20
+                let travel = Double(tube.height) + 20
                 let rise = ((clock * speed) + (Double(bubble) * 97) + (seed * 50)).truncatingRemainder(dividingBy: travel)
-                let radius = size.width * (0.26 + (0.06 * CGFloat(bubble % 3)))
-                let y = size.height + 10 - CGFloat(rise)
-                context.fill(Path(ellipseIn: CGRect(x: (size.width / 2) - radius, y: y - radius, width: radius * 2, height: radius * 2)),
-                             with: .color(.white.opacity(0.75)))
+                let radius = tube.width * (0.26 + (0.06 * CGFloat(bubble % 3)))
+                let y = tube.maxY + 10 - CGFloat(rise)
+                inside.fill(Path(ellipseIn: CGRect(x: tube.midX - radius, y: y - radius, width: radius * 2, height: radius * 2)),
+                            with: .color(.white.opacity(0.75)))
             }
         }
-        .frame(width: 7)
-        .opacity(0.5 + (0.5 * flare))
-        .shadow(color: Theme.lilac.opacity(0.35 + (0.5 * flare)), radius: 6 + (10 * flare))
-        .padding(.vertical, 120)
+        .frame(width: 7 + (Self.room * 2))
+        .padding(.vertical, 120 - Self.room)
+    }
+
+    /// A tube's glow: a gradient out from its edge as far as `reach`, drawn rather than blurred (a
+    /// blurred glow that changes with every tap is blurred afresh every frame)
+    private static func glow(round tube: CGRect, reach: CGFloat, color: Color, in context: GraphicsContext) {
+        let half = tube.width / 2
+        let outer = half + reach
+        // (how strong it is, out from the tube's middle: as strong under the tube as at its edge,
+        // then fading away)
+        let fade: [(out: CGFloat, strength: Double)] = [(half, 0.6), (half + (reach * 0.4), 0.22), (outer, 0)]
+        // Down its sides, from the middle of one end to the middle of the other
+        let sides = CGRect(x: tube.midX - outer, y: tube.minY + half, width: outer * 2, height: max(0, tube.height - tube.width))
+        var across: [Gradient.Stop] = []
+        for point in fade.reversed() {
+            across.append(Gradient.Stop(color: color.opacity(point.strength), location: (outer - point.out) / (outer * 2)))
+        }
+        for point in fade {
+            across.append(Gradient.Stop(color: color.opacity(point.strength), location: (outer + point.out) / (outer * 2)))
+        }
+        context.fill(Path(sides), with: .linearGradient(Gradient(stops: across), startPoint: CGPoint(x: sides.minX, y: 0),
+                                                        endPoint: CGPoint(x: sides.maxX, y: 0)))
+        // Round each end
+        let around = [Gradient.Stop(color: color.opacity(0.6), location: 0)] + fade.map { point in
+            Gradient.Stop(color: color.opacity(point.strength), location: point.out / outer)
+        }
+        for (end, above) in [(CGPoint(x: tube.midX, y: tube.minY + half), true), (CGPoint(x: tube.midX, y: tube.maxY - half), false)] {
+            var cap = context
+            cap.clip(to: Path(CGRect(x: end.x - outer, y: above ? end.y - outer : end.y, width: outer * 2, height: outer)))
+            cap.fill(Path(ellipseIn: CGRect(x: end.x - outer, y: end.y - outer, width: outer * 2, height: outer * 2)),
+                     with: .radialGradient(Gradient(stops: around), center: end, startRadius: 0, endRadius: outer))
+        }
     }
 }
 

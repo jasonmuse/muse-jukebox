@@ -90,11 +90,17 @@ struct Song: Identifiable, Hashable, Decodable, Sendable {
     /// The song's wave (from waves.json): how loud it is at 96 points along, 0 to 1
     var waveform: [Double] {
         guard let shape else { return [] }
-        let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
-        return shape.map { letter in
-            Double(alphabet.firstIndex(of: letter) ?? 0) / 63
-        }
+        return shape.utf8.map { Self.waveLevels[Int($0)] }
     }
+
+    /// What each letter of a wave stands for (A is 0, _ is 1), looked up by its character code
+    private static let waveLevels: [Double] = {
+        var levels = Array(repeating: 0.0, count: 256)
+        for (place, letter) in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".utf8.enumerated() {
+            levels[Int(letter)] = Double(place) / 63
+        }
+        return levels
+    }()
 }
 
 struct SongCatalog: Decodable {

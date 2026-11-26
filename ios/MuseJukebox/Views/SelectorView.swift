@@ -25,10 +25,12 @@ struct SelectorView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                // (each part its own view, so a key press redraws only what it changes: not every
+                // key, with all their glass and glow, every time)
                 VStack(spacing: 18) {
-                    display
-                    letterKeys
-                    numberKeys
+                    SelectionDisplay(code: code, song: song, hint: hint)
+                    LetterKeys(rows: library.rows, letter: $letter, number: $number, presses: $presses)
+                    NumberKeys(letter: $letter, number: $number, presses: $presses)
                         .padding(.top, 4)
                     actions
                 }
@@ -42,9 +44,56 @@ struct SelectorView: View {
         }
     }
 
-    // MARK: - The display
+    private var hint: String {
+        guard let row else { return "Pick a row,\nthen a number" }
+        if number.isEmpty {
+            return "\(row.name)\n1 to \(row.songs.count)"
+        }
+        return "Nothing at \(code)"
+    }
 
-    private var display: some View {
+    // MARK: - Play
+
+    private var actions: some View {
+        HStack(spacing: 10) {
+            Button {
+                if let song, let row {
+                    player.play(song, in: row.songs)
+                }
+            } label: {
+                Label(song == nil ? "Play" : "Play \(code)", systemImage: "play.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Theme.pink)
+            .disabled(song == nil)
+
+            Button {
+                if let song {
+                    player.playNext(song)
+                }
+            } label: {
+                Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.glass)
+            .disabled(song == nil)
+        }
+    }
+}
+
+/// The selector's display: the code punched in so far, glowing amber with its cursor blinking, and
+/// the record it picks (or what to punch in next)
+private struct SelectionDisplay: View {
+    let code: String
+    let song: Song?
+    let hint: String
+
+    var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 LEDText(text: "Selection", color: Brand.amber.opacity(0.7), size: 10)
@@ -54,14 +103,7 @@ struct SelectorView: View {
                         .foregroundStyle(Brand.amber)
                         .shadow(color: Brand.amber.opacity(0.9), radius: 8)
                         .contentTransition(.numericText())
-                    TimelineView(.periodic(from: .now, by: 0.5)) { context in
-                        let lit = Int(context.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
-                        Rectangle()
-                            .fill(Brand.amber)
-                            .frame(width: 4, height: 40)
-                            .opacity(lit ? 0.9 : 0)
-                            .shadow(color: Brand.amber, radius: 6)
-                    }
+                    BlinkingCursor()
                 }
             }
             Spacer(minLength: 8)
@@ -88,33 +130,47 @@ struct SelectorView: View {
         .padding(18)
         .frame(minHeight: 118)
         .background {
+            // (the glow comes off the panel itself, so it isn't worked out afresh from everything on
+            // the display whenever a key changes it)
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.04, green: 0.035, blue: 0.07), Color(red: 0.07, green: 0.063, blue: 0.13)],
                                      startPoint: .top, endPoint: .bottom))
+                .shadow(color: Brand.amber.opacity(0.18), radius: 18)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Brand.amber.opacity(0.3), lineWidth: 1)
         }
-        .shadow(color: Brand.amber.opacity(0.18), radius: 18)
         .animation(.snappy, value: code)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(song.map { "\(code): \($0.title)" } ?? (code.isEmpty ? "No selection" : "Selection \(code)"))
     }
+}
 
-    private var hint: String {
-        guard let row else { return "Pick a row,\nthen a number" }
-        if number.isEmpty {
-            return "\(row.name)\n1 to \(row.songs.count)"
+/// The display's cursor, blinking twice a second
+private struct BlinkingCursor: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let lit = Int(context.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+            Rectangle()
+                .fill(Brand.amber)
+                .frame(width: 4, height: 40)
+                .opacity(lit ? 0.9 : 0)
+                .shadow(color: Brand.amber, radius: 6)
         }
-        return "Nothing at \(code)"
     }
+}
 
-    // MARK: - The keys
+/// A key for each row of the jukebox: its letter and its mood, lit up in its color once it's picked
+private struct LetterKeys: View {
+    let rows: [JukeboxRow]
+    @Binding var letter: String?
+    @Binding var number: String
+    @Binding var presses: Int
 
-    private var letterKeys: some View {
+    var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
-            ForEach(library.rows) { row in
+            ForEach(rows) { row in
                 let chosen = letter == row.letter
                 Button {
                     letter = row.letter
@@ -138,7 +194,8 @@ struct SelectorView: View {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .strokeBorder(chosen ? row.tint.opacity(0.7) : .white.opacity(0.14), lineWidth: 1)
                     }
-                    .shadow(color: chosen ? row.tint.opacity(0.45) : .clear, radius: 10)
+                    // (only the picked key glows: the others have no shadow to draw at all)
+                    .shadow(color: row.tint.opacity(chosen ? 0.45 : 0), radius: chosen ? 10 : 0)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Row \(row.letter), \(row.name)")
@@ -146,10 +203,21 @@ struct SelectorView: View {
             }
         }
     }
+}
 
-    private var numberKeys: some View {
+/// The number keys: 1 to 9 and 0 for the record in the row, delete, and a die to pick one at random.
+/// They only change what's punched in, so pressing one doesn't redraw them.
+private struct NumberKeys: View {
+    @Binding var letter: String?
+    @Binding var number: String
+    @Binding var presses: Int
+    @Environment(Library.self) private var library
+
+    private static let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "🎲"]
+
+    var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.fixed(76), spacing: 22), count: 3), spacing: 14) {
-            ForEach(["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "🎲"], id: \.self) { key in
+            ForEach(Self.keys, id: \.self) { key in
                 Button {
                     press(key)
                 } label: {
@@ -192,39 +260,6 @@ struct SelectorView: View {
         default:
             guard letter != nil, number.count < 2, !(number.isEmpty && key == "0") else { return }
             number += key
-        }
-    }
-
-    // MARK: - Play
-
-    private var actions: some View {
-        HStack(spacing: 10) {
-            Button {
-                if let song, let row {
-                    player.play(song, in: row.songs)
-                }
-            } label: {
-                Label(song == nil ? "Play" : "Play \(code)", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(Theme.pink)
-            .disabled(song == nil)
-
-            Button {
-                if let song {
-                    player.playNext(song)
-                }
-            } label: {
-                Label("Play next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.glass)
-            .disabled(song == nil)
         }
     }
 }

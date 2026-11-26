@@ -23,6 +23,9 @@ struct FoldFXRack: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 FoldGauge(amount: duo.foldFXAmount, detail: detail, tint: duo.foldFX == .off ? .white : duo.foldFXTint)
+                    // (it swings round when it's turned on, off or locked; following the hinge it
+                    // just moves with it, many times a second, not easing after it each time)
+                    .animation(.snappy, value: mode)
                 Picker("Fold FX", selection: Binding(get: { mode }, set: { choose($0) })) {
                     Text("Off").tag(Mode.off)
                     Text("Live").tag(Mode.live)
@@ -117,7 +120,6 @@ private struct FoldGauge: View {
         }
         .padding(18)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .animation(.snappy, value: amount)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fold FX: \(Int((amount * 100).rounded())) percent. \(detail)")
     }
@@ -189,7 +191,7 @@ private struct SoundTile: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(isOn ? effect.tint.opacity(0.65) : .white.opacity(0.12), lineWidth: 1)
             }
-            .shadow(color: isOn ? effect.tint.opacity(0.3) : .clear, radius: 12)
+            .shadow(color: effect.tint.opacity(isOn ? 0.3 : 0), radius: isOn ? 12 : 0)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

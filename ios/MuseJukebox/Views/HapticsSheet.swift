@@ -151,7 +151,8 @@ struct HapticPulse: View {
     @Environment(HapticsConductor.self) private var conductor
 
     var body: some View {
-        TimelineView(.animation(paused: !player.isPlaying || !settings.isActive)) { _ in
+        // (still while there are no taps to show: no haptics, or the song's haptic track not here yet)
+        TimelineView(.animation(paused: !player.isPlaying || !settings.isActive || conductor.track == nil)) { _ in
             let time = player.currentTime
             let tap = conductor.track?.lastTap(atOrBefore: time, beatsOnly: settings.mix == .beats)
             let since = tap.map { (time - $0.time) / max(player.rate, 0.1) } ?? 10
