@@ -3566,6 +3566,7 @@ html {
 #jukebox:not(.is-flipped) .jb-eye--open,
 #jukebox:not(.is-flipped) .jb-fan-blades,
 #jukebox:not(.is-flipped) .jb-antenna-led,
+#jukebox:not(.is-flipped) .back-title::after,
 #jukebox.is-flipped .title-muse-wrap::after,
 #jukebox.is-flipped .penguin-icon,
 #jukebox.is-flipped .title-waves svg,
