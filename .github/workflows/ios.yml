@@ -204,11 +204,13 @@ jobs:
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[testflight]'))
     runs-on: xcode-27
     timeout-minutes: 45
+    # The App Store Connect key itself (ASC_KEY) only goes to the step that writes it to a file:
+    # owner-only, in the runner's temp folder (ASC_KEY_PATH, set by the first step), and removed at
+    # the end however the job goes. Nothing prints it. The workflow never runs for pull requests, so
+    # a fork's pull request can't reach it.
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY: ${{ secrets.ASC_KEY }}
-      ASC_KEY_PATH: ${{ github.workspace }}/../AuthKey.p8
       # (optional: worked out from the app's ID when it isn't set)
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       # (higher every run, and every re-run of one)
@@ -216,11 +218,16 @@ jobs:
     steps:
       - name: Check the App Store Connect secrets are set
         id: secrets
+        env:
+          # (whether the key's set, not the key)
+          ASC_KEY_SET: ${{ secrets.ASC_KEY != '' }}
         run: |
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
           missing=""
-          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY; do
+          for name in ASC_KEY_ID ASC_ISSUER_ID; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
+          if [ "$ASC_KEY_SET" != true ]; then missing="$missing ASC_KEY"; fi
           if [ -z "$missing" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
@@ -240,8 +247,11 @@ jobs:
       - name: Get App Store Connect ready
         id: asc
         if: steps.secrets.outputs.ready == 'true'
+        env:
+          ASC_KEY: ${{ secrets.ASC_KEY }}
         run: |
-          printf '%s\n' "$ASC_KEY" > "$ASC_KEY_PATH"
+          (umask 077 && printf '%s\n' "$ASC_KEY" > "$ASC_KEY_PATH")
+          unset ASC_KEY
           python3 ios/TestFlight/appstoreconnect.py prepare
 
       - name: Is TestFlight's build getting old?

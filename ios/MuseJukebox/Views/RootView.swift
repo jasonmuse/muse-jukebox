@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// On a phone: the songs and search as tabs, the song that's on along the bottom, and Now Playing
-/// a tap away. With room for both (iPhone Duo open, an iPad): the gatefold, Now Playing and the
-/// songs side by side.
+/// On a phone: the jukebox, the selector, Jukebot and search as tabs, the song that's on along the
+/// bottom, and Now Playing a tap away. With room for both (iPhone Duo open, an iPad): the gatefold,
+/// Now Playing and the jukebox side by side.
 struct RootView: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.verticalSizeClass) private var heightClass
@@ -32,15 +32,23 @@ struct RootView: View {
     nonisolated static let showsNowPlaying = ProcessInfo.processInfo.arguments.contains("-showNowPlaying")
 }
 
+/// The jukebox's four tabs: the jukebox itself (its records and title strips), the selector to punch
+/// in a code, Jukebot in the back, and search
 private struct PhoneLayout: View {
     @State private var showingNowPlaying = RootView.showsNowPlaying
 
     var body: some View {
         TabView {
-            Tab("Jukebox", systemImage: "music.note.house.fill") {
+            Tab("Jukebox", systemImage: "opticaldisc") {
                 NavigationStack {
-                    LibraryView()
+                    JukeboxHome()
                 }
+            }
+            Tab("Selector", systemImage: "circle.grid.3x3.fill") {
+                SelectorView()
+            }
+            Tab("Jukebot", systemImage: "cpu") {
+                JukebotView()
             }
             Tab(role: .search) {
                 SearchView()

@@ -80,6 +80,13 @@ struct Song: Identifiable, Hashable, Decodable, Sendable {
         ([year] + shownTags.prefix(2)).filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
+    /// How long it plays, as "2:51" (empty when that's not known)
+    var lengthText: String {
+        guard let duration, duration.isFinite, duration > 0 else { return "" }
+        let whole = Int(duration.rounded())
+        return String(format: "%d:%02d", whole / 60, whole % 60)
+    }
+
     /// The song's wave (from waves.json): how loud it is at 96 points along, 0 to 1
     var waveform: [Double] {
         guard let shape else { return [] }
