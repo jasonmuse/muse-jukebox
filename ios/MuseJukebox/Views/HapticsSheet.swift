@@ -158,17 +158,19 @@ struct HapticPulse: View {
             let since = tap.map { (time - $0.time) / max(player.rate, 0.1) } ?? 10
             let strength = (tap?.power ?? 0) * (0.35 + (0.65 * player.filterOpenness))
             let showing = settings.isActive && player.isPlaying && since < 0.9
-            Canvas { context, size in
-                guard showing else { return }
-                let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let largest = min(size.width, size.height) / 2
-                for ring in 0..<3 {
-                    let along = min(1, max(0, (since - (Double(ring) * 0.07)) / 0.75))
-                    guard along > 0 else { continue }
-                    let radius = largest * (0.55 + (0.45 * along))
-                    let fade = (1 - along) * strength
-                    let circle = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-                    context.stroke(circle, with: .color(Theme.rings[ring].opacity(fade * 0.9)), lineWidth: 2 + (6 * fade))
+            // (no rings out, nothing to draw: the canvas goes, rather than being drawn empty every frame)
+            if showing {
+                Canvas { context, size in
+                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                    let largest = min(size.width, size.height) / 2
+                    for ring in 0..<3 {
+                        let along = min(1, max(0, (since - (Double(ring) * 0.07)) / 0.75))
+                        guard along > 0 else { continue }
+                        let radius = largest * (0.55 + (0.45 * along))
+                        let fade = (1 - along) * strength
+                        let circle = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+                        context.stroke(circle, with: .color(Theme.rings[ring].opacity(fade * 0.9)), lineWidth: 2 + (6 * fade))
+                    }
                 }
             }
         }

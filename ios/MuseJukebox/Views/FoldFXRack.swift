@@ -22,9 +22,10 @@ struct FoldFXRack: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                FoldGauge(amount: duo.foldFXAmount, detail: detail, tint: duo.foldFX == .off ? .white : duo.foldFXTint)
-                    // (it swings round when it's turned on, off or locked; following the hinge it
-                    // just moves with it, many times a second, not easing after it each time)
+                // (it watches the hinge itself, so as the phone folds only the gauge redraws; and it
+                // swings round when Fold FX is turned on, off or locked, but following the hinge it
+                // just moves with it, many times a second, not easing after it each time)
+                FoldGauge()
                     .animation(.snappy, value: mode)
                 Picker("Fold FX", selection: Binding(get: { mode }, set: { choose($0) })) {
                     Text("Off").tag(Mode.off)
@@ -57,17 +58,6 @@ struct FoldFXRack: View {
         .sensoryFeedback(.selection, trigger: duo.foldFX)
     }
 
-    private var detail: String {
-        switch duo.foldFX {
-        case .off:
-            return "Off: pick a sound to go live"
-        case .locked:
-            return "Locked: stays put, open or closed"
-        case .live:
-            return duo.hinge == .partiallyOpen ? "Hinge at \(Int(duo.angle.rounded()))°" : "Fold the phone to bring it in"
-        }
-    }
-
     private func choose(_ mode: Mode) {
         switch mode {
         case .off:
@@ -83,9 +73,26 @@ struct FoldFXRack: View {
 
 /// How far in the sound is: a needle sweeping an arc from open (left) to folded (right)
 private struct FoldGauge: View {
-    let amount: Double
-    let detail: String
-    let tint: Color
+    @Environment(DuoState.self) private var duo
+
+    private var amount: Double {
+        duo.foldFXAmount
+    }
+
+    private var tint: Color {
+        duo.foldFX == .off ? .white : duo.foldFXTint
+    }
+
+    private var detail: String {
+        switch duo.foldFX {
+        case .off:
+            return "Off: pick a sound to go live"
+        case .locked:
+            return "Locked: stays put, open or closed"
+        case .live:
+            return duo.hinge == .partiallyOpen ? "Hinge at \(Int(duo.angle.rounded()))°" : "Fold the phone to bring it in"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 4) {

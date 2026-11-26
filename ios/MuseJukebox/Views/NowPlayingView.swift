@@ -101,7 +101,7 @@ struct NowPlayingView: View {
         }
         // (behind, not beside: a blurred cover filling the screen mustn't make the screen any wider)
         .background {
-            Backdrop(image: player.artwork)
+            Backdrop()
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingHaptics) {
@@ -169,7 +169,7 @@ private struct TopBar: View {
 /// The cover, big and blurred, glowing behind everything. It's blurred once, small and away from the
 /// main thread, then stretched to fill the screen: blurring it live at that size cost every frame.
 private struct Backdrop: View {
-    let image: UIImage?
+    @Environment(Player.self) private var player
     @State private var blurred: UIImage?
 
     var body: some View {
@@ -190,11 +190,11 @@ private struct Backdrop: View {
             .clipped()
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: blurred)
-            .task(id: image.map { ObjectIdentifier($0) }) {
-                guard let image else {
-                    blurred = nil
-                    return
-                }
+            // (the cover's watched here, so a new one redraws the backdrop, not all of Now Playing; and
+            // while the next song's cover is on its way the last one stays, rather than the backdrop
+            // dipping to plain between songs)
+            .task(id: player.artwork.map { ObjectIdentifier($0) }) {
+                guard let image = player.artwork else { return }
                 blurred = await BlurredCover.make(from: image.images?.first ?? image)
             }
     }
@@ -502,7 +502,7 @@ struct Scrubber: View {
 
 /// The wave's bars: a mirror of how loud the song is along the way, drawn as the site draws it, lit
 /// as far as the song's got
-struct WaveformBars: View {
+struct WaveformBars: View, Equatable {
     let levels: [Double]
     /// How many of the bars are lit, from the left
     let lit: Int

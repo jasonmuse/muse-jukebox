@@ -4,10 +4,11 @@ import Observation
 import UIKit
 
 /// Plays the songs. Each song's file is fetched once and kept, then played through AVAudioEngine:
-/// the player, a varispeed (a slowed side plays slower and lower, like a record), then Fold FX's
-/// effects (on iPhone Duo: a filter, a crusher, an echo and a reverb, each doing nothing until
-/// folding brings it in). Knows to the sample where the song is, which the haptics are timed by.
-/// Keeps the lock screen, Control Center and headphone buttons in step.
+/// the player, a mixer (whatever the file, stereo at one rate from here on), a varispeed (a slowed
+/// side plays slower and lower, like a record), then Fold FX's effects (on iPhone Duo: a filter, a
+/// crusher, an echo and a reverb, each doing nothing until folding brings it in). Knows to the
+/// sample where the song is, which the haptics are timed by. Keeps the lock screen, Control Center
+/// and headphone buttons in step.
 @MainActor
 @Observable
 final class Player {
@@ -67,7 +68,9 @@ final class Player {
     private let varispeed = AVAudioUnitVarispeed()
     /// Fold FX's filters: a low-pass, and a high-pass (the radio)
     private let filter = AVAudioUnitEQ(numberOfBands: 2)
-    /// (everything from here on in stereo, which the effects after it are happiest with)
+    /// Straight after the player: every file comes out of it the same, in stereo at one rate (which
+    /// the effects are happiest with), so a song at another rate needs only the player plugged in
+    /// again, and that can be done with the engine running
     private let effectsMixer = AVAudioMixerNode()
     private let crusher = AVAudioUnitDistortion()
     private let echo = AVAudioUnitDelay()
@@ -80,16 +83,23 @@ final class Player {
     /// The speed the lock screen was last told about
     @ObservationIgnored private var toldRate: Double = 1
     @ObservationIgnored private var connectedFormat: AVAudioFormat?
+    /// Whether everything after the player's wired up (it's done once)
+    @ObservationIgnored private var chainWired = false
     @ObservationIgnored private var file: AVAudioFile?
     /// The file's length in frames, worked out as it was opened
     @ObservationIgnored private var fileLength: AVAudioFramePosition = 0
     @ObservationIgnored private var segmentStart: AVAudioFramePosition = 0
-    @ObservationIgnored private var pausedTime: TimeInterval = 0
+    /// Where it is while it's paused (watched, so a jump while it's paused shows: the wave and the
+    /// record are still then, with nothing else to redraw them)
+    private var pausedTime: TimeInterval = 0
     @ObservationIgnored private var segment = 0
     @ObservationIgnored private var playWhenLoaded = false
     @ObservationIgnored private var resumeAfterInterruption = false
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private var glide: Task<Void, Never>?
+    /// The engine's pause, a little while after the song's (so playing again straight away needn't
+    /// start the engine up again)
+    @ObservationIgnored private var resting: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// Where the player was last seen (host time, song time), for when the engine's stopped under it
     @ObservationIgnored private var lastSeen: (at: TimeInterval, time: TimeInterval) = (0, 0)
@@ -222,8 +232,10 @@ final class Player {
         pausedTime = min(duration, playedTime)
         isPlaying = false
         if rendering {
+            // (just the player: the engine pauses a few seconds on, so playing again before then
+            // starts straight away, without waiting on the engine)
             node.pause()
-            engine.pause()
+            restEngineSoon()
         } else {
             // (iOS has stopped the engine under it: the song's queued again from where it got to)
             stopNode()
@@ -394,6 +406,7 @@ final class Player {
     private func load(_ song: Song, from time: TimeInterval = 0, playing: Bool) {
         loading?.cancel()
         glide?.cancel()
+        resting?.cancel()
         stopNode()
         // (going straight on to another song the engine's left running, so the song starts the
         // moment it's ready: stopping and starting the engine for every song held up the screen)
@@ -434,7 +447,8 @@ final class Player {
                 connect(opened.file.processingFormat)
                 sideRate = song.rate
                 applyRate()
-                schedule(from: time)
+                // (from where it was moved to while it loaded, if it was)
+                schedule(from: pausedTime)
                 isLoading = false
                 if playWhenLoaded {
                     start()
@@ -468,31 +482,47 @@ final class Player {
 
     /// The engine paused while there's nothing for it to play, rather than left running silent
     private func idleEngine() {
+        resting?.cancel()
         if engine.isRunning && !isPlaying {
             engine.pause()
         }
     }
 
-    /// The player, varispeed and Fold FX's effects wired up for the song's file (only when its
-    /// format's new). From the effects mixer on it's in stereo, whatever the file is.
-    private func connect(_ format: AVAudioFormat) {
-        if let connectedFormat, connectedFormat == format { return }
-        engine.stop()
-        for unit in [node, varispeed, filter, effectsMixer, crusher, echo, reverb] as [AVAudioNode] {
-            engine.disconnectNodeOutput(unit)
+    /// The engine paused in a few seconds, if the song's still paused then
+    private func restEngineSoon() {
+        resting?.cancel()
+        resting = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, !Task.isCancelled, !self.isPlaying, !self.isLoading else { return }
+            if self.engine.isRunning {
+                self.engine.pause()
+            }
         }
-        let stereo = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 2) ?? format
-        engine.connect(node, to: varispeed, format: format)
-        engine.connect(varispeed, to: filter, format: format)
-        engine.connect(filter, to: effectsMixer, format: format)
-        engine.connect(effectsMixer, to: crusher, format: stereo)
-        engine.connect(crusher, to: echo, format: stereo)
-        engine.connect(echo, to: reverb, format: stereo)
-        engine.connect(reverb, to: engine.mainMixerNode, format: stereo)
+    }
+
+    /// The player plugged in for the song's file. Everything after it is wired once, in stereo at one
+    /// rate, so a file at another rate (some songs are 48 kHz, most 44.1) only needs the player
+    /// plugged into the mixer again: that can be done while the engine runs, where rewiring the lot
+    /// meant stopping the engine and starting it from cold, a stall between songs.
+    private func connect(_ format: AVAudioFormat) {
+        if !chainWired {
+            let stereo = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2) ?? format
+            engine.connect(effectsMixer, to: varispeed, format: stereo)
+            engine.connect(varispeed, to: filter, format: stereo)
+            engine.connect(filter, to: crusher, format: stereo)
+            engine.connect(crusher, to: echo, format: stereo)
+            engine.connect(echo, to: reverb, format: stereo)
+            engine.connect(reverb, to: engine.mainMixerNode, format: stereo)
+            chainWired = true
+        }
+        if let connectedFormat, connectedFormat == format { return }
+        engine.disconnectNodeOutput(node)
+        engine.connect(node, to: effectsMixer, fromBus: 0, toBus: 0, format: format)
         connectedFormat = format
     }
 
     private func start() {
+        resting?.cancel()
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             if !engine.isRunning {
@@ -585,6 +615,11 @@ final class Player {
     }
 
     private func loadArtwork(for song: Song) {
+        // (a cover that's been fetched before is there straight away)
+        if let kept = ArtworkStore.shared.cached(song.cover, maxPixels: 800) {
+            artwork = kept
+            return
+        }
         artwork = nil
         Task { [weak self] in
             let image = await ArtworkStore.shared.image(for: song.cover, maxPixels: 800)

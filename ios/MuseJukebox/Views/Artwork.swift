@@ -99,7 +99,23 @@ struct Artwork: View {
 
     @State private var image: UIImage?
 
+    @MainActor
+    init(song: Song?, size: Size = .small, animated: Bool = false, cornerRadius: CGFloat = 14) {
+        self.song = song
+        self.size = size
+        self.animated = animated
+        self.cornerRadius = cornerRadius
+        // (a cover that's been fetched before shows from the first frame, rather than after a frame of
+        // the placeholder: records popping in as they scroll by, or a label blinking as it starts to spin)
+        let source = Self.source(song: song, size: size, animated: animated)
+        _image = State(initialValue: source.flatMap { ArtworkStore.shared.cached($0.path, maxPixels: $0.maxPixels, animated: $0.animated) })
+    }
+
     private var source: (path: String, maxPixels: Int, animated: Bool)? {
+        Self.source(song: song, size: size, animated: animated)
+    }
+
+    private static func source(song: Song?, size: Size, animated: Bool) -> (path: String, maxPixels: Int, animated: Bool)? {
         guard let song else { return nil }
         switch size {
         case .small:
