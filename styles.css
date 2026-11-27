@@ -941,6 +941,17 @@ box-shadow: 0 0 0 3px #ffffff;
     --cover-gap: 15px;
 }
 
+/* Rows scrolled out of sight aren't drawn (they keep their size), so a frame where anything on the
+   page moves doesn't go through dozens of them: on a slow phone, frames while a song plays come out
+   about a quarter cheaper. The playing row (and one fading out of playing) is always drawn, as its
+   shadow reaches outside it, and the margin lets a cover's hover shadow do the same. Chromium only
+   for now, where it's been measured (script.js adds the class). */
+.rows-skip-unseen .track:not(.track-playing, .track-playing-fade-out) {
+    content-visibility: auto;
+    contain-intrinsic-height: auto calc(var(--cover-size) + 30px);
+    overflow-clip-margin: 24px;
+}
+
 .track.track-playing {
     z-index: 8;
     border-radius: 12px;
@@ -3566,6 +3577,7 @@ html {
 #jukebox:not(.is-flipped) .jb-eye--open,
 #jukebox:not(.is-flipped) .jb-fan-blades,
 #jukebox:not(.is-flipped) .jb-antenna-led,
+#jukebox:not(.is-flipped) .back-title::after,
 #jukebox.is-flipped .title-muse-wrap::after,
 #jukebox.is-flipped .penguin-icon,
 #jukebox.is-flipped .title-waves svg,

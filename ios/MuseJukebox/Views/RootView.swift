@@ -59,6 +59,8 @@ private struct PhoneLayout: View {
                 showingNowPlaying = true
             }
         }
+        // (the bouncing bars under Now Playing rest while it's up)
+        .environment(\.isUnderNowPlaying, showingNowPlaying)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showingNowPlaying) {
             NowPlayingView(style: .sheet)

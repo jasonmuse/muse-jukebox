@@ -50,7 +50,7 @@ final class HapticsConductor {
                 taps.append(HapticsPlayer.Tap(delay: (Double(bar) * 0.8) + at, intensity: settings.intensity(for: power), sharpness: Float(crisp)))
             }
         }
-        haptics.play(taps)
+        haptics.play(taps, waiting: true)
         isPlayingSample = true
         sample?.cancel()
         sample = Task { [weak self] in
@@ -67,9 +67,13 @@ final class HapticsConductor {
     }
 
     private func step() {
+        let inFront = UIApplication.shared.applicationState == .active
+        // (the haptic engine's woken as a song comes on, so it's up and ready by its first taps)
+        if settings.isActive, inFront, player.isLoading || player.isPlaying {
+            haptics.warmUp()
+        }
         // (and none while the app's in the background: iOS doesn't play its haptics there)
-        guard settings.isActive, !isPlayingSample, let song = player.song, player.isPlaying,
-              UIApplication.shared.applicationState == .active else {
+        guard settings.isActive, !isPlayingSample, let song = player.song, player.isPlaying, inFront else {
             callBack()
             return
         }
@@ -119,7 +123,9 @@ final class HapticsConductor {
             ))
         }
         if !due.isEmpty {
-            haptics.play(due)
+            // (while the engine's still starting they don't go: they're worked out again next time
+            // round, all but the ones that are late by then)
+            guard haptics.play(due) else { return }
             tapsOut = true
         }
         sentTo = max(from, until)

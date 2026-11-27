@@ -4,10 +4,11 @@ import Observation
 import UIKit
 
 /// Plays the songs. Each song's file is fetched once and kept, then played through AVAudioEngine:
-/// the player, a varispeed (a slowed side plays slower and lower, like a record), then Fold FX's
-/// effects (on iPhone Duo: a filter, a crusher, an echo and a reverb, each doing nothing until
-/// folding brings it in). Knows to the sample where the song is, which the haptics are timed by.
-/// Keeps the lock screen, Control Center and headphone buttons in step.
+/// the player, a mixer (whatever the file, stereo at one rate from here on), a varispeed (a slowed
+/// side plays slower and lower, like a record), then Fold FX's effects (on iPhone Duo: a filter, a
+/// crusher, an echo and a reverb, each doing nothing until folding brings it in). Knows to the
+/// sample where the song is, which the haptics are timed by. Keeps the lock screen, Control Center
+/// and headphone buttons in step.
 @MainActor
 @Observable
 final class Player {
@@ -67,7 +68,9 @@ final class Player {
     private let varispeed = AVAudioUnitVarispeed()
     /// Fold FX's filters: a low-pass, and a high-pass (the radio)
     private let filter = AVAudioUnitEQ(numberOfBands: 2)
-    /// (everything from here on in stereo, which the effects after it are happiest with)
+    /// Straight after the player: every file comes out of it the same, in stereo at one rate (which
+    /// the effects are happiest with), so a song at another rate needs only the player plugged in
+    /// again, and that can be done with the engine running
     private let effectsMixer = AVAudioMixerNode()
     private let crusher = AVAudioUnitDistortion()
     private let echo = AVAudioUnitDelay()
@@ -80,14 +83,23 @@ final class Player {
     /// The speed the lock screen was last told about
     @ObservationIgnored private var toldRate: Double = 1
     @ObservationIgnored private var connectedFormat: AVAudioFormat?
+    /// Whether everything after the player's wired up (it's done once)
+    @ObservationIgnored private var chainWired = false
     @ObservationIgnored private var file: AVAudioFile?
+    /// The file's length in frames, worked out as it was opened
+    @ObservationIgnored private var fileLength: AVAudioFramePosition = 0
     @ObservationIgnored private var segmentStart: AVAudioFramePosition = 0
-    @ObservationIgnored private var pausedTime: TimeInterval = 0
+    /// Where it is while it's paused (watched, so a jump while it's paused shows: the wave and the
+    /// record are still then, with nothing else to redraw them)
+    private var pausedTime: TimeInterval = 0
     @ObservationIgnored private var segment = 0
     @ObservationIgnored private var playWhenLoaded = false
     @ObservationIgnored private var resumeAfterInterruption = false
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private var glide: Task<Void, Never>?
+    /// The engine's pause, a little while after the song's (so playing again straight away needn't
+    /// start the engine up again)
+    @ObservationIgnored private var resting: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// Where the player was last seen (host time, song time), for when the engine's stopped under it
     @ObservationIgnored private var lastSeen: (at: TimeInterval, time: TimeInterval) = (0, 0)
@@ -211,13 +223,19 @@ final class Player {
 
     func pause() {
         playWhenLoaded = false
-        guard isPlaying else { return }
+        guard isPlaying else {
+            // (paused while the song's still on its way: the engine needn't run on for it)
+            idleEngine()
+            return
+        }
         let rendering = engine.isRunning
         pausedTime = min(duration, playedTime)
         isPlaying = false
         if rendering {
+            // (just the player: the engine pauses a few seconds on, so playing again before then
+            // starts straight away, without waiting on the engine)
             node.pause()
-            engine.pause()
+            restEngineSoon()
         } else {
             // (iOS has stopped the engine under it: the song's queued again from where it got to)
             stopNode()
@@ -388,12 +406,16 @@ final class Player {
     private func load(_ song: Song, from time: TimeInterval = 0, playing: Bool) {
         loading?.cancel()
         glide?.cancel()
+        resting?.cancel()
         stopNode()
-        if engine.isRunning {
+        // (going straight on to another song the engine's left running, so the song starts the
+        // moment it's ready: stopping and starting the engine for every song held up the screen)
+        if engine.isRunning && !playing {
             engine.pause()
         }
         self.song = song
         file = nil
+        fileLength = 0
         beat = nil
         isPlaying = false
         isLoading = true
@@ -404,23 +426,34 @@ final class Player {
         jumps += 1
         loadArtwork(for: song)
         updateNowPlaying()
+        if playing {
+            wakeSession()
+        }
         loading = Task { [weak self] in
             guard let self else { return }
             do {
                 let url = try await cache.file(for: song)
                 try Task.checkCancellation()
-                let file = try AVAudioFile(forReading: url)
+                // (opened away from the main thread: working out an mp3's length can mean reading
+                // through the whole file, which held up the screen as the song started)
+                let opened = try await Task.detached(priority: .userInitiated) {
+                    try OpenedFile(url)
+                }.value
+                try Task.checkCancellation()
                 guard self.song == song else { return }
-                self.file = file
-                duration = Double(file.length) / file.processingFormat.sampleRate
-                connect(file.processingFormat)
+                file = opened.file
+                fileLength = opened.length
+                duration = Double(opened.length) / opened.file.processingFormat.sampleRate
+                connect(opened.file.processingFormat)
                 sideRate = song.rate
                 applyRate()
-                schedule(from: time)
+                // (from where it was moved to while it loaded, if it was)
+                schedule(from: pausedTime)
                 isLoading = false
                 if playWhenLoaded {
                     start()
                 } else {
+                    idleEngine()
                     updateNowPlaying()
                 }
                 fetchNext()
@@ -432,31 +465,64 @@ final class Player {
                 guard self.song == song else { return }
                 isLoading = false
                 couldNotLoad = true
+                idleEngine()
                 updateNowPlaying()
             }
         }
     }
 
-    /// The player, varispeed and Fold FX's effects wired up for the song's file (only when its
-    /// format's new). From the effects mixer on it's in stereo, whatever the file is.
-    private func connect(_ format: AVAudioFormat) {
-        if let connectedFormat, connectedFormat == format { return }
-        engine.stop()
-        for unit in [node, varispeed, filter, effectsMixer, crusher, echo, reverb] as [AVAudioNode] {
-            engine.disconnectNodeOutput(unit)
+    /// The audio session woken in the background while the song's fetched and opened, so it's awake
+    /// by the time the song starts (waking it holds up whichever thread asks, the first time for a
+    /// good moment)
+    private func wakeSession() {
+        Task.detached(priority: .userInitiated) {
+            try? AVAudioSession.sharedInstance().setActive(true)
         }
-        let stereo = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 2) ?? format
-        engine.connect(node, to: varispeed, format: format)
-        engine.connect(varispeed, to: filter, format: format)
-        engine.connect(filter, to: effectsMixer, format: format)
-        engine.connect(effectsMixer, to: crusher, format: stereo)
-        engine.connect(crusher, to: echo, format: stereo)
-        engine.connect(echo, to: reverb, format: stereo)
-        engine.connect(reverb, to: engine.mainMixerNode, format: stereo)
+    }
+
+    /// The engine paused while there's nothing for it to play, rather than left running silent
+    private func idleEngine() {
+        resting?.cancel()
+        if engine.isRunning && !isPlaying {
+            engine.pause()
+        }
+    }
+
+    /// The engine paused in a few seconds, if the song's still paused then
+    private func restEngineSoon() {
+        resting?.cancel()
+        resting = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, !Task.isCancelled, !self.isPlaying, !self.isLoading else { return }
+            if self.engine.isRunning {
+                self.engine.pause()
+            }
+        }
+    }
+
+    /// The player plugged in for the song's file. Everything after it is wired once, in stereo at one
+    /// rate, so a file at another rate (some songs are 48 kHz, most 44.1) only needs the player
+    /// plugged into the mixer again: that can be done while the engine runs, where rewiring the lot
+    /// meant stopping the engine and starting it from cold, a stall between songs.
+    private func connect(_ format: AVAudioFormat) {
+        if !chainWired {
+            let stereo = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2) ?? format
+            engine.connect(effectsMixer, to: varispeed, format: stereo)
+            engine.connect(varispeed, to: filter, format: stereo)
+            engine.connect(filter, to: crusher, format: stereo)
+            engine.connect(crusher, to: echo, format: stereo)
+            engine.connect(echo, to: reverb, format: stereo)
+            engine.connect(reverb, to: engine.mainMixerNode, format: stereo)
+            chainWired = true
+        }
+        if let connectedFormat, connectedFormat == format { return }
+        engine.disconnectNodeOutput(node)
+        engine.connect(node, to: effectsMixer, fromBus: 0, toBus: 0, format: format)
         connectedFormat = format
     }
 
     private func start() {
+        resting?.cancel()
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             if !engine.isRunning {
@@ -482,12 +548,12 @@ final class Player {
     private func schedule(from time: TimeInterval) {
         guard let file else { return }
         let sampleRate = file.processingFormat.sampleRate
-        let first = min(max(0, AVAudioFramePosition(time * sampleRate)), file.length)
+        let first = min(max(0, AVAudioFramePosition(time * sampleRate)), fileLength)
         segment += 1
         let current = segment
         segmentStart = first
         pausedTime = Double(first) / sampleRate
-        let frames = file.length - first
+        let frames = fileLength - first
         guard frames > 0 else { return }
         node.scheduleSegment(file, startingFrame: first, frameCount: AVAudioFrameCount(frames), at: nil,
                              completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
@@ -549,6 +615,11 @@ final class Player {
     }
 
     private func loadArtwork(for song: Song) {
+        // (a cover that's been fetched before is there straight away)
+        if let kept = ArtworkStore.shared.cached(song.cover, maxPixels: 800) {
+            artwork = kept
+            return
+        }
         artwork = nil
         Task { [weak self] in
             let image = await ArtworkStore.shared.image(for: song.cover, maxPixels: 800)
@@ -668,5 +739,17 @@ final class Player {
         if wasPlaying {
             start()
         }
+    }
+}
+
+/// A song's file, opened, and its length in frames (for an mp3, working that out can mean reading
+/// through the whole file, so it's done away from the main thread)
+private struct OpenedFile: @unchecked Sendable {
+    let file: AVAudioFile
+    let length: AVAudioFramePosition
+
+    init(_ url: URL) throws {
+        file = try AVAudioFile(forReading: url)
+        length = file.length
     }
 }

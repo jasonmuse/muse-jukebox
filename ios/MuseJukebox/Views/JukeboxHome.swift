@@ -164,6 +164,7 @@ private struct FrontRecordCard: View {
     let song: Song
     @Environment(Library.self) private var library
     @Environment(Player.self) private var player
+    @State private var presses = 0
 
     private var isOn: Bool {
         guard let current = player.song else { return false }
@@ -206,6 +207,7 @@ private struct FrontRecordCard: View {
                 } else {
                     player.play(song, in: library.records)
                 }
+                presses += 1
             } label: {
                 Image(systemName: isOn && player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title2.weight(.bold))
@@ -217,7 +219,8 @@ private struct FrontRecordCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isOn && player.isPlaying ? "Pause" : "Play \(song.title)")
-            .sensoryFeedback(.impact(weight: .medium), trigger: player.isPlaying)
+            // (a thump for the press, not whenever the song stops or starts somewhere else)
+            .sensoryFeedback(.impact(weight: .medium), trigger: presses)
         }
         .padding(16)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))

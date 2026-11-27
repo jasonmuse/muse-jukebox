@@ -25,6 +25,8 @@ final class Library {
     private(set) var rows: [JukeboxRow] = []
     /// Every record, newest first: a song with two sides is one record (its flip side's on the back)
     private(set) var records: [Song] = []
+    /// Each song's code, worked out with the rows
+    private var codes: [Song.ID: String] = [:]
 
     private let keptCopy = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appending(path: "songs.json")
@@ -46,7 +48,9 @@ final class Library {
         guard let (data, response) = try? await URLSession.shared.data(from: Site.url("songs.json")),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let catalog = try? JSONDecoder().decode(SongCatalog.self, from: data),
-              !catalog.songs.isEmpty else { return }
+              !catalog.songs.isEmpty,
+              // (the same as before, as it usually is: nothing to sort again or redraw)
+              catalog.songs != songs else { return }
         songs = catalog.songs
         sortIntoRows()
         try? data.write(to: keptCopy, options: .atomic)
@@ -127,13 +131,7 @@ final class Library {
 
     /// A song's code: where it is in the first row it's in (a flip side has its record's)
     func code(for song: Song) -> String? {
-        let record = isFlipSide(song) ? (flipSide(of: song) ?? song) : song
-        for row in rows {
-            if let index = row.songs.firstIndex(where: { $0.id == record.id }) {
-                return row.letter + String(index + 1)
-            }
-        }
-        return nil
+        codes[song.id]
     }
 
     /// The rows, as on a real jukebox: A, the newest (the featured songs, then the newest year's);
@@ -157,8 +155,20 @@ final class Library {
         }
         let placed = Set(rows.flatMap { $0.songs.map(\.id) })
         add("More", records.filter { !placed.contains($0.id) })
+        var codes: [Song.ID: String] = [:]
+        for row in rows {
+            for (index, song) in row.songs.enumerated() where codes[song.id] == nil {
+                codes[song.id] = row.letter + String(index + 1)
+            }
+        }
+        for song in songs where isFlipSide(song) {
+            if let record = song.otherSide, let code = codes[record] {
+                codes[song.id] = code
+            }
+        }
         self.records = records
         self.rows = rows
+        self.codes = codes
     }
 }
 

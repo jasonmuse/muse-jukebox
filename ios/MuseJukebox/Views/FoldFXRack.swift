@@ -22,7 +22,11 @@ struct FoldFXRack: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                FoldGauge(amount: duo.foldFXAmount, detail: detail, tint: duo.foldFX == .off ? .white : duo.foldFXTint)
+                // (it watches the hinge itself, so as the phone folds only the gauge redraws; and it
+                // swings round when Fold FX is turned on, off or locked, but following the hinge it
+                // just moves with it, many times a second, not easing after it each time)
+                FoldGauge()
+                    .animation(.snappy, value: mode)
                 Picker("Fold FX", selection: Binding(get: { mode }, set: { choose($0) })) {
                     Text("Off").tag(Mode.off)
                     Text("Live").tag(Mode.live)
@@ -54,17 +58,6 @@ struct FoldFXRack: View {
         .sensoryFeedback(.selection, trigger: duo.foldFX)
     }
 
-    private var detail: String {
-        switch duo.foldFX {
-        case .off:
-            return "Off: pick a sound to go live"
-        case .locked:
-            return "Locked: stays put, open or closed"
-        case .live:
-            return duo.hinge == .partiallyOpen ? "Hinge at \(Int(duo.angle.rounded()))°" : "Fold the phone to bring it in"
-        }
-    }
-
     private func choose(_ mode: Mode) {
         switch mode {
         case .off:
@@ -80,9 +73,26 @@ struct FoldFXRack: View {
 
 /// How far in the sound is: a needle sweeping an arc from open (left) to folded (right)
 private struct FoldGauge: View {
-    let amount: Double
-    let detail: String
-    let tint: Color
+    @Environment(DuoState.self) private var duo
+
+    private var amount: Double {
+        duo.foldFXAmount
+    }
+
+    private var tint: Color {
+        duo.foldFX == .off ? .white : duo.foldFXTint
+    }
+
+    private var detail: String {
+        switch duo.foldFX {
+        case .off:
+            return "Off: pick a sound to go live"
+        case .locked:
+            return "Locked: stays put, open or closed"
+        case .live:
+            return duo.hinge == .partiallyOpen ? "Hinge at \(Int(duo.angle.rounded()))°" : "Fold the phone to bring it in"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -117,7 +127,6 @@ private struct FoldGauge: View {
         }
         .padding(18)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .animation(.snappy, value: amount)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fold FX: \(Int((amount * 100).rounded())) percent. \(detail)")
     }
@@ -189,7 +198,7 @@ private struct SoundTile: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(isOn ? effect.tint.opacity(0.65) : .white.opacity(0.12), lineWidth: 1)
             }
-            .shadow(color: isOn ? effect.tint.opacity(0.3) : .clear, radius: 12)
+            .shadow(color: effect.tint.opacity(isOn ? 0.3 : 0), radius: isOn ? 12 : 0)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

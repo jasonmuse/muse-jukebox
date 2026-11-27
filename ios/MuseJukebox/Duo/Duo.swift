@@ -65,19 +65,23 @@ final class DuoState {
         return fold.width > fold.height
     }
 
-    /// The hinge moved, or went quiet (`.none`: on the outside screen, or the phone doesn't fold)
+    /// The hinge moved, or went quiet (`.none`: on the outside screen, or the phone doesn't fold).
+    /// Only what's changed is set: the hinge says where it is many times a second as it moves, and
+    /// setting anything, even to what it was, redraws everything that shows it.
     func update(hinge: Hinge, angle: Double?) {
-        self.hinge = hinge
-        if let angle {
+        if self.hinge != hinge {
+            self.hinge = hinge
+        }
+        if let angle, abs(angle - self.angle) >= 0.1 {
             self.angle = angle
         }
-        switch hinge {
-        case .partiallyOpen:
-            heldOpenness = Self.openness(at: self.angle)
-        case .fullyOpen:
-            heldOpenness = 1
-        case .closed, .none:
-            break
+        let openness: Double? = switch hinge {
+        case .partiallyOpen: Self.openness(at: self.angle)
+        case .fullyOpen: 1
+        case .closed, .none: nil
+        }
+        if let openness, openness != heldOpenness {
+            heldOpenness = openness
         }
         if hinge != .none {
             rememberFolding()
@@ -86,8 +90,12 @@ final class DuoState {
 
     /// Where the fold is, and whether there is one
     func update(fold reading: FoldReading) {
-        fold = reading.frame
-        hasFold = reading.exists
+        if fold != reading.frame {
+            fold = reading.frame
+        }
+        if hasFold != reading.exists {
+            hasFold = reading.exists
+        }
         if reading.exists {
             rememberFolding()
         }
