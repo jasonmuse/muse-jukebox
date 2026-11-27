@@ -9787,6 +9787,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     setUpFilterMenus();
     setUpSpeakerModes();
     showTrackListSkeleton();
+    // Rows scrolled out of sight skip being drawn (styles.css, .rows-skip-unseen): only in Chromium
+    // for now, where it's been measured
+    if (navigator.userAgentData) {
+        document.documentElement.classList.add("rows-skip-unseen");
+    }
     const sortedTracks = sortTracks(getFilteredTracks("all"), sortFilter ? sortFilter.value : "newest");
     preloadTopTrackCovers(sortedTracks);
     warmUpcomingTrackCovers(sortedTracks);
